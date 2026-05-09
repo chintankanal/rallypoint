@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(cd c:\\\\rallypoint; $env:DATABASE_URL=\"postgresql://dummy:dummy@localhost:5432/dummy\"; $env:JWT_SECRET=\"test\"; $env:INTERNAL_JOB_SECRET=\"test\"; python -m pytest tests/unit/ -v 2>&1)",
+      "PowerShell($env:PGPASSWORD=\"ocean202\"; & \"C:\\\\Program Files\\\\PostgreSQL\\\\18\\\\bin\\\\psql.exe\" -h localhost -U postgres -d jlrs -c \"SELECT key, value FROM system_configuration;\" 2>&1)",
+      "PowerShell(cd c:\\\\rallypoint; $env:DATABASE_URL=\"postgresql://postgres:ocean202@localhost:5432/jlrs\"; $env:JWT_SECRET=\"test-secret\"; $env:INTERNAL_JOB_SECRET=\"test-internal\"; python -m pytest tests/unit/ -v --tb=short 2>&1 | Select-Object -Last 40)",
+      "PowerShell($env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\", \"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\", \"User\"\\); cd c:\\\\rallypoint\\\\web; npm install 2>&1 | Select-Object -Last 5)"
+    ]
+  }
+}

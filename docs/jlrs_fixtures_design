@@ -1,0 +1,652 @@
+
+# JLRS Matchup and Fixture Design
+
+This document defines how players are paired, how often they play, and how “stretch matches” are integrated into the fixture system to maximize both competitive integrity and player development.
+
+---
+
+## Design Principles
+
+1. **Every match should be purposeful** — no filler matches between mismatched players
+
+2. **Players need both competitive and developmental matches** — winning 50% of the time is ideal for rating accuracy but not sufficient for growth
+
+3. **Stretch matches are a coaching tool, not a rating exploit** — the Elo system already handles cross-tier matches correctly; fixture design just needs to create them deliberately
+
+4. **Fixtures are generated per session, not per week** — matches happen during daily 2–3 hour academy training blocks where all players are present simultaneously
+
+5. **The system must bootstrap itself** — during the provisional phase when most players are at 1000, the algorithm uses round-robin discovery before transitioning to rating-based pairing
+
+---
+
+## Match Types by Purpose
+
+Every league match falls into one of three pairing categories:
+
+| Category | Rating Gap | Purpose | Share of session fixtures |
+|----------|------------|---------|---------------------------|
+| **Competitive** | 0–100 points | True peer-level play. Tests current form. Produces the most reliable rating signal | 50% |
+| **Stretch** | 100–250 points above | Developmental challenge. Forces the lower-rated player to adapt to higher-level play | 25% |
+| **Anchor** | 100–250 points below | The inverse of a stretch match — the higher-rated player faces a stretch opponent. Builds confidence and reinforces fundamentals | 25% |
+
+Every stretch match is simultaneously an anchor match for the opponent: when a 1000-rated player stretches up to face a 1200-rated player, the 1200-rated player is anchoring down. No separate scheduling is needed — one fixture serves both purposes.
+
+---
+
+## Daily Session Model
+
+### Academy Training Context
+
+Matches happen during daily academy training sessions:
+
+| Parameter | Typical Value |
+|----------|---------------|
+| Session duration | 2–3 hours (150 minutes usable) |
+| Tables available | 4–8 |
+| Players present | 15–25 |
+| Match format | Best-of-3 (training) or Best-of-5 (league day) |
+| Average match duration | 15–20 min (best-of-3) or 25–30 min (best-of-5) |
+| Changeover time | 5 minutes |
+
+---
+
+### Session Capacity Calculation
+
+$$
+\text{matches\_per\_table} = \left\lfloor \frac{\text{session\_minutes}}{\text{match\_duration} + \text{changeover}} \right\rfloor
+$$
+
+$$
+\text{total\_match\_slots} = \text{matches\_per\_table} \times \text{num\_tables}
+$$
+
+$$
+\text{matches\_per\_player} = \min\left(4,\ \left\lfloor \frac{\text{total\_match\_slots} \times 2}{\text{num\_present\_players}} \right\rfloor \right)
+$$
+
+---
+
+**Example**: 150-minute session, 5 tables, 20 players, best-of-3 (20 min + 5 min changeover):
+
+- Matches per table:  
+  $$\lfloor 150 / 25 \rfloor = 6$$
+
+- Total match slots:  
+  $$6 \times 5 = 30$$
+
+- Matches per player:  
+  $$\min(4, \lfloor 30 \times 2 / 20 \rfloor) = \min(4, 3) = 3$$
+
+Each player plays **3 matches** in this session.
+
+---
+
+## Daily Match Allocation
+
+For a standard 3-match session:
+
+| Round | Type | Purpose |
+|------|------|---------|
+| Round 1 | Competitive | Peer-level, closest rating |
+| Round 2 | Stretch / Anchor | Developmental — lower-rated plays up, higher-rated plays down |
+| Round 3 | Competitive | Peer-level, different opponent from Round 1 |
+
+---
+
+For a 4-match session the pattern depends on tier composition:
+
+**Variety Maximization — C-S-C-S** (all tier groups have even player counts):
+
+| Round | Type | Purpose |
+|------|------|---------|
+| Round 1 | Competitive | Peer-level |
+| Round 2 | Stretch / Anchor | Developmental |
+| Round 3 | Competitive | Peer-level, different opponent |
+| Round 4 | Stretch / Anchor | Second developmental pairing |
+
+Used when: every tier group present has an even number of players (e.g. 2, 4, 6). Even-sized groups are fully paired in a single competitive round, so alternating provides maximum match variety.
+
+---
+
+**Rotation Completion — C-C-S-C** (at least one tier group has an odd player count):
+
+| Round | Type | Purpose |
+|------|------|---------|
+| Round 1 | Competitive (shift 0) | Peer-level |
+| Round 2 | Competitive (shift 1) | Peer-level, cross-half pairing |
+| Round 3 | Stretch / Anchor | Developmental |
+| Round 4 | Competitive (shift 2) | Peer-level, third rotation |
+
+Used when: at least one tier group has an odd number of players (e.g. 3 or 5). A 3-player tier needs 3 competitive shifts (0, 1, 2) to complete its internal round-robin — all three pairs appear once each. The C-S-C-S pattern only delivers 2 competitive rounds, guaranteeing one intra-tier pair is never scheduled. C-C-S-C fulfils the 3-round requirement while still providing a stretch round.
+
+---
+
+Both patterns maintain approximately the 50/25/25 split: 2 competitive + 1 stretch in a 3-match session, or 3 + 1 / 2 + 2 in a 4-match session.
+
+---
+
+## Provisional Phase: Bootstrapping from Base Rating
+
+### The Problem
+
+When the system launches (or when a batch of new players joins), most players start at rating 1000. Rating-based pairing fails because:
+
+- All players are in the same tier (intermediate)
+- There are no rating gaps to define competitive vs stretch matches
+- “Closest rating” returns arbitrary results when everyone is equal
+
+---
+
+### The Solution: Three-Phase Bootstrap
+
+The fixture algorithm transitions through three phases automatically, based on the **rating spread** among present players — no manual intervention required.
+
+---
+
+### Phase A: Discovery (Rating spread < 100 points)
+
+**Trigger**: The difference between the highest and lowest rated present player is ≤ 100 points (the entire group is effectively at the same level).
+
+**Algorithm: Rotating round-robin**
+
+1. Sort players alphabetically (or by registration order — any deterministic, non-rating-based order)
+2. Use the **circle method** to generate round-robin pairings:
+   - Fix player 1 in position
+   - Rotate all other players clockwise each round
+   - This guarantees maximum opponent diversity
+
+Round-robin circle method for 8 players:
+
+```
+Round 1: (1v8) (2v7) (3v6) (4v5)
+Round 2: (1v7) (8v6) (2v5) (3v4)
+Round 3: (1v6) (7v5) (8v4) (2v3)
+Round 4: (1v5) (6v4) (7v3) (8v2)
+...and so on
+```
+
+3. Each daily session picks the next 3 rounds from the rotation
+4. All matches are classified as **Competitive** (no stretch/anchor distinction possible yet)
+5. Progress through the round-robin across days until every player has faced every other player at least once
+
+---
+
+### Why this works
+
+- With K=60 during provisional and everyone at 1000:
+  - After each match: winner gains ~30 points, loser drops ~30 (for \(E = 0.5\), \(S = 1.0\))
+- The round-robin ensures maximum unique opponents — every match produces new information
+- Rating spread grows rapidly
+
+---
+
+### Expected separation timeline (20 players, 3 matches/day, 5 days/week)
+
+| Day | Matches per player | Rating spread | Distinct tiers |
+|-----|-------------------|---------------|----------------|
+| Day 1 | 3 | ~60 points | None |
+| Day 3 | 9 | ~150 points | Emerging |
+| Day 5 | 15 (provisional complete for first players) | ~250 points | 2 visible tiers |
+| Day 8 | 20+ | ~350 points | 3–4 clusters |
+| Day 10 | 25+ | ~400+ points | Clear tier structure |
+
+---
+
+### Phase B: Transition (Rating spread 100–250 points)
+
+**Trigger**: The spread among present players exceeds 100 points but is < 250 points. Some differentiation exists but tiers are thin.
+
+**Algorithm: Split + round-robin**
+
+1. Sort all present players by rating
+2. Split into **two halves**: upper half and lower half at the median rating
+3. Generate fixtures:
+
+- Round 1: **Competitive** — pair within each half (closest rating within half)
+- Round 2: **Stretch / Anchor** — pair across halves (top of lower half vs bottom of upper half)
+- Round 3: **Competitive** — pair within each half (next opponent in rotation)
+
+This is a simplified version of the full algorithm that works with just two groups. As the spread grows, the two halves naturally become the basis for tier-based pairing.
+
+---
+
+### Why not jump straight to full tiers?
+
+With only 100–250 point spread, tier boundaries (200 points each) would create groups of 2–3 players — too small for meaningful round-robins. The two-group split is more robust at small spreads.
+
+---
+
+### Phase C: Standard (Rating spread > 250 points)
+
+**Trigger**: The spread exceeds 250 points. Players span at least two tier bands.
+
+**Algorithm**: Full competitive/stretch/anchor pairing as described in the Daily Session Algorithm section below. The system has bootstrapped itself through round-robin play. No external seeding or coach input was needed.
+
+---
+
+### Phase Detection Logic
+
+At the start of each daily session:
+
+```
+spread = max_rating(present_players) - min_rating(present_players)
+
+if spread < 100:
+    use Phase A (discovery round-robin)
+elif spread < 250:
+    use Phase B (split round-robin)
+else:
+    use Phase C (standard fixture algorithm)
+```
+
+This check runs daily. An academy will typically progress through all three phases in 5–10 training days.
+
+---
+
+## Daily Session Algorithm (Phase C — Standard)
+
+This is the fixture generation algorithm used once ratings have separated sufficiently.
+
+---
+
+### Inputs
+
+- `present_players[]`: Players attending today’s session (with current ratings)
+- `num_tables`: Available tables
+- `session_minutes`: Session duration
+- `match_format`: BEST_OF_3 or BEST_OF_5
+- `recent_matches[]`: Matches from the last 7 days (for deduplication)
+
+---
+
+### Step 1: Calculate Session Parameters
+
+Compute `matches_per_player` using the capacity formula above. Determine the number of rounds.
+
+---
+
+### Step 2: Sort and Group
+
+1. Sort present players by rating (descending)
+2. Create a **pairing index**: each player’s position in the sorted list (rank 1 = highest rated)
+
+---
+
+### Step 3: Generate Competitive Pairings (Rounds 1 and 3)
+
+**Adjacent pairing within tiers:**
+
+1. Group present players by tier
+2. Within each tier, pair adjacent players in the sorted list:
+   - Pair (rank 1, rank 2), (rank 3, rank 4), ...
+3. For Round 3: shift by one — pair (rank 1, rank 3), (rank 2, rank 4), ...
+4. If a tier has an odd number, the unpaired player is paired cross-tier with the closest-rated player from the adjacent tier (this becomes a borderline competitive match)
+
+**Deduplication**: If a pair has already played 2 rated matches in the last 7 days, skip to the next eligible opponent.
+
+**Simultaneous assignment**: For each round, assign pairs to tables. T tables = T simultaneous matches. If more pairs than tables, create sub-rounds (players wait one sub-round between matches).
+
+---
+
+### Step 4: Generate Stretch / Anchor Pairings (Round 2 or Round 3, depending on pattern)
+
+**Folded pairing across tiers:**
+
+1. Take the full sorted list of present players
+2. Pair by folding: match player at position \(k\) with player at position \(k + \lfloor N/4 \rfloor\)
+
+For 20 players sorted by rating:
+
+Positions:
+$$
+1 \quad 2 \quad 3 \quad 4 \quad 5 \quad 6 \quad 7 \quad 8 \quad 9 \quad 10 \quad 11 \quad 12 \quad 13 \quad 14 \quad 15 \quad 16 \quad 17 \quad 18 \quad 19 \quad 20
+$$
+
+Fold offset:
+$$
+\left\lfloor \frac{20}{4} \right\rfloor = 5
+$$
+
+Stretch pairs: (6,1), (7,2), (8,3), (9,4), (10,5), (11,6), ...
+
+Player at position 6 (stretch) faces player at position 1 (anchor). The rating gap is naturally proportional to the pool’s spread.
+
+3. Filter: only create the pairing if the rating gap is between 100 and 250. If the gap is < 100, convert to a competitive match. If > 250, find the next eligible opponent closer to the stretch zone.
+
+4. National Track / top-rated players with no one above them: pair downward as anchor matches only. Their stretch matches come from cross-academy meets.
+
+---
+
+### Step 5: Build the Session Schedule
+
+Interleave rounds across time slots:
+
+- Time Slot 1 (0:00–0:25): Round 1 matches on all tables (Competitive)
+- Time Slot 2 (0:25–0:50): Round 2 matches on all tables (Stretch/Anchor)
+- Time Slot 3 (0:50–1:15): Round 3 matches on all tables (Competitive)
+- Time Slot 4 (1:15–1:40): Round 4 if capacity allows (Stretch/Anchor)
+- Time Slot 5 (1:40–2:05): Overflow / rescheduled matches  
+- Buffer (2:05–2:30): Cool-down, result submission
+
+If more players than \(2 \times \text{num_tables}\), split into sub-rounds within each time slot:
+
+- Time Slot 1, Sub-round A: Tables 1–5 host matches (10 players)
+- Time Slot 1, Sub-round B: Tables 1–5 host matches (remaining players)
+
+Players in Sub-round B do warm-up or drills while Sub-round A plays.
+
+---
+
+### Step 6: Handle Edge Cases
+
+| Situation | Resolution |
+|----------|-----------|
+| Player arrives late | Insert into the next available round at the closest available pairing slot |
+| Player leaves early | Their completed matches are rated; remaining fixtures are marked unplayed |
+| Fewer than 6 players present | Pure round-robin (everyone plays everyone); no stretch/anchor split |
+| Only 2 players present | They play each other for all rounds (competitive); one opponent cap defers to the weekly limit |
+| Odd total players | One player gets a “bye” per round (rotating); bye player does drills and plays in the next round |
+
+---
+
+## Why Stretch Matches Work With Elo (No Special Treatment Needed)
+
+The rating system already incentivizes the correct behavior. No special match weight or scoring adjustment is needed for stretch matches.
+
+---
+
+### From the stretching player’s perspective (playing up)
+
+For a 1050-rated player facing a 1250-rated opponent (200-point stretch):
+
+$$
+E = \frac{1}{1 + 10^{(200/400)}} = \frac{1}{1 + 10^{0.5}} = \frac{1}{1 + 3.16} \approx 0.24
+$$
+
+| Outcome | Delta formula | Approximate delta (K_shared=35) |
+|---------|---------------|----------------------------------|
+| Win (3–0) | \(35 \times (1.0 - 0.24)\) | +26.6 |
+| Win (3–2) | \(35 \times (0.8 - 0.24)\) | +19.8 |
+| Loss (0–3) | \(35 \times (0.0 - 0.24)\) | -8.4 |
+| Loss (2–3) | \(35 \times (0.2 - 0.24)\) | -1.4 |
+
+The risk/reward ratio is **~3.2:1** — for every point risked on a loss, the player gains 3.2 points on a win. A close loss (2–3) costs almost nothing (~1.4 points). This naturally makes stretch matches low-risk, high-reward for the developing player.
+
+---
+
+### From the anchor player’s perspective (playing down)
+
+For a 1250-rated player facing a 1050-rated opponent:
+
+$$
+E \approx 0.76
+$$
+
+| Outcome | Delta (K_shared=35) |
+|---------|---------------------|
+| Win (3–0) | +8.4 |
+| Win (3–2) | +1.4 |
+| Loss (0–3) | -26.6 |
+| Loss (2–3) | -19.6 |
+
+This looks unfavorable — high risk, low reward. But the **expected value is zero**:
+
+$$
+0.76 \times 8.4 + 0.24 \times (-26.6) = 6.4 - 6.4 = 0
+$$
+
+A correctly rated anchor player neither gains nor loses rating on average from playing down. They only lose points if they’re overrated — in which case the system is correcting them.
+
+---
+
+## Stretch Match Zones
+
+| Player’s Tier | Rating Range | Stretch Zone (up) | Max Stretch Gap |
+|--------------|--------------|-------------------|------------------|
+| Beginner | < 900 | +100 to +200 | 200 |
+| Intermediate | 900–1100 | +100 to +250 | 250 |
+| Advanced | 1100–1300 | +100 to +250 | 250 |
+| Elite | 1300–1500 | +100 to +200 | 200 |
+| National Track | 1500+ | +100 to +200 | 200 |
+
+The stretch gap is capped well below the 500-point match exclusion threshold. No stretch match should ever produce a matchup that feels uncompetitive.
+
+---
+
+### Expected win rates at different stretch gaps
+
+| Stretch Gap | E (stretching player) | Win chance | Loss cost (3–0) | Win reward (3–0) | Risk/Reward |
+|-------------|------------------------|------------|------------------|------------------|--------------|
+| 100 points | 0.36 | 36% | -12.6 | +22.4 | 1.8:1 |
+| 150 points | 0.30 | 30% | -10.5 | +24.5 | 2.3:1 |
+| 200 points | 0.24 | 24% | -8.4 | +26.6 | 3.2:1 |
+| 250 points | 0.19 | 19% | -6.7 | +28.4 | 4.2:1 |
+
+The sweet spot is **150–200 points**: the stretching player has a realistic ~25–30% chance to win, loses very little on a loss, and gains substantially on a win.
+
+---
+
+## Cross-Academy Fixtures
+
+Monthly cross-academy meets include all three match types:
+
+| Round | Type | Pairing Rule |
+|------|------|--------------|
+| Round 1 | Competitive | Swiss-style: pair closest-rated players across academies within each tier |
+| Round 2 | Competitive | Swiss progression: pair based on Round 1 results |
+| Round 3 | Stretch | Pair top half of each lower tier against bottom half of the upper tier across academies |
+
+This gives each player 2 competitive cross-academy matches and 1 stretch cross-academy match per meet.
+
+Cross-academy stretch matches carry the highest \(K_{\text{shared}}\) in the system:
+
+$$
+K_{\text{shared}}
+$$
+
+Components:
+
+$$
+W_{\text{match}} = 1.0 \quad (\text{league})
+$$
+
+$$
+W_{\text{academy}} = 1.2 \quad (\text{cross-academy})
+$$
+
+Combined multiplier:
+
+$$
+W_{\text{effective}} =
+W_{\text{match}} \times W_{\text{academy}} = 1.2
+$$
+
+Plus the natural Elo asymmetry of a stretch match.
+
+These are the most impactful matches a player can play — a stretch win in a cross-academy meet is the single fastest way to gain rating.
+
+---
+
+## Weekly and Season Totals
+
+### Weekly (5 training days, 3 rated matches per session)
+
+| Match Type | Per Day | Per Week |
+|------------|----------|-----------|
+| Competitive | 2 | 10 |
+| Stretch / Anchor | 1 | 5 |
+| **Total** | **3** | **15** |
+
+---
+
+### Season (16 weeks)
+
+| Match Type | Within-Academy | Cross-Academy (4 meets × 3 matches) | Season Total |
+|------------|----------------|--------------------------------------|--------------|
+| Competitive | 160 | 8 | **168** |
+| Stretch / Anchor | 80 | 4 | **84** |
+| **Total** | **240** | **12** | **252** |
+
+At 252 matches per season, a player completes their provisional period (15 matches) in the **first week**. They reach K_base = 32 (30 total matches) by **week 2**, and K_base = 20 (100 total matches) by **week 7**. Rating convergence happens fast.
+
+---
+
+## Comparison to Weekly Model
+
+| Metric | Old (weekly) model | New (daily session) model |
+|--------|-------------------|---------------------------|
+| Matches per week | 4 | 15 |
+| Matches per season | 76 | 252 |
+| Provisional exit | Week 4 | Week 1 |
+| K_base=32 reached | Week 8 | Week 2 |
+| K_base=20 reached | Not in season | Week 7 |
+
+The daily model produces 3× more matches, which means faster convergence, richer data, and more meaningful analytics.
+
+---
+
+## Stretch Match Progression Tracking
+
+The coaching analytics layer should track stretch match outcomes to measure developmental progress:
+
+| Metric | What It Shows |
+|--------|----------------|
+| **Stretch win rate** | % of stretch matches won (across all stretch gaps). Rising trend indicates the player is outgrowing their tier |
+| **Stretch win rate by gap** | Win rate at 100, 150, 200, 250 point gaps. Identifies the sweet spot where the player is competitive but challenged |
+| **Stretch score quality** | Average S value in stretch losses (e.g., average 0.15 in losses means they’re losing close). Improving even without winning |
+| **Promotion signal** | If stretch win rate against the next tier exceeds 40% for 4+ consecutive weeks, the player is likely ready for tier promotion |
+
+This data is available through the coaching analytics dashboard and is not part of the rating system itself.
+
+---
+
+## Example: A Typical Day at Academy X
+
+Academy X has 20 players present today. 5 tables available. Session: 150 minutes, best-of-3 format.
+
+**Session capacity**: 6 matches per table × 5 tables = 30 match slots. 3 matches per player.
+
+---
+
+**Current ratings (Phase C — spread > 250):**
+
+| Tier | Players | Rating Range |
+|------|----------|---------------|
+| Beginner | 3 | 810–880 |
+| Intermediate | 7 | 920–1080 |
+| Advanced | 6 | 1120–1280 |
+| Elite | 3 | 1330–1460 |
+| National Track | 1 | 1520 |
+
+---
+
+### Round 1 — Competitive (5 matches on 5 tables simultaneously)
+
+Pair adjacent within tiers:
+
+| Table | Player A | Rating | Player B | Rating | Gap |
+|------|-----------|--------|-----------|--------|------|
+| 1 | Aarav (Elite) | 1460 | Priya (Elite) | 1380 | 80 |
+| 2 | Sneha (Advanced) | 1280 | Arjun (Advanced) | 1240 | 40 |
+| 3 | Vikram (Advanced) | 1180 | Meera (Advanced) | 1120 | 60 |
+| 4 | Amit (Intermediate) | 1080 | Riya (Intermediate) | 1020 | 60 |
+| 5 | Dev (Intermediate) | 960 | Sara (Intermediate) | 920 | 40 |
+
+Remaining 10 players paired in Sub-round B on the same 5 tables after Sub-round A finishes (~20 minutes).
+
+---
+
+### Round 2 — Stretch / Anchor (folded pairing)
+
+Sorted by rating, fold by \(\lfloor 20/4 \rfloor = 5\):
+
+| Table | Stretching Player | Rating | Anchor Player | Rating | Gap |
+|------|-------------------|--------|----------------|--------|------|
+| 1 | Riya (Intermediate) | 1020 | Sneha (Advanced) | 1280 | 260 → exceeds 250, find next eligible |
+| 1 (adjusted) | Riya (Intermediate) | 1020 | Vikram (Advanced) | 1180 | 160 |
+| 2 | Amit (Intermediate) | 1080 | Sneha (Advanced) | 1280 | 200 |
+| 3 | Dev (Intermediate) | 960 | Meera (Advanced) | 1120 | 160 |
+| 4 | Kiran (Beginner) | 880 | Sara (Intermediate) | 1020 | 140 |
+| 5 | Raj (Beginner) | 840 | Priya (Elite) | 1380 | 540 → exceeds 250, reassign |
+| 5 (adjusted) | Raj (Beginner) | 840 | Nisha (Intermediate) | 980 | 140 |
+
+---
+
+### Round 3 — Competitive (shifted pairing)
+
+Same as Round 1 but shifted by one position within each tier (different opponents):
+
+| Table | Player A | Rating | Player B | Rating | Gap |
+|------|-----------|--------|-----------|--------|------|
+| 1 | Aarav (Elite) | 1460 | Meera (Elite) | 1330 | 130 → borderline, still competitive |
+| 2 | Sneha (Advanced) | 1280 | Vikram (Advanced) | 1180 | 100 |
+| 3 | Arjun (Advanced) | 1240 | Meera (Advanced) | 1120 | 120 → borderline competitive |
+
+---
+
+## Example: Day 3 of Provisional Phase (Academy Y — New Launch)
+
+Academy Y just launched. 16 players, all rated 1000. 4 tables. Best-of-3.
+
+**Phase detection**: spread = 0 → **Phase A (discovery round-robin)**
+
+---
+
+### Day 1 (all at 1000)
+
+Round-robin circle method, 3 rounds of 4 matches each:
+
+```
+Round 1: (1v16) (2v15) (3v14) (4v13) — on tables 1–4
+Round 2: (5v12) (6v11) (7v10) (8v9) — on tables 1–4
+Round 3: (1v15) (16v14) (2v13) (3v12) — on tables 1–4
+```
+
+After Day 1: 12 matches played. Rating spread: ~60 points (highest ~1030, lowest ~970).
+
+---
+
+### Day 3 (spread reached ~150 points)
+
+**Phase detection**: spread = 150 → **Phase B (split round-robin)**
+
+Players sorted by rating after 9 matches each:
+
+- **Upper half** (8 players, ratings 1040–1120):
+  - Round-robin within upper half for Rounds 1 and 3
+
+- **Lower half** (8 players, ratings 880–960):
+  - Round-robin within lower half for Rounds 1 and 3
+
+- **Cross-half for Round 2**:
+  - Top of lower half faces bottom of upper half (stretch/anchor)
+
+---
+
+### Day 7 (spread reached ~300 points)
+
+**Phase detection**: spread = 300 → **Phase C (standard algorithm)**
+
+Players now span Beginner through Advanced. Full competitive/stretch/anchor fixture generation activates. Most players have completed 15+ matches and exited provisional.
+
+The system bootstrapped itself in one week with zero external input.
+
+---
+
+## Summary
+
+| Design Choice | Decision | Rationale |
+|--------------|----------|-----------|
+| Session model | Daily 2–3 hour blocks, 3 rated matches per session | Matches real academy training schedules |
+| Match mix | 50% competitive, 25% stretch, 25% anchor per session | Balances rating accuracy with developmental growth |
+| Session algorithm | C-S-C-S (even tiers) or C-C-S-C (any odd tier) — auto-selected per session | C-S-C-S maximises variety; C-C-S-C completes 3-player tier round-robins |
+| Provisional bootstrapping | 3-phase auto-transition (Discovery → Split → Standard) | Self-starting, no coach seeding needed |
+| Bootstrap duration | ~5–10 training days to reach standard fixtures | K=60 + round-robin produces rapid separation |
+| Phase detection | Based on rating spread of present players | Simple, automatic, runs daily |
+
+---
+
+| Stretch gap | 100–250 points | Win rate of 19–36% — challenging but achievable |
+| Stretch rating treatment | Standard Elo, no special weights | Math already produces favorable 3:1+ risk/reward |
+| Cross-academy stretch | 1 per monthly meet | Highest-impact match type in the system |
+| Season total | ~252 matches (15/week × 16 weeks + cross-academy) | Fast convergence, exits provisional in week 1 |

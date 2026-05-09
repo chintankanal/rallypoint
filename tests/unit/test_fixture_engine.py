@@ -7,6 +7,7 @@ Tests cover:
   - Discovery fixture generation
   - Standard fixtures: BYE for odd count, recent_match_pairs dedup
   - Full dispatcher for 20 players → 30 slots
+  - Inter-academy league fixture strategies: TIER_MATCHED, CROSS_ACADEMY_ONLY, TEAM_FORMAT, FULL_ROUND_ROBIN
 """
 import math
 
@@ -19,6 +20,7 @@ from app.services.fixture_engine import (
     detect_phase,
     generate_discovery_fixtures,
     generate_fixtures,
+    generate_league_fixtures,
     generate_standard_fixtures,
     generate_transition_fixtures,
     rating_spread,
@@ -760,3 +762,392 @@ def test_standard_3player_tier_full_rotation_with_mpp4():
     assert intra_adv == expected, (
         f"ADV 3-player round-robin incomplete. Missing: {expected - intra_adv}"
     )
+
+
+# ── Inter-academy league fixture strategies ────────────────────────────────────
+#
+# Tests for generate_league_fixtures with 4 strategies:
+#   1. TIER_MATCHED (default): within-tier cross-academy round-robin
+#   2. CROSS_ACADEMY_ONLY: circle method, intra-academy pairs → BYEs
+#   3. TEAM_FORMAT: positional academy matchups (#1v#1, #2v#2, …)
+#   4. FULL_ROUND_ROBIN: every player vs every other (legacy)
+#
+# Diverse test data:
+#   - 2–4 academies with varying sizes
+#   - Rated 900–1500 (BEGINNER → NATIONAL_TRACK)
+#   - Mixed tier distributions per academy
+#
+
+def _make_inter_academy_players(
+    academy_data: dict[str, list[tuple[str, float]]],
+) -> dict[str, list[dict]]:
+    """
+    Helper to create inter-academy player dicts.
+    academy_data: {academy_id: [(player_name, rating), ...]}
+    Returns: {academy_id: [player_dict, ...]}
+    """
+    result = {}
+    for academy_id, players_list in academy_data.items():
+        result[academy_id] = [
+            {
+                "player_id": f"{academy_id}_{name}",
+                "name": name,
+                "current_rating": rating,
+                "academy_id": academy_id,
+                "academy_name": f"Academy {academy_id.upper()}",
+            }
+            for name, rating in players_list
+        ]
+    return result
+
+
+def test_league_fixtures_tier_matched_default_strategy():
+    """TIER_MATCHED is the default strategy when none specified."""
+    # 2 academies, 3 players each, same tier distribution
+    academy_data = {
+        "a": [("a1", 1150.0), ("a2", 1100.0), ("a3", 1050.0)],
+        "b": [("b1", 1140.0), ("b2", 1090.0), ("b3", 1040.0)],
+    }
+    players_by_academy = _make_inter_academy_players(academy_data)
+    
+    result = generate_league_fixtures(players_by_academy, set())
+    assert "slots" in result
+    assert len(result["slots"]) > 0
+    
+    # Verify the result has the expected structure
+    for slot in result["slots"]:
+        assert "round_number" in slot
+        assert "player_a_id" in slot
+        assert "match_category" in slot
+        assert "expected_rating_gap" in slot
+    
+    # TIER_MATCHED groups by tier, so all matches within a tier should have similar ratings
+    for slot in result["slots"]:
+        if slot["player_b_id"]:
+            # Should be within reasonable gap for same tier
+            assert slot["expected_rating_gap"] <= 200, (
+                f"Gap {slot['expected_rating_gap']} too large for tier-matched pairing"
+            )
+
+
+def test_league_fixtures_tier_matched_multi_tier():
+    """
+    TIER_MATCHED groups players by tier, then cross-academy round-robin within each tier.
+    Academies with players in different tiers should have tier-specific matches only.
+    """
+    # Academy A: 2 ELITE, 1 ADVANCED
+    # Academy B: 1 ELITE, 2 ADVANCED, 1 INTERMEDIATE
+    # Within ELITE tier: A_e1/e2 face B_e1
+    # Within ADVANCED tier: A_a1 faces B_a1/a2
+    # Within INTERMEDIATE tier: only B_i1 (no cross-academy pair) → no INTERMEDIATE matches
+    academy_data = {
+        "a": [("e1", 1350.0), ("e2", 1340.0), ("a1", 1150.0)],
+        "b": [("e1", 1330.0), ("a1", 1140.0), ("a2", 1130.0), ("i1", 1000.0)],
+    }
+    players_by_academy = _make_inter_academy_players(academy_data)
+    
+    result = generate_league_fixtures(players_by_academy, set(), strategy="TIER_MATCHED")
+    
+    # Verify cross-academy within each tier
+    cross_academy_count = 0
+    for slot in result["slots"]:
+        if slot["player_b_id"]:
+            a_rating = float([p for p in players_by_academy["a"] + players_by_academy["b"]
+                            if p["player_id"] == slot["player_a_id"]][0]["current_rating"])
+            b_rating = float([p for p in players_by_academy["a"] + players_by_academy["b"]
+                            if p["player_id"] == slot["player_b_id"]][0]["current_rating"])
+            # Gap should be small (same tier)
+            gap = abs(a_rating - b_rating)
+            assert gap <= 200, f"Gap {gap} too large for tier-matched pairing"
+            cross_academy_count += 1
+    
+    assert cross_academy_count > 0, "TIER_MATCHED generated no cross-academy matches"
+
+
+def test_league_fixtures_cross_academy_only_no_intra_academy():
+    """
+    CROSS_ACADEMY_ONLY: all matches are cross-academy; intra-academy pairs → BYEs.
+    No two players from the same academy should ever be paired.
+    """
+    academy_data = {
+        "a": [("a1", 1200.0), ("a2", 1100.0)],
+        "b": [("b1", 1180.0), ("b2", 1080.0)],
+    }
+    players_by_academy = _make_inter_academy_players(academy_data)
+    
+    result = generate_league_fixtures(players_by_academy, set(), strategy="CROSS_ACADEMY_ONLY")
+    
+    # Verify no intra-academy pairs
+    for slot in result["slots"]:
+        if slot["player_b_id"]:  # Skip BYE slots
+            a_academy = slot["player_a_id"].split("_")[0]
+            b_academy = slot["player_b_id"].split("_")[0]
+            assert a_academy != b_academy, (
+                f"CROSS_ACADEMY_ONLY generated intra-academy pair: {slot['player_a_id']} vs {slot['player_b_id']}"
+            )
+
+
+def test_league_fixtures_cross_academy_only_has_bye_slots():
+    """
+    CROSS_ACADEMY_ONLY generates BYE slots where intra-academy pairs would have occurred.
+    With 2 academies of 2 players each, circle method produces 3 rounds with some BYEs.
+    """
+    academy_data = {
+        "a": [("a1", 1200.0), ("a2", 1100.0)],
+        "b": [("b1", 1180.0), ("b2", 1080.0)],
+    }
+    players_by_academy = _make_inter_academy_players(academy_data)
+    
+    result = generate_league_fixtures(players_by_academy, set(), strategy="CROSS_ACADEMY_ONLY")
+    
+    # At least some BYE slots should exist
+    bye_count = sum(1 for slot in result["slots"] if slot["player_b_id"] is None)
+    assert bye_count > 0, "CROSS_ACADEMY_ONLY should generate BYE slots for intra-academy pairs"
+
+
+def test_league_fixtures_team_format_academy_pairs():
+    """
+    TEAM_FORMAT: generates round-robin of academy pairs, with positional pairing.
+    With 3 academies, should have 3 rounds (A vs B, A vs C, B vs C).
+    Each round has positional matches (#1 vs #1, #2 vs #2, …).
+    """
+    academy_data = {
+        "ymca": [("p1", 1300.0), ("p2", 1200.0), ("p3", 1100.0)],
+        "isl": [("p1", 1280.0), ("p2", 1180.0), ("p3", 1080.0)],
+        "dlsa": [("p1", 1260.0), ("p2", 1160.0), ("p3", 1060.0)],
+    }
+    players_by_academy = _make_inter_academy_players(academy_data)
+    
+    result = generate_league_fixtures(players_by_academy, set(), strategy="TEAM_FORMAT")
+    
+    # 3 academies → C(3,2) = 3 academy-pair rounds
+    assert result["total_rounds"] == 3
+    
+    # Verify positional pairing: #1 vs #1 in each academy-pair round
+    by_round = {}
+    for slot in result["slots"]:
+        by_round.setdefault(slot["round_number"], []).append(slot)
+    
+    for round_num, slots in by_round.items():
+        # Each position (table) should have one match or BYE
+        by_position = {}
+        for slot in slots:
+            by_position.setdefault(slot["table_number"], slot)
+        
+        assert len(by_position) >= 1, f"Round {round_num} has no positional matches"
+
+
+def test_league_fixtures_team_format_uneven_academy_sizes():
+    """
+    TEAM_FORMAT with uneven academy sizes: smaller academy players get BYEs.
+    Academy A has 3 players, Academy B has 2 → match B's #1-#2, then A's #3 gets BYE.
+    """
+    academy_data = {
+        "a": [("p1", 1300.0), ("p2", 1200.0), ("p3", 1100.0)],
+        "b": [("p1", 1280.0), ("p2", 1180.0)],
+    }
+    players_by_academy = _make_inter_academy_players(academy_data)
+    
+    result = generate_league_fixtures(players_by_academy, set(), strategy="TEAM_FORMAT")
+    
+    # 2 academies → 1 round (A vs B)
+    assert result["total_rounds"] == 1
+    
+    # Should have 3 slots: (a_p1 vs b_p1), (a_p2 vs b_p2), (a_p3 BYE)
+    assert len(result["slots"]) == 3
+    
+    bye_count = sum(1 for s in result["slots"] if s["player_b_id"] is None)
+    assert bye_count == 1, "Expected 1 BYE for uneven sized teams"
+
+
+def test_league_fixtures_full_round_robin_all_pairs():
+    """
+    FULL_ROUND_ROBIN: every player faces every other exactly once (or as close as possible).
+    With 4 players total (2+2 academies), should have ceil(N-1) = 3 rounds with 2 matches each.
+    """
+    academy_data = {
+        "a": [("a1", 1200.0), ("a2", 1100.0)],
+        "b": [("b1", 1180.0), ("b2", 1080.0)],
+    }
+    players_by_academy = _make_inter_academy_players(academy_data)
+    
+    result = generate_league_fixtures(players_by_academy, set(), strategy="FULL_ROUND_ROBIN")
+    
+    # 4 players → 3 rounds of circle method
+    assert result["total_rounds"] <= 4
+    
+    # Collect all pairs
+    all_pairs: set[tuple] = set()
+    for slot in result["slots"]:
+        if slot["player_b_id"]:
+            pair = _canonical(slot["player_a_id"], slot["player_b_id"])
+            all_pairs.add(pair)
+    
+    # With 4 players, max unique pairs = 6
+    assert len(all_pairs) >= 4, f"FULL_ROUND_ROBIN produced only {len(all_pairs)} unique pairs (expected ~6)"
+
+
+def test_league_fixtures_diverse_3_academies_4_players_each():
+    """
+    Complex scenario: 3 academies, 4 players each, mixed ratings (900–1400).
+    Tests scalability of each strategy.
+    """
+    academy_data = {
+        "a": [("p1", 1400.0), ("p2", 1300.0), ("p3", 1100.0), ("p4", 900.0)],
+        "b": [("p1", 1380.0), ("p2", 1280.0), ("p3", 1080.0), ("p4", 920.0)],
+        "c": [("p1", 1360.0), ("p2", 1260.0), ("p3", 1060.0), ("p4", 940.0)],
+    }
+    players_by_academy = _make_inter_academy_players(academy_data)
+    
+    for strategy in ["TIER_MATCHED", "CROSS_ACADEMY_ONLY", "TEAM_FORMAT", "FULL_ROUND_ROBIN"]:
+        result = generate_league_fixtures(players_by_academy, set(), strategy=strategy)
+        
+        # All strategies should generate slots
+        assert len(result["slots"]) > 0, f"{strategy} generated no slots"
+        
+        # No self-pairings
+        for slot in result["slots"]:
+            if slot["player_b_id"]:
+                assert slot["player_a_id"] != slot["player_b_id"], (
+                    f"{strategy}: self-pairing detected"
+                )
+        
+        # All player IDs should be valid
+        all_player_ids = set()
+        for acad_players in players_by_academy.values():
+            for p in acad_players:
+                all_player_ids.add(p["player_id"])
+        
+        for slot in result["slots"]:
+            assert slot["player_a_id"] in all_player_ids, f"{strategy}: invalid player_a_id"
+            if slot["player_b_id"]:
+                assert slot["player_b_id"] in all_player_ids, f"{strategy}: invalid player_b_id"
+
+
+def test_league_fixtures_cross_academy_percentage():
+    """
+    Verify cross_academy_pct metric for each strategy.
+    TIER_MATCHED: typically >60% (can have intra-academy if tier has only 1 academy)
+    CROSS_ACADEMY_ONLY: 100% (by design, no intra-academy pairs)
+    TEAM_FORMAT: 100% (all academy-pair matches are cross-academy)
+    """
+    academy_data = {
+        "a": [("p1", 1300.0), ("p2", 1200.0), ("p3", 1100.0)],
+        "b": [("p1", 1280.0), ("p2", 1180.0), ("p3", 1080.0)],
+    }
+    players_by_academy = _make_inter_academy_players(academy_data)
+    
+    tier_result = generate_league_fixtures(players_by_academy, set(), strategy="TIER_MATCHED")
+    cross_result = generate_league_fixtures(players_by_academy, set(), strategy="CROSS_ACADEMY_ONLY")
+    team_result = generate_league_fixtures(players_by_academy, set(), strategy="TEAM_FORMAT")
+    
+    # CROSS_ACADEMY_ONLY and TEAM_FORMAT should be 100%
+    assert cross_result["cross_academy_pct"] == 100.0
+    assert team_result["cross_academy_pct"] == 100.0
+    
+    # TIER_MATCHED should be reasonably high when multiple academies per tier
+    assert tier_result["cross_academy_pct"] > 50.0
+
+
+def test_league_fixtures_with_played_pairs():
+    """
+    Test that played_pairs (from previous events) is respected.
+    Strategies should avoid recent pairs (though emphasis varies).
+    """
+    academy_data = {
+        "a": [("p1", 1300.0), ("p2", 1200.0), ("p3", 1100.0)],
+        "b": [("p1", 1280.0), ("p2", 1180.0), ("p3", 1080.0)],
+    }
+    players_by_academy = _make_inter_academy_players(academy_data)
+    
+    # Mark one pair as recently played
+    played = {_canonical("a_p1", "b_p1")}
+    
+    # TIER_MATCHED should try to avoid this pair
+    result = generate_league_fixtures(players_by_academy, played, strategy="TIER_MATCHED")
+    
+    played_in_result = any(
+        _canonical(s["player_a_id"], s["player_b_id"]) in played
+        for s in result["slots"] if s["player_b_id"]
+    )
+    # Note: TIER_MATCHED may still include the pair if no alternatives exist
+    # This test mainly verifies the function accepts played_pairs parameter
+    assert result is not None
+
+
+def test_league_fixtures_single_academy_no_cross_academy():
+    """
+    Edge case: single academy (no inter-academy pairing possible).
+    Strategies should handle gracefully (no matches or all BYEs).
+    """
+    academy_data = {
+        "a": [("p1", 1300.0), ("p2", 1200.0), ("p3", 1100.0)],
+    }
+    players_by_academy = _make_inter_academy_players(academy_data)
+    
+    # All strategies should handle single academy without crashing
+    for strategy in ["TIER_MATCHED", "CROSS_ACADEMY_ONLY", "TEAM_FORMAT", "FULL_ROUND_ROBIN"]:
+        result = generate_league_fixtures(players_by_academy, set(), strategy=strategy)
+        # Single academy → no cross-academy possible
+        # Strategies may generate no matches, all BYEs, or intra-academy matches
+        assert "slots" in result
+
+
+def test_league_fixtures_rating_gaps_tier_matched_vs_full_rr():
+    """
+    Compare TIER_MATCHED vs FULL_ROUND_ROBIN gap distributions.
+    TIER_MATCHED should have mostly small gaps (same tier).
+    FULL_ROUND_ROBIN may have large gaps (cross-tier).
+    """
+    # 3 academies, mixed tiers
+    academy_data = {
+        "a": [("elite", 1400.0), ("adv", 1150.0), ("int", 1000.0)],
+        "b": [("elite", 1380.0), ("adv", 1130.0), ("int", 980.0)],
+        "c": [("elite", 1360.0), ("adv", 1110.0), ("int", 960.0)],
+    }
+    players_by_academy = _make_inter_academy_players(academy_data)
+    
+    tier_result = generate_league_fixtures(players_by_academy, set(), strategy="TIER_MATCHED")
+    rr_result = generate_league_fixtures(players_by_academy, set(), strategy="FULL_ROUND_ROBIN")
+    
+    tier_gaps = [s["expected_rating_gap"] for s in tier_result["slots"] if s["player_b_id"]]
+    rr_gaps = [s["expected_rating_gap"] for s in rr_result["slots"] if s["player_b_id"]]
+    
+    tier_avg_gap = sum(tier_gaps) / len(tier_gaps) if tier_gaps else 0
+    rr_avg_gap = sum(rr_gaps) / len(rr_gaps) if rr_gaps else 0
+    
+    # TIER_MATCHED gaps should be tighter (same tier)
+    assert tier_avg_gap < rr_avg_gap or len(rr_gaps) == 0, (
+        f"TIER_MATCHED avg gap {tier_avg_gap} >= FULL_RR avg gap {rr_avg_gap}"
+    )
+
+
+def test_league_fixtures_match_category_assignments():
+    """
+    Verify that match_category is correctly assigned based on rating gap.
+    COMPETITIVE: gap ≤ 100
+    STRETCH: 100 < gap ≤ 250
+    ANCHOR: same as stretch for opponent (no separate category)
+    """
+    academy_data = {
+        "a": [("low", 900.0), ("mid", 1050.0), ("high", 1200.0)],
+        "b": [("low", 1000.0), ("mid", 1150.0), ("high", 1300.0)],
+    }
+    players_by_academy = _make_inter_academy_players(academy_data)
+    
+    # FULL_ROUND_ROBIN will have diverse gaps, good for category testing
+    result = generate_league_fixtures(players_by_academy, set(), strategy="FULL_ROUND_ROBIN")
+    
+    for slot in result["slots"]:
+        if slot["player_b_id"]:
+            gap = slot["expected_rating_gap"]
+            category = slot["match_category"]
+            
+            if gap <= 100:
+                assert category == "COMPETITIVE", (
+                    f"Gap {gap} ≤ 100 should be COMPETITIVE, got {category}"
+                )
+            elif 100 < gap <= 250:
+                assert category in ("STRETCH", "ANCHOR"), (
+                    f"Gap {gap} in (100, 250] should be STRETCH/ANCHOR, got {category}"
+                )

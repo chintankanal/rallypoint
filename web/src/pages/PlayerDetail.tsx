@@ -63,16 +63,49 @@ function formatScore(entry: RatingHistoryEntry, playerId: string): string {
   return won ? `${winSets}–${loseSets}` : `${loseSets}–${winSets}`
 }
 
-function categoryBadge(cat: string | null) {
-  if (!cat) return null
-  const styles: Record<string, string> = {
-    COMPETITIVE: 'bg-blue-900/50 text-blue-300',
-    STRETCH: 'bg-purple-900/50 text-purple-300',
-    ANCHOR: 'bg-gray-700 text-gray-300',
+function matchTypeBadge(r: RatingHistoryEntry) {
+  if (!r.match_category) return <span className="text-gray-600">—</span>
+
+  if (r.match_category === 'COMPETITIVE') {
+    return (
+      <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-blue-900/50 text-blue-300">
+        Competitive
+      </span>
+    )
   }
+
+  if (r.match_category === 'STRETCH') {
+    const oppRating = r.opponent_rating_before
+    if (oppRating != null && r.rating_before < oppRating) {
+      return (
+        <span
+          className="px-1.5 py-0.5 rounded text-xs font-medium bg-purple-900/50 text-purple-300"
+          title="Playing up against a stronger opponent"
+        >
+          Stretch ↑
+        </span>
+      )
+    }
+    if (oppRating != null && r.rating_before > oppRating) {
+      return (
+        <span
+          className="px-1.5 py-0.5 rounded text-xs font-medium bg-amber-900/50 text-amber-400"
+          title="Playing down as the stronger player"
+        >
+          Anchor ↓
+        </span>
+      )
+    }
+    return (
+      <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-purple-900/50 text-purple-300">
+        Stretch
+      </span>
+    )
+  }
+
   return (
-    <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${styles[cat] ?? 'bg-gray-700 text-gray-300'}`}>
-      {cat.charAt(0) + cat.slice(1).toLowerCase()}
+    <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-gray-700 text-gray-300">
+      {r.match_category.charAt(0) + r.match_category.slice(1).toLowerCase()}
     </span>
   )
 }
@@ -417,7 +450,7 @@ export default function PlayerDetail() {
                                               </td>
                                               <td className="px-3 py-2">
                                                 <div className="flex flex-wrap gap-1 items-center">
-                                                  {r.match_category ? categoryBadge(r.match_category) : <span className="text-gray-600">—</span>}
+                                                  {matchTypeBadge(r)}
                                                   {r.diminishing_signal_applied && (
                                                     <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-orange-900/50 text-orange-300" title="Diminishing signal — treated as Friendly">DS</span>
                                                   )}

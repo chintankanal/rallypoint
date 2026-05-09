@@ -81,16 +81,45 @@ def list_events(role: str, academy_id: str | None) -> list[dict]:
                 cur.execute(
                     """
                     SELECT e.event_id::text, e.name, e.scheduling_mode, e.event_type,
-                           e.status, e.start_date, e.end_date
-                    FROM event e ORDER BY e.start_date DESC LIMIT 100
+                           e.default_match_format, e.tournament_format, e.status,
+                           e.start_date, e.end_date, e.created_at,
+                           CASE WHEN e.season_id IS NOT NULL THEN
+                               json_build_object('season_id', s.season_id, 'name', s.name)
+                           ELSE NULL END AS season,
+                           COALESCE(
+                               (
+                                   SELECT json_agg(json_build_object('academy_id', a.academy_id, 'name', a.name))
+                                   FROM event_academy ea
+                                   JOIN academy a ON a.academy_id = ea.academy_id
+                                   WHERE ea.event_id = e.event_id
+                               ),
+                               '[]'::json
+                           ) AS participating_academies
+                    FROM event e
+                    LEFT JOIN season s ON s.season_id = e.season_id
+                    ORDER BY e.start_date DESC LIMIT 100
                     """
                 )
             else:
                 cur.execute(
                     """
                     SELECT DISTINCT e.event_id::text, e.name, e.scheduling_mode, e.event_type,
-                           e.status, e.start_date, e.end_date
+                           e.default_match_format, e.tournament_format, e.status,
+                           e.start_date, e.end_date, e.created_at,
+                           CASE WHEN e.season_id IS NOT NULL THEN
+                               json_build_object('season_id', s.season_id, 'name', s.name)
+                           ELSE NULL END AS season,
+                           COALESCE(
+                               (
+                                   SELECT json_agg(json_build_object('academy_id', a.academy_id, 'name', a.name))
+                                   FROM event_academy ea
+                                   JOIN academy a ON a.academy_id = ea.academy_id
+                                   WHERE ea.event_id = e.event_id
+                               ),
+                               '[]'::json
+                           ) AS participating_academies
                     FROM event e
+                    LEFT JOIN season s ON s.season_id = e.season_id
                     LEFT JOIN event_academy ea ON ea.event_id = e.event_id
                     WHERE e.host_academy_id = %s OR ea.academy_id = %s
                     ORDER BY e.start_date DESC LIMIT 100

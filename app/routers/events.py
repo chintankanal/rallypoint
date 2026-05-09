@@ -280,7 +280,7 @@ def generate_event_fixtures(
 
             # Wipe existing unplayed fixture slots for this event before regenerating
             cur.execute(
-                "DELETE FROM event_fixture_slot WHERE event_id = %s AND status = 'SCHEDULED'",
+                "DELETE FROM event_fixture_slot WHERE event_id = %s AND status IN ('SCHEDULED', 'BYE')",
                 (event_id,),
             )
 

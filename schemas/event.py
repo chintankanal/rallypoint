@@ -95,3 +95,78 @@ class UmpireAssignmentResponse(BaseModel):
     user_id: str
     table_number: int
     assigned_at: datetime
+
+
+# ── Event player registration ─────────────────────────────────────────────────
+
+class EventPlayerRegister(BaseModel):
+    player_id: str
+
+
+class EventPlayerItem(BaseModel):
+    registration_id: str
+    player_id: str
+    name: str
+    academy_id: str
+    academy_name: str
+    current_rating: float
+    status: str
+    registered_at: datetime
+
+
+class EventRosterResponse(BaseModel):
+    event_id: str
+    total: int
+    items: list[EventPlayerItem]
+
+
+# ── Inter-academy fixture generation ─────────────────────────────────────────
+
+_VALID_FIXTURE_STRATEGIES = {"FULL_ROUND_ROBIN", "TIER_MATCHED", "CROSS_ACADEMY_ONLY", "TEAM_FORMAT"}
+
+
+class GenerateEventFixturesRequest(BaseModel):
+    num_tables: int = 4
+    fixture_strategy: str = "TIER_MATCHED"
+
+    @field_validator("num_tables")
+    @classmethod
+    def validate_tables(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError("num_tables must be at least 1")
+        return v
+
+    @field_validator("fixture_strategy")
+    @classmethod
+    def validate_strategy(cls, v: str) -> str:
+        if v not in _VALID_FIXTURE_STRATEGIES:
+            raise ValueError(f"fixture_strategy must be one of {sorted(_VALID_FIXTURE_STRATEGIES)}")
+        return v
+
+
+class EventFixturePlayer(BaseModel):
+    player_id: str
+    name: str
+    current_rating: float
+    academy_id: str
+    academy_name: str
+
+
+class EventFixtureSlotResponse(BaseModel):
+    slot_id: str
+    round_number: int
+    table_number: int
+    match_category: str
+    player_a: EventFixturePlayer
+    player_b: EventFixturePlayer | None
+    expected_rating_gap: float
+    status: str
+    match_id: str | None
+
+
+class EventFixturesResponse(BaseModel):
+    event_id: str
+    total_rounds: int
+    total_slots: int
+    cross_academy_pct: float
+    slots: list[EventFixtureSlotResponse]

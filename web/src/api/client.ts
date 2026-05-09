@@ -150,6 +150,15 @@ export interface PlayerSearchResult {
   academy_name: string | null
 }
 
+export interface PlayerDirectoryItem {
+  player_id: string
+  name: string
+  current_rating: number
+  status: string
+  academy_id: string
+  academy_name: string
+}
+
 export interface PlayerDetail {
   player_id: string
   name: string
@@ -216,6 +225,7 @@ export interface RatingHistoryEntry {
 }
 
 export const playersApi = {
+  listAll: () => request<{ items: PlayerDirectoryItem[] }>('/players'),
   search: (q: string, academyId?: string) => {
     const params = new URLSearchParams({ q })
     if (academyId) params.set('academy_id', academyId)
@@ -315,6 +325,63 @@ export const eventsApi = {
     request<Event>(`/events/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   addAcademy: (id: string, academy_id: string) =>
     request<Event>(`/events/${id}/academies`, { method: 'POST', body: JSON.stringify({ academy_id }) }),
+  listPlayers: (id: string) => request<EventRoster>(`/events/${id}/players`),
+  registerPlayer: (id: string, player_id: string) =>
+    request<EventRoster>(`/events/${id}/players`, { method: 'POST', body: JSON.stringify({ player_id }) }),
+  removePlayer: (id: string, player_id: string) =>
+    request<void>(`/events/${id}/players/${player_id}`, { method: 'DELETE' }),
+  generateFixtures: (id: string, num_tables: number, fixture_strategy: string = 'TIER_MATCHED') =>
+    request<EventFixtures>(`/events/${id}/generate-fixtures`, { method: 'POST', body: JSON.stringify({ num_tables, fixture_strategy }) }),
+  getFixtures: (id: string) => request<EventFixtures>(`/events/${id}/fixture-slots`),
+}
+
+// ── Event player roster ───────────────────────────────────────────────────────
+
+export interface EventPlayer {
+  registration_id: string
+  player_id: string
+  name: string
+  academy_id: string
+  academy_name: string
+  current_rating: number
+  status: string
+  registered_at: string
+}
+
+export interface EventRoster {
+  event_id: string
+  total: number
+  items: EventPlayer[]
+}
+
+// ── Event fixture types ───────────────────────────────────────────────────────
+
+export interface EventFixturePlayer {
+  player_id: string
+  name: string
+  current_rating: number
+  academy_id: string
+  academy_name: string
+}
+
+export interface EventFixtureSlot {
+  slot_id: string
+  round_number: number
+  table_number: number
+  match_category: string
+  player_a: EventFixturePlayer
+  player_b: EventFixturePlayer | null
+  expected_rating_gap: number
+  status: string
+  match_id: string | null
+}
+
+export interface EventFixtures {
+  event_id: string
+  total_rounds: number
+  total_slots: number
+  cross_academy_pct: number
+  slots: EventFixtureSlot[]
 }
 
 // ── Matches ───────────────────────────────────────────────────────────────────

@@ -1,14 +1,24 @@
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from app.database import get_connection
 from app.dependencies.auth import get_current_user, require_roles
-from app.services import event_service
+from app.services import event_service, event_player_service
+from app.services.fixture_engine import generate_league_fixtures
 from schemas.event import (
     AddAcademyToEvent,
     AssignRefereeRequest,
     AssignUmpireRequest,
     EventCreate,
+    EventFixturePlayer,
+    EventFixtureSlotResponse,
+    EventFixturesResponse,
+    EventPlayerRegister,
+    EventRosterResponse,
     EventResponse,
     EventStatusUpdate,
+    GenerateEventFixturesRequest,
     RefereeAssignmentResponse,
     UmpireAssignmentResponse,
 )
@@ -17,6 +27,7 @@ router = APIRouter(prefix="/events", tags=["events"])
 
 _ADMIN = Depends(require_roles("ADMIN"))
 _ADMIN_COACH = Depends(require_roles("ADMIN", "COACH"))
+_ANY = Depends(get_current_user)
 
 
 @router.post("", response_model=EventResponse, status_code=status.HTTP_201_CREATED)
@@ -85,3 +96,346 @@ def assign_umpire(event_id: str, body: AssignUmpireRequest, _: dict = _ADMIN):
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
     return UmpireAssignmentResponse(**row)
+
+
+# ── Player registration ───────────────────────────────────────────────────────
+
+@router.get("/{event_id}/players", response_model=EventRosterResponse)
+def list_event_players(event_id: str, _: dict = _ANY):
+    items = event_player_service.list_players(event_id)
+    return EventRosterResponse(event_id=event_id, total=len(items), items=items)
+
+
+@router.post(
+    "/{event_id}/players",
+    response_model=EventRosterResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def register_event_player(
+    event_id: str,
+    body: EventPlayerRegister,
+    current_user: dict = Depends(get_current_user),
+):
+    if current_user["role"] not in ("ADMIN", "COACH", "PLAYER"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorised")
+    try:
+        row = event_player_service.register_player(
+            event_id=event_id,
+            player_id=body.player_id,
+            registered_by=current_user["user_id"],
+            caller_role=current_user["role"],
+            caller_academy_id=current_user.get("academy_id"),
+            caller_user_id=current_user["user_id"],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event or player not found")
+    items = event_player_service.list_players(event_id)
+    return EventRosterResponse(event_id=event_id, total=len(items), items=items)
+
+
+@router.delete("/{event_id}/players/{player_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_event_player(
+    event_id: str,
+    player_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    if current_user["role"] not in ("ADMIN", "COACH", "PLAYER"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorised")
+    try:
+        removed = event_player_service.remove_player(
+            event_id=event_id,
+            player_id=player_id,
+            withdrawn_by=current_user["user_id"],
+            caller_role=current_user["role"],
+            caller_academy_id=current_user.get("academy_id"),
+            caller_user_id=current_user["user_id"],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    if not removed:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Registration not found")
+
+
+# ── Inter-academy league fixtures ─────────────────────────────────────────────
+
+def _require_host_coach_or_admin(current_user: dict, event: dict) -> None:
+    """Raise 403 unless caller is ADMIN or the host-academy COACH."""
+    if current_user["role"] == "ADMIN":
+        return
+    if current_user["role"] == "COACH":
+        host = str(event.get("host_academy_id") or "")
+        if host and host == current_user.get("academy_id"):
+            return
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the host academy coach or an admin can generate fixtures",
+        )
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorised")
+
+
+@router.post("/{event_id}/generate-fixtures", response_model=EventFixturesResponse)
+def generate_event_fixtures(
+    event_id: str,
+    body: GenerateEventFixturesRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # Fetch and validate event
+            cur.execute(
+                """
+                SELECT event_id, scheduling_mode, event_type, status,
+                       host_academy_id, season_id, start_date
+                FROM event WHERE event_id = %s
+                """,
+                (event_id,),
+            )
+            event = cur.fetchone()
+            if not event:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+            if event["scheduling_mode"] != "INTER_ACADEMY" or event["event_type"] != "LEAGUE":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Fixture generation is only supported for INTER_ACADEMY LEAGUE events",
+                )
+            if event["status"] not in ("SCHEDULED", "IN_PROGRESS"):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot generate fixtures for a completed or cancelled event",
+                )
+
+            _require_host_coach_or_admin(current_user, dict(event))
+
+            # Fetch registered players with academy info
+            cur.execute(
+                """
+                SELECT p.player_id::text, p.name, p.current_rating,
+                       p.primary_academy_id::text AS academy_id,
+                       a.name AS academy_name
+                FROM event_player_registration epr
+                JOIN player p ON p.player_id = epr.player_id
+                JOIN academy a ON a.academy_id = p.primary_academy_id
+                WHERE epr.event_id = %s
+                  AND epr.status IN ('REGISTERED', 'CHECKED_IN')
+                  AND p.status = 'ACTIVE'
+                ORDER BY p.current_rating DESC
+                """,
+                (event_id,),
+            )
+            all_players = [dict(r) for r in cur.fetchall()]
+
+            if len(all_players) < 2:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="At least 2 registered active players required to generate fixtures",
+                )
+
+            # Group players by academy
+            players_by_academy: dict[str, list[dict]] = {}
+            for p in all_players:
+                players_by_academy.setdefault(p["academy_id"], []).append(p)
+
+            academies_with_players = len(players_by_academy)
+            if academies_with_players < 2:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="At least 2 different academies must have registered players",
+                )
+
+            # Fetch played_pairs from immediate prior league event in same season
+            played_pairs: set[tuple] = set()
+            season_id = event["season_id"]
+            if season_id:
+                cur.execute(
+                    """
+                    SELECT e2.event_id
+                    FROM event e2
+                    WHERE e2.season_id = %s
+                      AND e2.scheduling_mode = 'INTER_ACADEMY'
+                      AND e2.event_type = 'LEAGUE'
+                      AND e2.end_date < %s
+                    ORDER BY e2.end_date DESC
+                    LIMIT 1
+                    """,
+                    (str(season_id), event["start_date"]),
+                )
+                prior = cur.fetchone()
+                if prior:
+                    pids = [p["player_id"] for p in all_players]
+                    cur.execute(
+                        """
+                        SELECT DISTINCT player_a_id::text, player_b_id::text
+                        FROM match
+                        WHERE event_id = %s
+                          AND player_a_id = ANY(%s::uuid[])
+                          AND player_b_id = ANY(%s::uuid[])
+                        """,
+                        (str(prior["event_id"]), pids, pids),
+                    )
+                    played_pairs = {
+                        (r["player_a_id"], r["player_b_id"]) for r in cur.fetchall()
+                    }
+
+            # Wipe existing unplayed fixture slots for this event before regenerating
+            cur.execute(
+                "DELETE FROM event_fixture_slot WHERE event_id = %s AND status = 'SCHEDULED'",
+                (event_id,),
+            )
+
+            # Generate fixtures
+            result = generate_league_fixtures(
+                players_by_academy=players_by_academy,
+                played_pairs=played_pairs,
+                strategy=body.fixture_strategy,
+            )
+
+            # Persist fixture slots
+            players_by_id = {p["player_id"]: p for p in all_players}
+            slot_rows: list[dict] = []
+            for slot in result["slots"]:
+                slot_id = str(uuid.uuid4())
+                slot_status = "BYE" if slot["player_b_id"] is None else "SCHEDULED"
+                cur.execute(
+                    """
+                    INSERT INTO event_fixture_slot (
+                        slot_id, event_id, round_number, table_number,
+                        match_category, player_a_id, player_b_id,
+                        expected_rating_gap, status
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING slot_id::text, round_number, table_number,
+                              match_category, player_a_id::text, player_b_id::text,
+                              expected_rating_gap, status, match_id
+                    """,
+                    (
+                        slot_id, event_id,
+                        slot["round_number"], slot["table_number"],
+                        slot["match_category"],
+                        slot["player_a_id"], slot["player_b_id"],
+                        slot["expected_rating_gap"], slot_status,
+                    ),
+                )
+                slot_rows.append(dict(cur.fetchone()))
+
+    response_slots = _build_slot_responses(slot_rows, players_by_id)
+    return EventFixturesResponse(
+        event_id=event_id,
+        total_rounds=result["total_rounds"],
+        total_slots=len(response_slots),
+        cross_academy_pct=result["cross_academy_pct"],
+        slots=response_slots,
+    )
+
+
+@router.get("/{event_id}/fixture-slots", response_model=EventFixturesResponse)
+def get_event_fixtures(event_id: str, _: dict = _ANY):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT event_id FROM event WHERE event_id = %s", (event_id,))
+            if not cur.fetchone():
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+
+            cur.execute(
+                """
+                SELECT efs.slot_id::text, efs.round_number, efs.table_number,
+                       efs.match_category, efs.expected_rating_gap, efs.status,
+                       efs.match_id::text,
+                       efs.player_a_id::text, pa.name AS player_a_name,
+                       pa.current_rating AS player_a_rating,
+                       pa.primary_academy_id::text AS player_a_academy_id,
+                       aa.name AS player_a_academy_name,
+                       efs.player_b_id::text, pb.name AS player_b_name,
+                       pb.current_rating AS player_b_rating,
+                       pb.primary_academy_id::text AS player_b_academy_id,
+                       ab.name AS player_b_academy_name
+                FROM event_fixture_slot efs
+                JOIN player pa ON pa.player_id = efs.player_a_id
+                JOIN academy aa ON aa.academy_id = pa.primary_academy_id
+                LEFT JOIN player pb ON pb.player_id = efs.player_b_id
+                LEFT JOIN academy ab ON ab.academy_id = pb.primary_academy_id
+                WHERE efs.event_id = %s
+                ORDER BY efs.round_number, efs.table_number
+                """,
+                (event_id,),
+            )
+            rows = [dict(r) for r in cur.fetchall()]
+
+    total_rounds = max((r["round_number"] for r in rows), default=0)
+    cross_count = sum(
+        1 for r in rows
+        if r["player_b_id"] and r["player_a_academy_id"] != r["player_b_academy_id"]
+    )
+    real_count = sum(1 for r in rows if r["player_b_id"])
+    cross_pct = round(cross_count / real_count * 100, 1) if real_count > 0 else 0.0
+
+    slots = [
+        EventFixtureSlotResponse(
+            slot_id=r["slot_id"],
+            round_number=r["round_number"],
+            table_number=r["table_number"],
+            match_category=r["match_category"],
+            player_a=EventFixturePlayer(
+                player_id=r["player_a_id"],
+                name=r["player_a_name"],
+                current_rating=float(r["player_a_rating"]),
+                academy_id=r["player_a_academy_id"],
+                academy_name=r["player_a_academy_name"],
+            ),
+            player_b=EventFixturePlayer(
+                player_id=r["player_b_id"],
+                name=r["player_b_name"],
+                current_rating=float(r["player_b_rating"]),
+                academy_id=r["player_b_academy_id"],
+                academy_name=r["player_b_academy_name"],
+            ) if r["player_b_id"] else None,
+            expected_rating_gap=float(r["expected_rating_gap"]),
+            status=r["status"],
+            match_id=r["match_id"],
+        )
+        for r in rows
+    ]
+
+    return EventFixturesResponse(
+        event_id=event_id,
+        total_rounds=total_rounds,
+        total_slots=len(slots),
+        cross_academy_pct=cross_pct,
+        slots=slots,
+    )
+
+
+def _build_slot_responses(
+    slot_rows: list[dict],
+    players_by_id: dict,
+) -> list[EventFixtureSlotResponse]:
+    result = []
+    for sr in slot_rows:
+        pa = players_by_id.get(sr["player_a_id"])
+        pb = players_by_id.get(sr["player_b_id"]) if sr["player_b_id"] else None
+        result.append(
+            EventFixtureSlotResponse(
+                slot_id=sr["slot_id"],
+                round_number=sr["round_number"],
+                table_number=sr["table_number"],
+                match_category=sr["match_category"],
+                player_a=EventFixturePlayer(
+                    player_id=pa["player_id"],
+                    name=pa["name"],
+                    current_rating=float(pa["current_rating"]),
+                    academy_id=pa["academy_id"],
+                    academy_name=pa["academy_name"],
+                ),
+                player_b=EventFixturePlayer(
+                    player_id=pb["player_id"],
+                    name=pb["name"],
+                    current_rating=float(pb["current_rating"]),
+                    academy_id=pb["academy_id"],
+                    academy_name=pb["academy_name"],
+                ) if pb else None,
+                expected_rating_gap=float(sr["expected_rating_gap"]),
+                status=sr["status"],
+                match_id=sr.get("match_id"),
+            )
+        )
+    return result

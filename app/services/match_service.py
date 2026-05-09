@@ -85,11 +85,12 @@ def _check_diminishing_signal(cur, player_a_id: str, player_b_id: str, match_dat
     return row["cnt"] >= threshold
 
 
-def submit_match(conn, body, submitted_by_user_id: str) -> dict:
+def submit_match(conn, body, submitted_by_user_id: str, caller_role: str = "") -> dict:
     """
     Persist a new match.  Raises:
       - psycopg2.errors.UniqueViolation  → caller converts to 409 MATCH_DUPLICATE
       - ValueError                        → caller converts to 400
+      - PermissionError                   → caller converts to 403
     """
     with conn.cursor() as cur:
         # Resolve event to get scheduling_mode and default match format
@@ -103,6 +104,9 @@ def submit_match(conn, body, submitted_by_user_id: str) -> dict:
             raise ValueError("Event not found")
         if event["status"] not in ("SCHEDULED", "IN_PROGRESS"):
             raise ValueError(f"Cannot submit matches for event with status '{event['status']}'")
+
+        if event["scheduling_mode"] == "INTER_ACADEMY" and caller_role == "COACH":
+            raise PermissionError("Coaches cannot submit match results for inter-academy events — only players, umpires, or referees may submit")
 
         # Load players
         for pid in (body.player_a_id, body.player_b_id):
@@ -165,11 +169,14 @@ def submit_match(conn, body, submitted_by_user_id: str) -> dict:
         )
 
         # Validate fixture slot if provided
+        # INTRA_ACADEMY uses fixture_slot (session-scoped); INTER_ACADEMY uses event_fixture_slot
         slot_match_category = None
+        is_event_slot = event["scheduling_mode"] == "INTER_ACADEMY"
         if body.fixture_slot_id:
+            slot_table = "event_fixture_slot" if is_event_slot else "fixture_slot"
             cur.execute(
-                "SELECT slot_id, session_id, player_a_id::text, player_b_id::text, status, match_category "
-                "FROM fixture_slot WHERE slot_id = %s",
+                f"SELECT slot_id::text, player_a_id::text, player_b_id::text, status, match_category "
+                f"FROM {slot_table} WHERE slot_id = %s",
                 (body.fixture_slot_id,),
             )
             slot = cur.fetchone()
@@ -231,10 +238,16 @@ def submit_match(conn, body, submitted_by_user_id: str) -> dict:
         )
 
         if body.fixture_slot_id:
-            cur.execute(
-                "UPDATE fixture_slot SET status = 'PLAYED', match_id = %s WHERE slot_id = %s",
-                (match_id, body.fixture_slot_id),
-            )
+            if is_event_slot:
+                cur.execute(
+                    "UPDATE event_fixture_slot SET status = 'PLAYED', match_id = %s WHERE slot_id = %s",
+                    (match_id, body.fixture_slot_id),
+                )
+            else:
+                cur.execute(
+                    "UPDATE fixture_slot SET status = 'PLAYED', match_id = %s WHERE slot_id = %s",
+                    (match_id, body.fixture_slot_id),
+                )
             if body.session_id:
                 cur.execute(
                     """

@@ -16,12 +16,16 @@ _ADMIN_REFEREE = Depends(require_roles("ADMIN", "REFEREE"))
 def submit_match(body: MatchSubmit, current_user: dict = _ANY_USER):
     try:
         with get_connection() as conn:
-            row = match_service.submit_match(conn, body, current_user["user_id"])
+            row = match_service.submit_match(
+                conn, body, current_user["user_id"], caller_role=current_user["role"]
+            )
     except psycopg2.errors.UniqueViolation:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"error": "MATCH_DUPLICATE", "message": "This match has already been submitted"},
         )
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 

@@ -3,6 +3,7 @@ Fixture engine: pure Python, zero DB access, fully unit-testable.
 
 All functions accept and return plain dicts/lists of player dicts:
   player = {"player_id": str, "name": str, "current_rating": float}
+  inter-academy players additionally carry: "academy_id": str, "academy_name": str
 
 Returned slot dicts:
   {
@@ -542,3 +543,372 @@ def generate_fixtures(
         "matches_per_player": mpp,
         "slots": slots,
     }
+
+
+# ── Inter-academy League Fixture Engine ───────────────────────────────────────
+
+def _interleave_academies(players_by_academy: dict[str, list[dict]]) -> list[dict]:
+    """
+    Interleave players from different academies so the circle method produces
+    cross-academy pairings. Academy with the most players listed first (reduces BYEs).
+    Players within each academy are expected pre-sorted by rating desc.
+    """
+    sorted_lists = sorted(players_by_academy.values(), key=len, reverse=True)
+    max_len = max(len(p) for p in sorted_lists) if sorted_lists else 0
+    result: list[dict] = []
+    for i in range(max_len):
+        for players in sorted_lists:
+            if i < len(players):
+                result.append(players[i])
+    return result
+
+
+def _circle_pairs_for_ids(pids: list, round_idx: int) -> list[tuple]:
+    """
+    Circle method on a flat list of player_ids (None = BYE sentinel).
+    List must have even length. Returns pairs for one round.
+    """
+    n = len(pids)
+    fixed = pids[0]
+    rotating = list(pids[1:])
+    r = round_idx % (n - 1)
+    if r:
+        rotating = rotating[-r:] + rotating[:-r]
+    pairs: list[tuple] = [(fixed, rotating[-1])]
+    mid = (n - 2) // 2
+    for i in range(mid):
+        pairs.append((rotating[i], rotating[-2 - i]))
+    return pairs
+
+
+def _swap_for_novelty(
+    pairs: list[tuple],
+    played_pairs: set[tuple],
+) -> list[tuple]:
+    """
+    Single-pass swap: for each pair that appears in played_pairs (rematch from prior
+    event), try to find another pair to swap partners with that reduces total rematches.
+    """
+    pairs = list(pairs)
+    for i in range(len(pairs)):
+        a, b = pairs[i]
+        if b is None or _canonical(a, b) not in played_pairs:
+            continue
+        for j in range(len(pairs)):
+            if i == j:
+                continue
+            c, d = pairs[j]
+            if d is None:
+                continue
+            old_score = (
+                (1 if _canonical(a, b) in played_pairs else 0)
+                + (1 if _canonical(c, d) in played_pairs else 0)
+            )
+            new_score = (
+                (1 if _canonical(a, d) in played_pairs else 0)
+                + (1 if _canonical(c, b) in played_pairs else 0)
+            )
+            if new_score < old_score:
+                pairs[i] = (a, d)
+                pairs[j] = (c, b)
+                break
+    return pairs
+
+
+def _assign_tables_league(
+    pairs: list[tuple],
+    round_number: int,
+    players_by_id: dict,
+) -> list[dict]:
+    """Assign pairs to tables, derive category from gap. No sub-rounds for inter-academy."""
+    slots: list[dict] = []
+    for i, (pid_a, pid_b) in enumerate(pairs):
+        table = i + 1  # sequential match number within the round; physical table scheduling is out of scope
+        if pid_b is None:
+            slots.append({
+                "round_number": round_number,
+                "table_number": table,
+                "match_category": "COMPETITIVE",
+                "player_a_id": pid_a,
+                "player_b_id": None,
+                "expected_rating_gap": 0.0,
+            })
+            continue
+        canon_a, canon_b = _canonical(pid_a, pid_b)
+        gap = _gap(players_by_id, canon_a, canon_b)
+        slots.append({
+            "round_number": round_number,
+            "table_number": table,
+            "match_category": _category(gap),
+            "player_a_id": canon_a,
+            "player_b_id": canon_b,
+            "expected_rating_gap": round(gap, 2),
+        })
+    return slots
+
+
+def _run_circle_round_robin(
+    players_by_id: dict,
+    pids: list,
+    played_pairs: set[tuple],
+    round_offset: int = 0,
+) -> tuple[list[dict], int, int]:
+    """
+    Full circle-method round-robin on a (possibly BYE-padded) pid list.
+    Returns (slots, cross_count, real_count).
+    round_offset shifts round numbers so tiers can share a sequential counter.
+    """
+    total_rounds = len(pids) - 1
+    slots: list[dict] = []
+    cross_count = 0
+    real_count = 0
+
+    for round_idx in range(total_rounds):
+        raw_pairs = _circle_pairs_for_ids(pids, round_idx)
+        real_pairs = [(a, b) for a, b in raw_pairs if a is not None and b is not None]
+        bye_pairs = [(a if a is not None else b, None) for a, b in raw_pairs if a is None or b is None]
+        real_pairs = _swap_for_novelty(real_pairs, played_pairs)
+        all_pairs = real_pairs + bye_pairs
+
+        round_slots = _assign_tables_league(all_pairs, round_offset + round_idx + 1, players_by_id)
+        for slot in round_slots:
+            if slot["player_b_id"] is not None:
+                real_count += 1
+                if players_by_id[slot["player_a_id"]]["academy_id"] != players_by_id[slot["player_b_id"]]["academy_id"]:
+                    cross_count += 1
+        slots.extend(round_slots)
+
+    return slots, cross_count, real_count
+
+
+def _full_round_robin(players_by_academy: dict, played_pairs: set[tuple]) -> dict:
+    """
+    Option 1: Every player plays every other player exactly once.
+    Circle method with academy interleaving to maximise cross-academy pairings.
+    """
+    all_players = _interleave_academies(players_by_academy)
+    players_by_id = {p["player_id"]: p for p in all_players}
+    n = len(all_players)
+    if n < 2:
+        return {"total_rounds": 0, "cross_academy_pct": 0.0, "slots": []}
+
+    pids: list = [p["player_id"] for p in all_players]
+    if n % 2 == 1:
+        pids = pids + [None]
+
+    slots, cross_count, real_count = _run_circle_round_robin(players_by_id, pids, played_pairs)
+    total_rounds = len(pids) - 1
+    cross_pct = round(cross_count / real_count * 100, 1) if real_count > 0 else 0.0
+    return {"total_rounds": total_rounds, "cross_academy_pct": cross_pct, "slots": slots}
+
+
+def _tier_matched(players_by_academy: dict, played_pairs: set[tuple]) -> dict:
+    """
+    Option 2 (default): Players grouped by rating tier. Within each tier, a
+    cross-academy round-robin is run. Players in different tiers never meet,
+    so nearly all matches are COMPETITIVE (gap ≤ 100).
+    Rounds are numbered sequentially across tiers.
+    """
+    from app.utils.rating_math import get_tier
+
+    # Build per-tier, per-academy groupings
+    tier_by_academy: dict[str, dict[str, list[dict]]] = {}
+    for academy_id, players in players_by_academy.items():
+        for p in players:
+            tier = get_tier(float(p["current_rating"]))
+            tier_by_academy.setdefault(tier, {}).setdefault(academy_id, []).append(p)
+
+    all_slots: list[dict] = []
+    cross_count = 0
+    real_count = 0
+    round_offset = 0
+
+    tier_order = ["NATIONAL_TRACK", "ELITE", "ADVANCED", "INTERMEDIATE", "BEGINNER"]
+    for tier in tier_order:
+        by_academy = tier_by_academy.get(tier)
+        if not by_academy:
+            continue
+
+        all_in_tier = [p for players in by_academy.values() for p in players]
+        if len(all_in_tier) < 2:
+            continue
+
+        interleaved = _interleave_academies(by_academy)
+        players_by_id_tier = {p["player_id"]: p for p in interleaved}
+        pids: list = [p["player_id"] for p in interleaved]
+        if len(pids) % 2 == 1:
+            pids = pids + [None]
+
+        tier_slots, tc, rc = _run_circle_round_robin(
+            players_by_id_tier, pids, played_pairs, round_offset
+        )
+        all_slots.extend(tier_slots)
+        cross_count += tc
+        real_count += rc
+        round_offset += len(pids) - 1
+
+    cross_pct = round(cross_count / real_count * 100, 1) if real_count > 0 else 0.0
+    return {"total_rounds": round_offset, "cross_academy_pct": cross_pct, "slots": all_slots}
+
+
+def _cross_academy_only(players_by_academy: dict, played_pairs: set[tuple]) -> dict:
+    """
+    Option 3: Circle method, but intra-academy pairs are replaced with BYEs.
+    Every scheduled match is guaranteed to be cross-academy.
+    Players sit out (BYE) rounds where the circle would have paired them with
+    a same-academy teammate.
+    """
+    all_players = _interleave_academies(players_by_academy)
+    players_by_id = {p["player_id"]: p for p in all_players}
+    n = len(all_players)
+    if n < 2:
+        return {"total_rounds": 0, "cross_academy_pct": 0.0, "slots": []}
+
+    pids: list = [p["player_id"] for p in all_players]
+    if n % 2 == 1:
+        pids = pids + [None]
+
+    total_rounds = len(pids) - 1
+    slots: list[dict] = []
+    cross_count = 0
+    real_count = 0
+
+    for round_idx in range(total_rounds):
+        raw_pairs = _circle_pairs_for_ids(pids, round_idx)
+        real_pairs = [(a, b) for a, b in raw_pairs if a is not None and b is not None]
+        bye_pairs = [(a if a is not None else b, None) for a, b in raw_pairs if a is None or b is None]
+
+        cross_pairs = []
+        for a, b in real_pairs:
+            if players_by_id[a]["academy_id"] != players_by_id[b]["academy_id"]:
+                cross_pairs.append((a, b))
+            else:
+                # Same-academy pair → both players get a BYE this round
+                bye_pairs.append((a, None))
+                bye_pairs.append((b, None))
+
+        cross_pairs = _swap_for_novelty(cross_pairs, played_pairs)
+        all_pairs = cross_pairs + bye_pairs
+
+        round_slots = _assign_tables_league(all_pairs, round_idx + 1, players_by_id)
+        for slot in round_slots:
+            if slot["player_b_id"] is not None:
+                real_count += 1
+                cross_count += 1  # all real matches are cross-academy by construction
+        slots.extend(round_slots)
+
+    cross_pct = 100.0 if real_count > 0 else 0.0
+    return {"total_rounds": total_rounds, "cross_academy_pct": cross_pct, "slots": slots}
+
+
+def _team_format(players_by_academy: dict, _played_pairs: set[tuple]) -> dict:
+    """
+    Option 4: Structured as Academy A vs Academy B, A vs C, B vs C …
+    Within each matchup, players are paired positionally by intra-academy rating rank
+    (#1 vs #1, #2 vs #2, …). Unmatched positions (different academy sizes) get BYEs.
+    Each academy-pair matchup occupies one round number.
+    """
+    sorted_academies: dict[str, list[dict]] = {
+        aid: sorted(players, key=lambda p: float(p["current_rating"]), reverse=True)
+        for aid, players in players_by_academy.items()
+    }
+    players_by_id = {
+        p["player_id"]: p
+        for players in sorted_academies.values()
+        for p in players
+    }
+    academy_ids = list(sorted_academies.keys())
+
+    slots: list[dict] = []
+    cross_count = 0
+    real_count = 0
+    round_number = 1
+
+    for i in range(len(academy_ids)):
+        for j in range(i + 1, len(academy_ids)):
+            aid_a = academy_ids[i]
+            aid_b = academy_ids[j]
+            team_a = sorted_academies[aid_a]
+            team_b = sorted_academies[aid_b]
+            max_pos = max(len(team_a), len(team_b))
+
+            round_slots: list[dict] = []
+            for pos in range(max_pos):
+                p_a = team_a[pos] if pos < len(team_a) else None
+                p_b = team_b[pos] if pos < len(team_b) else None
+
+                if p_a is None:
+                    round_slots.append({
+                        "round_number": round_number,
+                        "table_number": pos + 1,
+                        "match_category": "COMPETITIVE",
+                        "player_a_id": p_b["player_id"],
+                        "player_b_id": None,
+                        "expected_rating_gap": 0.0,
+                    })
+                elif p_b is None:
+                    round_slots.append({
+                        "round_number": round_number,
+                        "table_number": pos + 1,
+                        "match_category": "COMPETITIVE",
+                        "player_a_id": p_a["player_id"],
+                        "player_b_id": None,
+                        "expected_rating_gap": 0.0,
+                    })
+                else:
+                    canon_a, canon_b = _canonical(p_a["player_id"], p_b["player_id"])
+                    gap = _gap(players_by_id, canon_a, canon_b)
+                    real_count += 1
+                    cross_count += 1
+                    round_slots.append({
+                        "round_number": round_number,
+                        "table_number": pos + 1,
+                        "match_category": _category(gap),
+                        "player_a_id": canon_a,
+                        "player_b_id": canon_b,
+                        "expected_rating_gap": round(gap, 2),
+                    })
+
+            slots.extend(round_slots)
+            round_number += 1
+
+    total_rounds = round_number - 1
+    cross_pct = round(cross_count / real_count * 100, 1) if real_count > 0 else 0.0
+    return {"total_rounds": total_rounds, "cross_academy_pct": cross_pct, "slots": slots}
+
+
+FIXTURE_STRATEGIES = {"FULL_ROUND_ROBIN", "TIER_MATCHED", "CROSS_ACADEMY_ONLY", "TEAM_FORMAT"}
+
+
+def generate_league_fixtures(
+    players_by_academy: dict[str, list[dict]],
+    played_pairs: set[tuple],
+    strategy: str = "TIER_MATCHED",
+) -> dict:
+    """
+    Generate inter-academy league fixtures using the selected strategy.
+
+    Strategy options:
+      TIER_MATCHED       (default) — cross-academy round-robin within each rating tier.
+                                     Maximises COMPETITIVE matches.
+      CROSS_ACADEMY_ONLY           — circle method, intra-academy pairs replaced with BYEs.
+                                     Every match is cross-academy.
+      TEAM_FORMAT                  — positional matchups per academy pair (#1v#1, #2v#2 …).
+                                     Closest to real inter-club team competition.
+      FULL_ROUND_ROBIN             — every player vs every other player (original behaviour).
+                                     Produces many STRETCH matches when academies differ in level.
+
+    players_by_academy: {academy_id: [player_dict, ...]} each sorted by rating desc.
+      Each player_dict must have: player_id, name, current_rating, academy_id, academy_name.
+    played_pairs: canonical (a, b) tuples from the immediately preceding league event.
+
+    Returns: {"total_rounds": int, "cross_academy_pct": float, "slots": list[dict]}
+    """
+    dispatch = {
+        "FULL_ROUND_ROBIN": _full_round_robin,
+        "TIER_MATCHED": _tier_matched,
+        "CROSS_ACADEMY_ONLY": _cross_academy_only,
+        "TEAM_FORMAT": _team_format,
+    }
+    fn = dispatch.get(strategy, _tier_matched)
+    return fn(players_by_academy, played_pairs)

@@ -26,6 +26,12 @@ def create_player(body: PlayerCreate, current_user: dict = _ADMIN_COACH):
     return PlayerResponse(**row)
 
 
+@router.get("", tags=["players"])
+def list_all_players(_: dict = _ANY_USER):
+    """All players ordered by academy name, then player name — used by event roster directory."""
+    return {"items": player_service.list_all_players()}
+
+
 @router.get("/search", tags=["players"])
 def search_players(
     q: str = Query("", description="Name search"),

@@ -112,6 +112,23 @@ def search_players(q: str, academy_id: str | None, limit: int) -> list[dict]:
             return [dict(r) for r in cur.fetchall()]
 
 
+def list_all_players() -> list[dict]:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT p.player_id::text, p.name, p.current_rating::float,
+                       p.status,
+                       p.primary_academy_id::text AS academy_id,
+                       a.name AS academy_name
+                FROM player p
+                JOIN academy a ON a.academy_id = p.primary_academy_id
+                ORDER BY a.name, p.name
+                """
+            )
+            return [dict(r) for r in cur.fetchall()]
+
+
 def get_computed_stats(player_id: str) -> dict | None:
     with get_connection() as conn:
         with conn.cursor() as cur:

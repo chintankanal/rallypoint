@@ -70,11 +70,11 @@ export default function Leaderboard() {
                   <tr className="bg-gray-900 text-gray-400 text-left">
                     <th className="px-4 py-3 w-12">#</th>
                     <th className="px-4 py-3">Player</th>
-                    <th className="px-4 py-3 hidden sm:table-cell">Academy</th>
-                    <th className="px-4 py-3">Rating</th>
+                    <th className="px-4 py-3 hidden sm:table-cell">Academy ↑</th>
+                    <th className="px-4 py-3">Rating ↓</th>
                     <th className="px-4 py-3">Tier</th>
                     <th className="px-4 py-3 hidden lg:table-cell">Gender</th>
-                    <th className="px-4 py-3 hidden lg:table-cell">Age Cat.</th>
+                    <th className="px-4 py-3 hidden lg:table-cell">Age Cat. ↑</th>
                     <th className="px-4 py-3 hidden md:table-cell">Matches</th>
                   </tr>
                 </thead>
@@ -144,8 +144,8 @@ export default function Leaderboard() {
                 <tr className="bg-gray-900 text-gray-400 text-left">
                   <th className="px-4 py-3 w-12">#</th>
                   <th className="px-4 py-3">Player</th>
-                  <th className="px-4 py-3 hidden sm:table-cell">Academy</th>
-                  <th className="px-4 py-3">Rating</th>
+                  <th className="px-4 py-3 hidden sm:table-cell">Academy ↑</th>
+                  <th className="px-4 py-3">Rating ↓</th>
                   <th className="px-4 py-3">Tier</th>
                   <th className="px-4 py-3 hidden sm:table-cell">Age</th>
                   <th className="px-4 py-3 hidden lg:table-cell">Gender</th>

@@ -161,6 +161,7 @@ class EventFixtureSlotResponse(BaseModel):
     player_b: EventFixturePlayer | None
     expected_rating_gap: float
     status: str
+    fixture_strategy: str
     match_id: str | None
 
 

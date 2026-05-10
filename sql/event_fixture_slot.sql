@@ -3,6 +3,14 @@ SET timezone TO 'Asia/Kolkata';
 
 -- Reuse match_category and fixture_slot_status ENUMs defined in fixture_slot.sql
 
+-- Create fixture_strategy enum for inter-academy league fixture generation strategies
+CREATE TYPE fixture_strategy AS ENUM (
+    'TIER_MATCHED',
+    'CROSS_ACADEMY_ONLY',
+    'TEAM_FORMAT',
+    'FULL_ROUND_ROBIN'
+);
+
 CREATE TABLE IF NOT EXISTS event_fixture_slot (
     slot_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     event_id            UUID NOT NULL REFERENCES event(event_id) ON DELETE CASCADE,
@@ -13,6 +21,7 @@ CREATE TABLE IF NOT EXISTS event_fixture_slot (
     player_b_id         UUID REFERENCES player(player_id),  -- NULL = BYE
     expected_rating_gap DECIMAL(10,2) NOT NULL DEFAULT 0,
     status              fixture_slot_status NOT NULL DEFAULT 'SCHEDULED',
+    fixture_strategy    fixture_strategy NOT NULL DEFAULT 'TIER_MATCHED',
     match_id            UUID,  -- FK to match added later to avoid circular dependency
     created_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 

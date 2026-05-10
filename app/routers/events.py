@@ -302,11 +302,11 @@ def generate_event_fixtures(
                     INSERT INTO event_fixture_slot (
                         slot_id, event_id, round_number, table_number,
                         match_category, player_a_id, player_b_id,
-                        expected_rating_gap, status
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        expected_rating_gap, status, fixture_strategy
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING slot_id::text, round_number, table_number,
                               match_category, player_a_id::text, player_b_id::text,
-                              expected_rating_gap, status, match_id
+                              expected_rating_gap, status, match_id, fixture_strategy
                     """,
                     (
                         slot_id, event_id,
@@ -314,6 +314,7 @@ def generate_event_fixtures(
                         slot["match_category"],
                         slot["player_a_id"], slot["player_b_id"],
                         slot["expected_rating_gap"], slot_status,
+                        body.fixture_strategy,
                     ),
                 )
                 slot_rows.append(dict(cur.fetchone()))
@@ -435,6 +436,7 @@ def _build_slot_responses(
                 ) if pb else None,
                 expected_rating_gap=float(sr["expected_rating_gap"]),
                 status=sr["status"],
+                fixture_strategy=sr["fixture_strategy"],
                 match_id=sr.get("match_id"),
             )
         )

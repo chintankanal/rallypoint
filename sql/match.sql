@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS match (
     match_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     event_id UUID REFERENCES event(event_id) NOT NULL,
     session_id UUID REFERENCES session(session_id),
-    fixture_slot_id UUID REFERENCES fixture_slot(slot_id),
+    fixture_slot_id UUID, -- Can reference fixture_slot(slot_id) or event_fixture_slot(slot_id)
     player_a_id UUID REFERENCES player(player_id) NOT NULL,
     player_b_id UUID REFERENCES player(player_id) NOT NULL,
     player_a_academy_id UUID REFERENCES academy(academy_id) NOT NULL, -- Snapshot

@@ -193,3 +193,136 @@ def get_asi_history(academy_id: str, limit: int) -> list[dict] | None:
                 (academy_id, limit),
             )
             return [dict(r) for r in cur.fetchall()]
+
+
+def get_academy_stats(academy_id: str) -> dict | None:
+    """
+    Get comprehensive statistics for an academy.
+    
+    Returns:
+    {
+        "tables_available": int,
+        "active_player_count": int,
+        "coach_count": int,
+        "total_match_volume": int,
+        "matches_30_days": int,
+        "current_asi": float | None,
+        "tier_distribution": {
+            "BEGINNER": int,
+            "INTERMEDIATE": int,
+            "ADVANCED": int,
+            "ELITE": int,
+            "NATIONAL_TRACK": int
+        }
+    }
+    """
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # Verify academy exists
+            cur.execute("SELECT academy_id FROM academy WHERE academy_id = %s", (academy_id,))
+            if not cur.fetchone():
+                return None
+            
+            stats = {}
+            
+            # 1. Tables available (from system_configuration)
+            cur.execute(
+                "SELECT total_tables FROM system_configuration LIMIT 1"
+            )
+            result = cur.fetchone()
+            stats["tables_available"] = result["total_tables"] if result else 0
+            
+            # 2. Active Player Count
+            cur.execute(
+                """
+                SELECT COUNT(*) as count FROM player
+                WHERE primary_academy_id = %s AND status = 'ACTIVE'
+                """,
+                (academy_id,)
+            )
+            stats["active_player_count"] = cur.fetchone()["count"]
+            
+            # 3. Coach Count
+            cur.execute(
+                """
+                SELECT COUNT(*) as count FROM users
+                WHERE academy_id = %s AND role = 'COACH'
+                """,
+                (academy_id,)
+            )
+            stats["coach_count"] = cur.fetchone()["count"]
+            
+            # 4. Total Match Volume (historical)
+            cur.execute(
+                """
+                SELECT COUNT(*) as count FROM match
+                WHERE player_a_academy_id = %s OR player_b_academy_id = %s
+                """,
+                (academy_id, academy_id)
+            )
+            stats["total_match_volume"] = cur.fetchone()["count"]
+            
+            # 5. 30-Day Activity
+            cur.execute(
+                """
+                SELECT COUNT(*) as count FROM match
+                WHERE (player_a_academy_id = %s OR player_b_academy_id = %s)
+                  AND match_date >= CURRENT_DATE - INTERVAL '30 days'
+                """,
+                (academy_id, academy_id)
+            )
+            stats["matches_30_days"] = cur.fetchone()["count"]
+            
+            # 6. Current ASI (mean rating of top non-provisional players)
+            cur.execute(
+                f"""
+                SELECT AVG(current_rating)::float as asi_value
+                FROM player
+                WHERE primary_academy_id = %s
+                  AND status = 'ACTIVE'
+                  AND NOT ({_IS_PROVISIONAL_SQL})
+                  AND current_rating >= 1000
+                LIMIT 15
+                """,
+                (academy_id,)
+            )
+            result = cur.fetchone()
+            stats["current_asi"] = result["asi_value"] if result["asi_value"] else None
+            
+            # 7. Tier Distribution
+            cur.execute(
+                f"""
+                SELECT
+                    {_TIER_SQL} as tier,
+                    COUNT(*) as player_count
+                FROM player
+                WHERE primary_academy_id = %s AND status = 'ACTIVE'
+                GROUP BY {_TIER_SQL}
+                ORDER BY
+                    CASE
+                        WHEN {_TIER_SQL} = 'BEGINNER' THEN 1
+                        WHEN {_TIER_SQL} = 'INTERMEDIATE' THEN 2
+                        WHEN {_TIER_SQL} = 'ADVANCED' THEN 3
+                        WHEN {_TIER_SQL} = 'ELITE' THEN 4
+                        ELSE 5
+                    END
+                """,
+                (academy_id,)
+            )
+            
+            # Initialize tier distribution with zeros
+            tier_distribution = {
+                "BEGINNER": 0,
+                "INTERMEDIATE": 0,
+                "ADVANCED": 0,
+                "ELITE": 0,
+                "NATIONAL_TRACK": 0
+            }
+            
+            # Populate from query results
+            for row in cur.fetchall():
+                tier_distribution[row["tier"]] = row["player_count"]
+            
+            stats["tier_distribution"] = tier_distribution
+            
+    return stats

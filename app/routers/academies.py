@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.dependencies.auth import get_current_user, require_roles
 from app.services import academy_service
-from schemas.academy import AcademyCreate, AcademyDetail, AcademyResponse
+from schemas.academy import AcademyCreate, AcademyDetail, AcademyResponse, AcademyStats, TierDistribution
 from schemas.leaderboard import (
     ASIHistoryEntry,
     ASIHistoryResponse,
@@ -88,3 +88,25 @@ def get_asi_history(
         for r in rows
     ]
     return ASIHistoryResponse(academy_id=academy_id, items=items)
+
+
+@router.get("/{academy_id}/stats", response_model=AcademyStats)
+def get_academy_stats(
+    academy_id: str,
+    _: dict = _ANY_USER,
+):
+    """Get comprehensive statistics for an academy including player counts, match volume, and tier distribution."""
+    stats = academy_service.get_academy_stats(academy_id)
+    if stats is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Academy not found")
+    
+    return AcademyStats(
+        academy_id=academy_id,
+        tables_available=stats["tables_available"],
+        active_player_count=stats["active_player_count"],
+        coach_count=stats["coach_count"],
+        total_match_volume=stats["total_match_volume"],
+        matches_30_days=stats["matches_30_days"],
+        current_asi=stats["current_asi"],
+        tier_distribution=TierDistribution(**stats["tier_distribution"]),
+    )

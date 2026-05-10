@@ -65,6 +65,25 @@ export interface AcademyDetail extends AcademyListItem {
   created_at: string
 }
 
+export interface TierDistribution {
+  BEGINNER: number
+  INTERMEDIATE: number
+  ADVANCED: number
+  ELITE: number
+  NATIONAL_TRACK: number
+}
+
+export interface AcademyStats {
+  academy_id: string
+  tables_available: number
+  active_player_count: number
+  coach_count: number
+  total_match_volume: number
+  matches_30_days: number
+  current_asi: number | null
+  tier_distribution: TierDistribution
+}
+
 export const academiesApi = {
   list: (status?: string) => {
     const q = status ? `?status=${status}` : ''
@@ -82,6 +101,8 @@ export const academiesApi = {
     if (params?.offset !== undefined) q.set('offset', String(params.offset))
     return request<LeaderboardResponse>(`/academies/${id}/leaderboard?${q}`)
   },
+  getStats: (id: string) =>
+    request<AcademyStats>(`/academies/${id}/stats`),
 }
 
 export interface ASIPoint {

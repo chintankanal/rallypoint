@@ -33,3 +33,22 @@ class AcademyDetail(AcademyResponse):
     asi_player_count: int | None
     asi_last_calculated: datetime | None
     active_player_count: int
+
+
+class TierDistribution(BaseModel):
+    BEGINNER: int
+    INTERMEDIATE: int
+    ADVANCED: int
+    ELITE: int
+    NATIONAL_TRACK: int
+
+
+class AcademyStats(BaseModel):
+    academy_id: str
+    tables_available: int
+    active_player_count: int
+    coach_count: int
+    total_match_volume: int
+    matches_30_days: int
+    current_asi: float | None
+    tier_distribution: TierDistribution

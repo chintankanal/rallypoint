@@ -1230,10 +1230,16 @@ function FixtureMatrix({
 function AcademiesTab() {
   const qc = useQueryClient()
   const [showForm, setShowForm] = useState(false)
+  const [selectedAcademyId, setSelectedAcademyId] = useState<string | null>(null)
   const [form, setForm] = useState({ name: '', location: '', city: '', state: '', min_tables: '4' })
   const [error, setError] = useState<string | null>(null)
 
   const q = useQuery({ queryKey: ['academies-list'], queryFn: () => academiesApi.list() })
+  const statsQ = useQuery({
+    queryKey: ['academy-stats', selectedAcademyId],
+    queryFn: () => selectedAcademyId ? academiesApi.getStats(selectedAcademyId) : Promise.resolve(null),
+    enabled: !!selectedAcademyId,
+  })
 
   const createMut = useMutation({
     mutationFn: () => academiesApi.create({
@@ -1249,60 +1255,155 @@ function AcademiesTab() {
   if (q.error) return <ErrorMsg message={(q.error as Error).message} />
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold text-white">Academies</h3>
-        <button onClick={() => setShowForm(!showForm)}
-          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg">
-          {showForm ? 'Cancel' : '+ New Academy'}
-        </button>
-      </div>
-
-      {showForm && (
-        <div className="bg-gray-900 border border-gray-700 rounded-xl p-5 space-y-4">
-          {error && <ErrorMsg message={error} />}
-          {[
-            { key: 'name', label: 'Academy name', placeholder: 'Champion TT Academy' },
-            { key: 'location', label: 'Address / location', placeholder: '12 Sports Complex, Sector 5' },
-            { key: 'city', label: 'City', placeholder: 'Mumbai' },
-            { key: 'state', label: 'State', placeholder: 'Maharashtra' },
-          ].map(({ key, label, placeholder }) => (
-            <div key={key}>
-              <label className="block text-sm text-gray-400 mb-1">{label}</label>
-              <input type="text" value={form[key as keyof typeof form]}
-                onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                placeholder={placeholder} className={inputCls} />
-            </div>
-          ))}
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">Number of tables</label>
-            <input type="number" min={1} value={form.min_tables}
-              onChange={e => setForm(f => ({ ...f, min_tables: e.target.value }))} className={inputCls} />
-          </div>
-          <button onClick={() => createMut.mutate()}
-            disabled={createMut.isPending || !form.name || !form.city || !form.state}
-            className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg disabled:opacity-50">
-            {createMut.isPending ? 'Creating…' : 'Create Academy'}
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* Academy List */}
+      <div className="lg:col-span-1 space-y-4">
+        <div className="flex justify-between items-center">
+          <h3 className="text-lg font-semibold text-white">Academies</h3>
+          <button onClick={() => setShowForm(!showForm)}
+            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg">
+            {showForm ? 'Cancel' : '+ New'}
           </button>
         </div>
-      )}
 
-      <div className="space-y-2">
-        {q.data?.items.map((a: AcademyListItem) => (
-          <div key={a.academy_id} className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 flex items-center justify-between">
+        {showForm && (
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-5 space-y-4">
+            {error && <ErrorMsg message={error} />}
+            {[
+              { key: 'name', label: 'Academy name', placeholder: 'Champion TT Academy' },
+              { key: 'location', label: 'Address / location', placeholder: '12 Sports Complex, Sector 5' },
+              { key: 'city', label: 'City', placeholder: 'Mumbai' },
+              { key: 'state', label: 'State', placeholder: 'Maharashtra' },
+            ].map(({ key, label, placeholder }) => (
+              <div key={key}>
+                <label className="block text-sm text-gray-400 mb-1">{label}</label>
+                <input type="text" value={form[key as keyof typeof form]}
+                  onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                  placeholder={placeholder} className={inputCls} />
+              </div>
+            ))}
             <div>
+              <label className="block text-sm text-gray-400 mb-1">Number of tables</label>
+              <input type="number" min={1} value={form.min_tables}
+                onChange={e => setForm(f => ({ ...f, min_tables: e.target.value }))} className={inputCls} />
+            </div>
+            <button onClick={() => createMut.mutate()}
+              disabled={createMut.isPending || !form.name || !form.city || !form.state}
+              className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg disabled:opacity-50">
+              {createMut.isPending ? 'Creating…' : 'Create Academy'}
+            </button>
+          </div>
+        )}
+
+        <div className="space-y-2 max-h-96 overflow-y-auto">
+          {q.data?.items.map((a: AcademyListItem) => (
+            <div key={a.academy_id}
+              onClick={() => setSelectedAcademyId(a.academy_id)}
+              className={`cursor-pointer rounded-xl px-4 py-3 transition-colors ${
+                selectedAcademyId === a.academy_id
+                  ? 'bg-blue-900 border border-blue-600'
+                  : 'bg-gray-900 border border-gray-800 hover:border-gray-700'
+              }`}>
               <div className="font-medium text-white">{a.name}</div>
               <div className="text-xs text-gray-500">{a.city}, {a.state}</div>
-              <div className="text-xs text-gray-700 font-mono">{a.academy_id}</div>
+              <span className={`inline-block mt-1 text-xs px-2 py-0.5 rounded font-medium ${
+                a.status === 'ACTIVE' ? 'bg-green-800 text-green-100' :
+                a.status === 'FROZEN' ? 'bg-blue-800 text-blue-100' : 'bg-gray-700 text-gray-300'
+              }`}>{a.status}</span>
             </div>
-            <span className={`text-xs px-2 py-0.5 rounded font-medium ${
-              a.status === 'ACTIVE' ? 'bg-green-800 text-green-100' :
-              a.status === 'FROZEN' ? 'bg-blue-800 text-blue-100' : 'bg-gray-700 text-gray-300'
-            }`}>{a.status}</span>
-          </div>
-        ))}
-        {!q.data?.items.length && <p className="text-gray-500 text-sm">No academies yet.</p>}
+          ))}
+          {!q.data?.items.length && <p className="text-gray-500 text-sm">No academies yet.</p>}
+        </div>
       </div>
+
+      {/* Academy Stats */}
+      {selectedAcademyId && (
+        <div className="lg:col-span-2">
+          {statsQ.isLoading ? (
+            <Spinner />
+          ) : statsQ.error ? (
+            <ErrorMsg message={(statsQ.error as Error).message} />
+          ) : statsQ.data ? (
+            <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold text-white mb-4">Academy Statistics</h3>
+                <div className="text-xs text-gray-500 font-mono mb-4">{statsQ.data.academy_id}</div>
+              </div>
+
+              {/* Key Metrics Grid */}
+              <div className="grid grid-cols-2 gap-4">
+                <StatCard label="Active Players" value={statsQ.data.active_player_count} icon="👥" />
+                <StatCard label="Coaches" value={statsQ.data.coach_count} icon="🎯" />
+                <StatCard label="Total Matches" value={statsQ.data.total_match_volume} icon="🏓" />
+                <StatCard label="Last 30 Days" value={statsQ.data.matches_30_days} icon="📊" />
+                <StatCard label="Available Tables" value={statsQ.data.tables_available} icon="🎰" />
+                <StatCard
+                  label="Current ASI"
+                  value={statsQ.data.current_asi ? statsQ.data.current_asi.toFixed(0) : 'N/A'}
+                  icon="⭐"
+                />
+              </div>
+
+              {/* Tier Distribution */}
+              <div>
+                <h4 className="text-sm font-semibold text-white mb-3">Tier Distribution</h4>
+                <div className="space-y-2">
+                  {[
+                    { tier: 'NATIONAL_TRACK', label: '🏆 National Track', color: 'bg-yellow-600' },
+                    { tier: 'ELITE', label: '💎 Elite', color: 'bg-purple-600' },
+                    { tier: 'ADVANCED', label: '🥇 Advanced', color: 'bg-blue-600' },
+                    { tier: 'INTERMEDIATE', label: '🥈 Intermediate', color: 'bg-green-600' },
+                    { tier: 'BEGINNER', label: '🥉 Beginner', color: 'bg-gray-600' },
+                  ].map(({ tier, label, color }) => {
+                    const count = statsQ.data.tier_distribution[tier as keyof typeof statsQ.data.tier_distribution]
+                    const total = statsQ.data.active_player_count || 1
+                    const pct = ((count / total) * 100).toFixed(0)
+                    return (
+                      <div key={tier}>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-gray-300">{label}</span>
+                          <span className="font-semibold text-white">{count} ({pct}%)</span>
+                        </div>
+                        <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                          <div className={`h-full ${color} transition-all`} style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Activity Indicator */}
+              <div>
+                <h4 className="text-sm font-semibold text-white mb-2">Activity Status</h4>
+                {statsQ.data.matches_30_days === 0 ? (
+                  <div className="text-sm text-red-400 bg-red-900 bg-opacity-30 rounded px-3 py-2">
+                    ⚠️ No recent activity - Academy may be inactive
+                  </div>
+                ) : statsQ.data.matches_30_days > (statsQ.data.total_match_volume / 12) ? (
+                  <div className="text-sm text-green-400 bg-green-900 bg-opacity-30 rounded px-3 py-2">
+                    ✓ Thriving - Strong recent activity
+                  </div>
+                ) : (
+                  <div className="text-sm text-yellow-400 bg-yellow-900 bg-opacity-30 rounded px-3 py-2">
+                    → Moderate activity - Consistent engagement
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function StatCard({ label, value, icon }: { label: string; value: string | number; icon: string }) {
+  return (
+    <div className="bg-gray-800 rounded-lg p-4 text-center border border-gray-700">
+      <div className="text-2xl mb-1">{icon}</div>
+      <div className="text-2xl font-bold text-white">{value}</div>
+      <div className="text-xs text-gray-400 mt-1">{label}</div>
     </div>
   )
 }

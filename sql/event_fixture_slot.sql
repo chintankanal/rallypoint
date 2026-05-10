@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS event_fixture_slot (
     player_b_id         UUID REFERENCES player(player_id),  -- NULL = BYE
     expected_rating_gap DECIMAL(10,2) NOT NULL DEFAULT 0,
     status              fixture_slot_status NOT NULL DEFAULT 'SCHEDULED',
-    fixture_strategy    fixture_strategy NOT NULL DEFAULT 'TIER_MATCHED',
+    fixture_strategy    fixture_strategy NOT NULL,
     match_id            UUID,  -- FK to match added later to avoid circular dependency
     created_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 

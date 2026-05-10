@@ -103,7 +103,7 @@ def list_events(role: str, academy_id: str | None) -> list[dict]:
             else:
                 cur.execute(
                     """
-                    SELECT DISTINCT e.event_id::text, e.name, e.scheduling_mode, e.event_type,
+                    SELECT e.event_id::text, e.name, e.scheduling_mode, e.event_type,
                            e.default_match_format, e.tournament_format, e.status,
                            e.start_date, e.end_date, e.created_at,
                            CASE WHEN e.season_id IS NOT NULL THEN
@@ -120,8 +120,11 @@ def list_events(role: str, academy_id: str | None) -> list[dict]:
                            ) AS participating_academies
                     FROM event e
                     LEFT JOIN season s ON s.season_id = e.season_id
-                    LEFT JOIN event_academy ea ON ea.event_id = e.event_id
-                    WHERE e.host_academy_id = %s OR ea.academy_id = %s
+                    WHERE e.host_academy_id = %s 
+                       OR EXISTS (
+                           SELECT 1 FROM event_academy ea 
+                           WHERE ea.event_id = e.event_id AND ea.academy_id = %s
+                       )
                     ORDER BY e.start_date DESC LIMIT 100
                     """,
                     (academy_id, academy_id),

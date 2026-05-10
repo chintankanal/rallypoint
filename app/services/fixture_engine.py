@@ -112,6 +112,7 @@ def _assign_tables(
     round_number: int,
     match_category: str,
     players_by_id: dict,
+    strategy: str = "TIER_MATCHED",
 ) -> list[dict]:
     """
     Assign pairs to tables. If more pairs than tables, split into sub-rounds A/B.
@@ -137,6 +138,7 @@ def _assign_tables(
                 "player_a_id": active_id,
                 "player_b_id": None,
                 "expected_rating_gap": 0.0,
+                "fixture_strategy": strategy,
             })
             continue
 
@@ -156,6 +158,7 @@ def _assign_tables(
             "player_a_id": canon_a,
             "player_b_id": canon_b,
             "expected_rating_gap": round(gap, 2),
+            "fixture_strategy": strategy,
         })
     return slots
 
@@ -619,6 +622,7 @@ def _assign_tables_league(
     pairs: list[tuple],
     round_number: int,
     players_by_id: dict,
+    strategy: str,
 ) -> list[dict]:
     """Assign pairs to tables, derive category from gap. No sub-rounds for inter-academy."""
     slots: list[dict] = []
@@ -632,6 +636,7 @@ def _assign_tables_league(
                 "player_a_id": pid_a,
                 "player_b_id": None,
                 "expected_rating_gap": 0.0,
+                "fixture_strategy": strategy,
             })
             continue
         canon_a, canon_b = _canonical(pid_a, pid_b)
@@ -643,6 +648,7 @@ def _assign_tables_league(
             "player_a_id": canon_a,
             "player_b_id": canon_b,
             "expected_rating_gap": round(gap, 2),
+            "fixture_strategy": strategy,
         })
     return slots
 
@@ -651,6 +657,7 @@ def _run_circle_round_robin(
     players_by_id: dict,
     pids: list,
     played_pairs: set[tuple],
+    strategy: str,
     round_offset: int = 0,
 ) -> tuple[list[dict], int, int]:
     """
@@ -670,7 +677,9 @@ def _run_circle_round_robin(
         real_pairs = _swap_for_novelty(real_pairs, played_pairs)
         all_pairs = real_pairs + bye_pairs
 
-        round_slots = _assign_tables_league(all_pairs, round_offset + round_idx + 1, players_by_id)
+        round_slots = _assign_tables_league(
+            all_pairs, round_offset + round_idx + 1, players_by_id, strategy
+        )
         for slot in round_slots:
             if slot["player_b_id"] is not None:
                 real_count += 1
@@ -696,7 +705,9 @@ def _full_round_robin(players_by_academy: dict, played_pairs: set[tuple]) -> dic
     if n % 2 == 1:
         pids = pids + [None]
 
-    slots, cross_count, real_count = _run_circle_round_robin(players_by_id, pids, played_pairs)
+    slots, cross_count, real_count = _run_circle_round_robin(
+        players_by_id, pids, played_pairs, "FULL_ROUND_ROBIN"
+    )
     total_rounds = len(pids) - 1
     cross_pct = round(cross_count / real_count * 100, 1) if real_count > 0 else 0.0
     return {"total_rounds": total_rounds, "cross_academy_pct": cross_pct, "slots": slots}
@@ -740,7 +751,7 @@ def _tier_matched(players_by_academy: dict, played_pairs: set[tuple]) -> dict:
             pids = pids + [None]
 
         tier_slots, tc, rc = _run_circle_round_robin(
-            players_by_id_tier, pids, played_pairs, round_offset
+            players_by_id_tier, pids, played_pairs, "TIER_MATCHED", round_offset
         )
         all_slots.extend(tier_slots)
         cross_count += tc
@@ -790,7 +801,9 @@ def _cross_academy_only(players_by_academy: dict, played_pairs: set[tuple]) -> d
         cross_pairs = _swap_for_novelty(cross_pairs, played_pairs)
         all_pairs = cross_pairs + bye_pairs
 
-        round_slots = _assign_tables_league(all_pairs, round_idx + 1, players_by_id)
+        round_slots = _assign_tables_league(
+            all_pairs, round_idx + 1, players_by_id, "CROSS_ACADEMY_ONLY"
+        )
         for slot in round_slots:
             if slot["player_b_id"] is not None:
                 real_count += 1
@@ -845,6 +858,7 @@ def _team_format(players_by_academy: dict, _played_pairs: set[tuple]) -> dict:
                         "player_a_id": p_b["player_id"],
                         "player_b_id": None,
                         "expected_rating_gap": 0.0,
+                        "fixture_strategy": "TEAM_FORMAT",
                     })
                 elif p_b is None:
                     round_slots.append({
@@ -854,6 +868,7 @@ def _team_format(players_by_academy: dict, _played_pairs: set[tuple]) -> dict:
                         "player_a_id": p_a["player_id"],
                         "player_b_id": None,
                         "expected_rating_gap": 0.0,
+                        "fixture_strategy": "TEAM_FORMAT",
                     })
                 else:
                     canon_a, canon_b = _canonical(p_a["player_id"], p_b["player_id"])
@@ -867,6 +882,7 @@ def _team_format(players_by_academy: dict, _played_pairs: set[tuple]) -> dict:
                         "player_a_id": canon_a,
                         "player_b_id": canon_b,
                         "expected_rating_gap": round(gap, 2),
+                        "fixture_strategy": "TEAM_FORMAT",
                     })
 
             slots.extend(round_slots)

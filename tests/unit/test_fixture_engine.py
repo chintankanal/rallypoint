@@ -820,6 +820,7 @@ def test_league_fixtures_tier_matched_default_strategy():
         assert "player_a_id" in slot
         assert "match_category" in slot
         assert "expected_rating_gap" in slot
+        assert "fixture_strategy" in slot
     
     # TIER_MATCHED groups by tier, so all matches within a tier should have similar ratings
     for slot in result["slots"]:

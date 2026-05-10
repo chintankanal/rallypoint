@@ -341,7 +341,7 @@ def get_event_fixtures(event_id: str, _: dict = _ANY):
                 """
                 SELECT efs.slot_id::text, efs.round_number, efs.table_number,
                        efs.match_category, efs.expected_rating_gap, efs.status,
-                       efs.match_id::text,
+                       efs.match_id::text, efs.fixture_strategy,
                        efs.player_a_id::text, pa.name AS player_a_name,
                        pa.current_rating AS player_a_rating,
                        pa.primary_academy_id::text AS player_a_academy_id,
@@ -392,6 +392,7 @@ def get_event_fixtures(event_id: str, _: dict = _ANY):
             ) if r["player_b_id"] else None,
             expected_rating_gap=float(r["expected_rating_gap"]),
             status=r["status"],
+            fixture_strategy=r["fixture_strategy"],
             match_id=r["match_id"],
         )
         for r in rows

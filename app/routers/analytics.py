@@ -46,8 +46,8 @@ def player_velocity(
                     COUNT(*) AS matches_played,
                     COUNT(*) FILTER (WHERE m.winner_id::text = rh.player_id::text) AS wins,
                     COUNT(*) FILTER (WHERE rh.tier_before != rh.tier_after) AS tier_changes,
-                    COUNT(*) FILTER (WHERE fs.match_category = 'STRETCH') AS stretch_matches,
-                    COUNT(*) FILTER (WHERE fs.match_category = 'STRETCH'
+                    COUNT(*) FILTER (WHERE m.match_category = 'STRETCH') AS stretch_matches,
+                    COUNT(*) FILTER (WHERE m.match_category = 'STRETCH'
                                       AND m.winner_id::text = rh.player_id::text) AS stretch_wins,
                     (SELECT rh2.rating_before
                      FROM rating_history rh2
@@ -63,7 +63,6 @@ def player_velocity(
                      ORDER BY m3.match_date DESC, m3.match_timestamp DESC LIMIT 1) AS end_rating
                 FROM rating_history rh
                 JOIN match m ON m.match_id = rh.match_id
-                LEFT JOIN fixture_slot fs ON fs.slot_id = m.fixture_slot_id
                 WHERE rh.player_id = %s AND rh.is_rollback = FALSE
                   AND m.match_date >= %s
                 """,

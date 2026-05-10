@@ -74,6 +74,7 @@ class EventResponse(BaseModel):
     start_date: date
     end_date: date | None
     status: str
+    fixture_state: str | None = None
     created_at: datetime
 
     @computed_field
@@ -170,4 +171,5 @@ class EventFixturesResponse(BaseModel):
     total_rounds: int
     total_slots: int
     cross_academy_pct: float
+    fixture_state: str | None = None
     slots: list[EventFixtureSlotResponse]

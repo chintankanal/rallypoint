@@ -6,6 +6,8 @@ from app.database import get_connection
 from app.dependencies.auth import get_current_user, require_roles
 from app.services import event_service, event_player_service
 from app.services.fixture_engine import generate_league_fixtures
+from app.services.rating_engine import apply_ratings_batch
+from app.services.webhook_service import fire
 from schemas.event import (
     AddAcademyToEvent,
     AssignRefereeRequest,
@@ -186,7 +188,7 @@ def generate_event_fixtures(
             # Fetch and validate event
             cur.execute(
                 """
-                SELECT event_id, scheduling_mode, event_type, status,
+                SELECT event_id, scheduling_mode, event_type, status, fixture_state,
                        host_academy_id, season_id, start_date
                 FROM event WHERE event_id = %s
                 """,
@@ -204,6 +206,27 @@ def generate_event_fixtures(
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Cannot generate fixtures for a completed or cancelled event",
+                )
+
+            fixture_state = event["fixture_state"]
+            if fixture_state in ("FIXTURE_FROZEN", "RATINGS_APPLIED"):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Cannot generate fixtures: fixtures are {fixture_state.lower().replace('_', ' ')}. "
+                           "Unlock fixtures first to allow regeneration.",
+                )
+
+            # Block regeneration if any fixture slots already have matches linked
+            cur.execute(
+                "SELECT COUNT(*) AS cnt FROM event_fixture_slot WHERE event_id = %s AND match_id IS NOT NULL",
+                (event_id,),
+            )
+            match_count = cur.fetchone()["cnt"]
+            if match_count > 0:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Cannot regenerate fixtures: {match_count} match result(s) already recorded. "
+                           "Clear match results first or create a new event.",
                 )
 
             _require_host_coach_or_admin(current_user, dict(event))
@@ -319,12 +342,19 @@ def generate_event_fixtures(
                 )
                 slot_rows.append(dict(cur.fetchone()))
 
+            # Transition fixture_state to FIXTURES_READY (locks roster, allows regeneration)
+            cur.execute(
+                "UPDATE event SET fixture_state = 'FIXTURES_READY' WHERE event_id = %s",
+                (event_id,),
+            )
+
     response_slots = _build_slot_responses(slot_rows, players_by_id)
     return EventFixturesResponse(
         event_id=event_id,
         total_rounds=result["total_rounds"],
         total_slots=len(response_slots),
         cross_academy_pct=result["cross_academy_pct"],
+        fixture_state="FIXTURES_READY",
         slots=response_slots,
     )
 
@@ -333,9 +363,11 @@ def generate_event_fixtures(
 def get_event_fixtures(event_id: str, _: dict = _ANY):
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT event_id FROM event WHERE event_id = %s", (event_id,))
-            if not cur.fetchone():
+            cur.execute("SELECT event_id, fixture_state FROM event WHERE event_id = %s", (event_id,))
+            ev = cur.fetchone()
+            if not ev:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+            current_fixture_state = ev["fixture_state"]
 
             cur.execute(
                 """
@@ -403,8 +435,147 @@ def get_event_fixtures(event_id: str, _: dict = _ANY):
         total_rounds=total_rounds,
         total_slots=len(slots),
         cross_academy_pct=cross_pct,
+        fixture_state=current_fixture_state,
         slots=slots,
     )
+
+
+@router.get("/{event_id}/fixtures/status")
+def get_fixture_status(event_id: str, _: dict = _ANY):
+    """Return current fixture_state and whether regeneration is allowed."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT fixture_state FROM event WHERE event_id = %s",
+                (event_id,),
+            )
+            ev = cur.fetchone()
+            if not ev:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+            fs = ev["fixture_state"]
+
+            can_regenerate = fs in ("ROSTER_OPEN", "FIXTURES_READY")
+            reason = None
+            if fs == "FIXTURE_FROZEN":
+                reason = "Fixtures are frozen. Unlock to allow regeneration."
+            elif fs == "RESULTS_SUBMITTED":
+                reason = "All results submitted — apply ratings to complete the event."
+            elif fs == "RATINGS_APPLIED":
+                reason = "Event complete — ratings have been applied."
+            elif fs is None:
+                reason = "Fixture lifecycle not applicable for this event type."
+
+    return {"fixture_state": fs, "can_regenerate": can_regenerate, "reason": reason}
+
+
+@router.post("/{event_id}/fixtures/lock")
+def lock_fixtures(event_id: str, current_user: dict = Depends(get_current_user)):
+    """Transition FIXTURES_READY → FIXTURE_FROZEN. Prevents further regeneration."""
+    if current_user["role"] not in ("ADMIN", "COACH"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admins and coaches only")
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT fixture_state, host_academy_id FROM event WHERE event_id = %s",
+                (event_id,),
+            )
+            ev = cur.fetchone()
+            if not ev:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+            if ev["fixture_state"] != "FIXTURES_READY":
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Cannot lock: fixture state is {ev['fixture_state']}, expected FIXTURES_READY.",
+                )
+            if current_user["role"] == "COACH":
+                host = str(ev["host_academy_id"] or "")
+                if not host or host != current_user.get("academy_id"):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Only the host academy coach or an admin can lock fixtures",
+                    )
+            cur.execute(
+                "UPDATE event SET fixture_state = 'FIXTURE_FROZEN' WHERE event_id = %s",
+                (event_id,),
+            )
+    return {"fixture_state": "FIXTURE_FROZEN"}
+
+
+@router.post("/{event_id}/apply-ratings")
+def apply_event_ratings(event_id: str, current_user: dict = Depends(get_current_user)):
+    """Apply Elo ratings for all confirmed matches in a FIXTURE_FROZEN LEAGUE event."""
+    if current_user["role"] not in ("ADMIN", "COACH"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admins and coaches only")
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT fixture_state, scheduling_mode, event_type FROM event WHERE event_id = %s",
+                (event_id,),
+            )
+            ev = cur.fetchone()
+            if not ev:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+            if ev["fixture_state"] not in ("FIXTURE_FROZEN", "RESULTS_SUBMITTED"):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Cannot apply ratings: fixture state is {ev['fixture_state']}. "
+                           "Fixtures must be locked (FIXTURE_FROZEN or RESULTS_SUBMITTED) before applying ratings.",
+                )
+
+            # Ensure all fixture slots are resolved (none still SCHEDULED)
+            cur.execute(
+                "SELECT COUNT(*) AS cnt FROM event_fixture_slot WHERE event_id = %s AND status = 'SCHEDULED'",
+                (event_id,),
+            )
+            scheduled = cur.fetchone()["cnt"]
+            if scheduled > 0:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Cannot apply ratings: {scheduled} fixture slot(s) still have no result. "
+                           "Enter all match results first.",
+                )
+
+            # Auto-confirm any PENDING matches for this event — the admin "Apply Ratings"
+            # action is the authoritative sign-off for inter-academy league events, so
+            # matches that were submitted but not yet individually confirmed by the opponent
+            # are auto-confirmed here before rating calculation.
+            cur.execute(
+                """
+                UPDATE match
+                SET confirmation_status = 'AUTO_CONFIRMED',
+                    confirmed_by = %s,
+                    confirmed_at = NOW()
+                WHERE event_id = %s
+                  AND confirmation_status = 'PENDING'
+                  AND rating_eligible = TRUE
+                """,
+                (current_user["user_id"], event_id),
+            )
+
+            cur.execute(
+                """
+                SELECT match_id FROM match
+                WHERE event_id = %s
+                  AND rating_eligible = TRUE
+                  AND ratings_applied_at IS NULL
+                  AND confirmation_status IN ('CONFIRMED', 'AUTO_CONFIRMED')
+                """,
+                (event_id,),
+            )
+            eligible_ids = [str(r["match_id"]) for r in cur.fetchall()]
+
+        if eligible_ids:
+            tier_changes = apply_ratings_batch(conn, eligible_ids)
+            for tc in tier_changes:
+                fire("player.tier_changed", tc)
+
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE event SET fixture_state = 'RATINGS_APPLIED' WHERE event_id = %s",
+                (event_id,),
+            )
+
+    return {"fixture_state": "RATINGS_APPLIED", "matches_processed": len(eligible_ids)}
 
 
 def _build_slot_responses(

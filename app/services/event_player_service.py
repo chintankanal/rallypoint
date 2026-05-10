@@ -42,7 +42,7 @@ def register_player(
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT scheduling_mode, status FROM event WHERE event_id = %s",
+                "SELECT scheduling_mode, status, fixture_state FROM event WHERE event_id = %s",
                 (event_id,),
             )
             event = cur.fetchone()
@@ -52,6 +52,11 @@ def register_player(
                 raise ValueError("Player registration only applies to INTER_ACADEMY events")
             if event["status"] not in ("SCHEDULED", "IN_PROGRESS"):
                 raise ValueError("Cannot register players for a completed or cancelled event")
+            if event["fixture_state"] and event["fixture_state"] != "ROSTER_OPEN":
+                raise ValueError(
+                    f"Cannot modify roster: fixtures have been generated ({event['fixture_state']}). "
+                    "Regenerate fixtures to add or remove players."
+                )
 
             cur.execute(
                 "SELECT player_id, primary_academy_id, status, user_id FROM player WHERE player_id = %s",
@@ -126,6 +131,17 @@ def remove_player(
     """
     with get_connection() as conn:
         with conn.cursor() as cur:
+            cur.execute(
+                "SELECT fixture_state FROM event WHERE event_id = %s",
+                (event_id,),
+            )
+            ev = cur.fetchone()
+            if ev and ev["fixture_state"] and ev["fixture_state"] != "ROSTER_OPEN":
+                raise ValueError(
+                    f"Cannot modify roster: fixtures have been generated ({ev['fixture_state']}). "
+                    "Regenerate fixtures to add or remove players."
+                )
+
             cur.execute(
                 """
                 SELECT epr.status,

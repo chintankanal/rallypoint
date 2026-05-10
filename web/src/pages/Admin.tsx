@@ -6,6 +6,8 @@ import {
   type EventRoster, type EventFixtures, type EventFixturePlayer, type EventFixtureSlot,
   type PlayerDirectoryItem,
 } from '../api/client'
+
+type FixtureState = 'ROSTER_OPEN' | 'FIXTURES_READY' | 'FIXTURE_FROZEN' | 'RESULTS_SUBMITTED' | 'RATINGS_APPLIED' | null
 import { Layout, Spinner, ErrorMsg, ProtectedRoute } from '../components/Layout'
 
 type Tab = 'seasons' | 'events' | 'academies' | 'disputes' | 'config'
@@ -384,11 +386,22 @@ function EventDetailPanel({ eventId, canManage }: { eventId: string; canManage: 
   const [dirFilterAcademy, setDirFilterAcademy] = useState<string | null>(null)
   const [numTables, setNumTables] = useState(4)
   const [fixtureStrategy, setFixtureStrategy] = useState('TIER_MATCHED')
+  const [fixtureState, setFixtureState] = useState<FixtureState>(null)
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState<string | null>(null)
+  const [confirmRegenerate, setConfirmRegenerate] = useState(false)
+  const [confirmLock, setConfirmLock] = useState(false)
+  const [locking, setLocking] = useState(false)
+  const [lockError, setLockError] = useState<string | null>(null)
+  const [applyingRatings, setApplyingRatings] = useState(false)
+  const [applyError, setApplyError] = useState<string | null>(null)
   const [resultSlot, setResultSlot] = useState<EventFixtureSlot | null>(null)
 
   const eventQ = useQuery({ queryKey: ['event-detail', eventId], queryFn: () => eventsApi.get(eventId) })
+
+  useEffect(() => {
+    if (eventQ.data) setFixtureState((eventQ.data.fixture_state as FixtureState) ?? null)
+  }, [eventQ.data])
 
   const loadRoster = async () => {
     setRosterLoading(true); setRosterError(null)
@@ -406,7 +419,12 @@ function EventDetailPanel({ eventId, canManage }: { eventId: string; canManage: 
 
   const loadFixtures = async () => {
     setFixturesLoading(true); setFixturesError(null)
-    try { setFixtures(await eventsApi.getFixtures(eventId)) }
+    try {
+      const result = await eventsApi.getFixtures(eventId)
+      setFixtures(result)
+      if (result.fixture_state) setFixtureState(result.fixture_state as FixtureState)
+      if (result.slots[0]?.fixture_strategy) setFixtureStrategy(result.slots[0].fixture_strategy)
+    }
     catch (e) { setFixturesError((e as Error).message) }
     finally { setFixturesLoading(false) }
   }
@@ -427,10 +445,36 @@ function EventDetailPanel({ eventId, canManage }: { eventId: string; canManage: 
   }
 
   const handleGenerate = async () => {
-    setGenerating(true); setGenError(null)
-    try { setFixtures(await eventsApi.generateFixtures(eventId, numTables, fixtureStrategy)) }
+    setGenerating(true); setGenError(null); setConfirmRegenerate(false)
+    try {
+      const result = await eventsApi.generateFixtures(eventId, numTables, fixtureStrategy)
+      setFixtures(result)
+      setFixtureState(result.fixture_state as FixtureState)
+      if (result.slots[0]?.fixture_strategy) setFixtureStrategy(result.slots[0].fixture_strategy)
+    }
     catch (e) { setGenError((e as Error).message) }
     finally { setGenerating(false) }
+  }
+
+  const handleLock = async () => {
+    setLocking(true); setLockError(null); setConfirmLock(false)
+    try {
+      const result = await eventsApi.lockFixtures(eventId)
+      setFixtureState(result.fixture_state as FixtureState)
+    }
+    catch (e) { setLockError((e as Error).message) }
+    finally { setLocking(false) }
+  }
+
+  const handleApplyRatings = async () => {
+    setApplyingRatings(true); setApplyError(null)
+    try {
+      const result = await eventsApi.applyRatings(eventId)
+      setFixtureState(result.fixture_state as FixtureState)
+      await loadFixtures()
+    }
+    catch (e) { setApplyError((e as Error).message) }
+    finally { setApplyingRatings(false) }
   }
 
   // Build colorMap from all academies in the directory
@@ -458,6 +502,17 @@ function EventDetailPanel({ eventId, canManage }: { eventId: string; canManage: 
       {section === 'roster' && (
         <div className="space-y-4">
           {rosterError && <ErrorMsg message={rosterError} />}
+
+          {/* Roster lock banner */}
+          {fixtureState && fixtureState !== 'ROSTER_OPEN' && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-amber-900/30 border border-amber-700/50 rounded-lg">
+              <span className="text-amber-400 text-sm">🔒</span>
+              <span className="text-xs text-amber-300">
+                Roster locked — fixtures have been generated ({fixtureState.replace(/_/g, ' ')}).
+                {fixtureState === 'FIXTURES_READY' && ' Regenerate fixtures to modify the roster.'}
+              </span>
+            </div>
+          )}
 
           {/* Player directory — all players grouped by academy */}
           {canManage && (
@@ -502,6 +557,7 @@ function EventDetailPanel({ eventId, canManage }: { eventId: string; canManage: 
                       {players.map(p => {
                         const isRegistered = registeredIds.has(p.player_id)
                         const isInactive = p.status !== 'ACTIVE'
+                        const rosterLocked = Boolean(fixtureState && fixtureState !== 'ROSTER_OPEN')
                         return (
                           <div key={p.player_id} className={`flex items-center justify-between px-3 py-1.5 ${isInactive ? 'opacity-50' : ''}`}>
                             <div className="flex items-center gap-2 min-w-0">
@@ -512,12 +568,15 @@ function EventDetailPanel({ eventId, canManage }: { eventId: string; canManage: 
                             {isRegistered ? (
                               <div className="flex items-center gap-2 flex-shrink-0">
                                 <span className="text-[10px] bg-green-900 text-green-300 px-1.5 py-0.5 rounded font-medium">Registered</span>
-                                <button onClick={() => handleRemove(p.player_id)}
-                                  className="text-xs text-gray-600 hover:text-red-400 transition-colors">✕</button>
+                                {!rosterLocked && (
+                                  <button onClick={() => handleRemove(p.player_id)}
+                                    className="text-xs text-gray-600 hover:text-red-400 transition-colors">✕</button>
+                                )}
                               </div>
                             ) : (
-                              <button onClick={() => !isInactive && handleAdd(p.player_id)}
-                                disabled={isInactive}
+                              <button onClick={() => !isInactive && !rosterLocked && handleAdd(p.player_id)}
+                                disabled={isInactive || rosterLocked}
+                                title={rosterLocked ? 'Roster locked — regenerate fixtures to modify' : undefined}
                                 className="text-xs px-2 py-0.5 bg-blue-700 hover:bg-blue-600 text-white rounded flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                                 Add
                               </button>
@@ -567,45 +626,159 @@ function EventDetailPanel({ eventId, canManage }: { eventId: string; canManage: 
 
       {section === 'fixtures' && (
         <div className="space-y-4">
-          {canManage && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-3 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <label className="text-sm text-gray-400">Tables:</label>
-                  <input type="number" min={1} max={20} value={numTables}
-                    onChange={e => setNumTables(Number(e.target.value))}
-                    className="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm" />
-                </div>
-                <div className="flex items-center gap-2">
-                  <label className="text-sm text-gray-400">Strategy:</label>
-                  <select value={fixtureStrategy} onChange={e => setFixtureStrategy(e.target.value)}
-                    className="bg-gray-800 border border-gray-700 text-gray-200 rounded px-2 py-1 text-sm">
-                    <option value="TIER_MATCHED">Tier-Matched Cross-Academy</option>
-                    <option value="CROSS_ACADEMY_ONLY">Cross-Academy Only</option>
-                    <option value="TEAM_FORMAT">Academy Team Format</option>
-                    <option value="FULL_ROUND_ROBIN">Full Round-Robin (Advanced)</option>
-                  </select>
-                </div>
-                <button onClick={handleGenerate} disabled={generating}
-                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg disabled:opacity-50">
-                  {generating ? 'Generating…' : fixtures && fixtures.slots.length > 0 ? 'Regenerate' : 'Generate Fixtures'}
-                </button>
-                {genError && <span className="text-xs text-red-400">{genError}</span>}
+          {canManage && (() => {
+            const isLocked = fixtureState === 'FIXTURE_FROZEN' || fixtureState === 'RESULTS_SUBMITTED' || fixtureState === 'RATINGS_APPLIED'
+            const hasFixtures = Boolean(fixtures && fixtures.slots.length > 0)
+            const scheduledCount = fixtures?.slots.filter(s => s.status === 'SCHEDULED').length ?? 0
+
+            return (
+              <div className="space-y-3">
+                {/* Fixture state banner */}
+                {fixtureState === 'FIXTURES_READY' && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-blue-900/30 border border-blue-700/50 rounded-lg">
+                    <span className="text-xs text-blue-300">
+                      Fixtures generated — review pairings, try a different strategy, or lock when satisfied.
+                    </span>
+                  </div>
+                )}
+                {fixtureState === 'FIXTURE_FROZEN' && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-purple-900/30 border border-purple-700/50 rounded-lg">
+                    <span className="text-xs text-purple-300">
+                      🔒 Fixtures locked — no further regeneration allowed. Enter match results to proceed.
+                    </span>
+                  </div>
+                )}
+                {fixtureState === 'RESULTS_SUBMITTED' && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-green-900/20 border border-green-700/40 rounded-lg">
+                    <span className="text-xs text-green-300">
+                      ✓ All match results submitted — click Apply Ratings to update player Elo ratings.
+                    </span>
+                  </div>
+                )}
+                {fixtureState === 'RATINGS_APPLIED' && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-green-900/30 border border-green-700/50 rounded-lg">
+                    <span className="text-xs text-green-300">
+                      ✓ Event complete — ratings applied for all confirmed matches.
+                    </span>
+                  </div>
+                )}
+
+                {/* Generation controls (hidden once locked) */}
+                {!isLocked && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <label className="text-sm text-gray-400">Tables:</label>
+                        <input type="number" min={1} max={20} value={numTables}
+                          onChange={e => setNumTables(Number(e.target.value))}
+                          className="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm" />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="text-sm text-gray-400">Strategy:</label>
+                        <select value={fixtureStrategy} onChange={e => setFixtureStrategy(e.target.value)}
+                          className="bg-gray-800 border border-gray-700 text-gray-200 rounded px-2 py-1 text-sm">
+                          <option value="TIER_MATCHED">Tier-Matched Cross-Academy</option>
+                          <option value="CROSS_ACADEMY_ONLY">Cross-Academy Only</option>
+                          <option value="TEAM_FORMAT">Academy Team Format</option>
+                          <option value="FULL_ROUND_ROBIN">Full Round-Robin (Advanced)</option>
+                        </select>
+                      </div>
+                      {/* Generate / Regenerate button */}
+                      {hasFixtures && fixtureState === 'FIXTURES_READY' ? (
+                        <button onClick={() => setConfirmRegenerate(true)} disabled={generating}
+                          className="px-4 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium rounded-lg disabled:opacity-50">
+                          {generating ? 'Generating…' : 'Regenerate'}
+                        </button>
+                      ) : (
+                        <button onClick={handleGenerate} disabled={generating}
+                          className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg disabled:opacity-50">
+                          {generating ? 'Generating…' : 'Generate Fixtures'}
+                        </button>
+                      )}
+                      {genError && <span className="text-xs text-red-400">{genError}</span>}
+                    </div>
+                    {fixtureStrategy === 'TIER_MATCHED' && (
+                      <p className="text-xs text-gray-500">Players are grouped by rating tier. Cross-academy round-robin within each tier — maximises competitive matches.</p>
+                    )}
+                    {fixtureStrategy === 'CROSS_ACADEMY_ONLY' && (
+                      <p className="text-xs text-gray-500">Circle method with same-academy pairs replaced by BYEs. Every scheduled match is cross-academy.</p>
+                    )}
+                    {fixtureStrategy === 'TEAM_FORMAT' && (
+                      <p className="text-xs text-gray-500">Each academy pair plays a positional matchup (#1 vs #1, #2 vs #2 …). Produces clear team scores per matchup.</p>
+                    )}
+                    {fixtureStrategy === 'FULL_ROUND_ROBIN' && (
+                      <p className="text-xs text-yellow-600">Every player plays every other player. Produces many stretch matches when academies have different rating levels.</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Lock Fixtures button — only when FIXTURES_READY */}
+                {fixtureState === 'FIXTURES_READY' && hasFixtures && (
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => setConfirmLock(true)} disabled={locking}
+                      className="px-4 py-1.5 bg-purple-700 hover:bg-purple-600 text-white text-sm font-medium rounded-lg disabled:opacity-50">
+                      {locking ? 'Locking…' : '🔒 Lock Fixtures'}
+                    </button>
+                    <span className="text-xs text-gray-500">Prevent further regeneration and roster changes.</span>
+                    {lockError && <span className="text-xs text-red-400">{lockError}</span>}
+                  </div>
+                )}
+
+                {/* Apply Ratings button — when all results are in (RESULTS_SUBMITTED or FIXTURE_FROZEN with no pending slots) */}
+                {(fixtureState === 'RESULTS_SUBMITTED' || (fixtureState === 'FIXTURE_FROZEN' && scheduledCount === 0)) && hasFixtures && (
+                  <div className="flex items-center gap-3">
+                    <button onClick={handleApplyRatings} disabled={applyingRatings}
+                      className="px-4 py-1.5 bg-green-700 hover:bg-green-600 text-white text-sm font-medium rounded-lg disabled:opacity-50">
+                      {applyingRatings ? 'Applying…' : '✅ Apply Ratings'}
+                    </button>
+                    <span className="text-xs text-gray-500">Update player Elo ratings for all confirmed matches.</span>
+                    {applyError && <span className="text-xs text-red-400">{applyError}</span>}
+                  </div>
+                )}
+                {fixtureState === 'FIXTURE_FROZEN' && scheduledCount > 0 && (
+                  <p className="text-xs text-gray-500">
+                    {scheduledCount} match result{scheduledCount !== 1 ? 's' : ''} still pending — enter all results to enable Apply Ratings.
+                  </p>
+                )}
+
+                {/* Confirm Regenerate dialog */}
+                {confirmRegenerate && (
+                  <div className="bg-gray-800 border border-amber-700/50 rounded-lg p-4 space-y-3">
+                    <p className="text-sm text-amber-300 font-medium">Regenerate fixtures?</p>
+                    <p className="text-xs text-gray-400">This will delete the current pairings and generate new ones. Any match results already entered will be lost.</p>
+                    <div className="flex gap-2">
+                      <button onClick={handleGenerate} disabled={generating}
+                        className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-sm rounded-lg disabled:opacity-50">
+                        {generating ? 'Generating…' : 'Yes, Regenerate'}
+                      </button>
+                      <button onClick={() => setConfirmRegenerate(false)}
+                        className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded-lg">
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Confirm Lock dialog */}
+                {confirmLock && (
+                  <div className="bg-gray-800 border border-purple-700/50 rounded-lg p-4 space-y-3">
+                    <p className="text-sm text-purple-300 font-medium">Lock these fixtures?</p>
+                    <p className="text-xs text-gray-400">Once locked, you cannot regenerate or modify the fixture list. Match results can still be entered.</p>
+                    <div className="flex gap-2">
+                      <button onClick={handleLock} disabled={locking}
+                        className="px-3 py-1.5 bg-purple-700 hover:bg-purple-600 text-white text-sm rounded-lg disabled:opacity-50">
+                        {locking ? 'Locking…' : 'Yes, Lock'}
+                      </button>
+                      <button onClick={() => setConfirmLock(false)}
+                        className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded-lg">
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-              {fixtureStrategy === 'TIER_MATCHED' && (
-                <p className="text-xs text-gray-500">Players are grouped by rating tier. Cross-academy round-robin within each tier — maximises competitive matches.</p>
-              )}
-              {fixtureStrategy === 'CROSS_ACADEMY_ONLY' && (
-                <p className="text-xs text-gray-500">Circle method with same-academy pairs replaced by BYEs. Every scheduled match is cross-academy.</p>
-              )}
-              {fixtureStrategy === 'TEAM_FORMAT' && (
-                <p className="text-xs text-gray-500">Each academy pair plays a positional matchup (#1 vs #1, #2 vs #2 …). Produces clear team scores per matchup.</p>
-              )}
-              {fixtureStrategy === 'FULL_ROUND_ROBIN' && (
-                <p className="text-xs text-yellow-600">Every player plays every other player. Produces many stretch matches when academies have different rating levels.</p>
-              )}
-            </div>
-          )}
+            )
+          })()}
           {fixturesLoading && <Spinner />}
           {fixturesError && <ErrorMsg message={fixturesError} />}
           {fixtures && fixtures.slots.length === 0 && (

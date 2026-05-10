@@ -295,6 +295,7 @@ export interface Event {
   default_match_format: string | null
   tournament_format: string | null
   status: string
+  fixture_state: string | null
   start_date: string
   end_date: string | null
   season: { season_id: string; name: string } | null
@@ -333,6 +334,9 @@ export const eventsApi = {
   generateFixtures: (id: string, num_tables: number, fixture_strategy: string = 'TIER_MATCHED') =>
     request<EventFixtures>(`/events/${id}/generate-fixtures`, { method: 'POST', body: JSON.stringify({ num_tables, fixture_strategy }) }),
   getFixtures: (id: string) => request<EventFixtures>(`/events/${id}/fixture-slots`),
+  getFixtureStatus: (id: string) => request<FixtureStatus>(`/events/${id}/fixtures/status`),
+  lockFixtures: (id: string) => request<{ fixture_state: string }>(`/events/${id}/fixtures/lock`, { method: 'POST' }),
+  applyRatings: (id: string) => request<{ fixture_state: string; matches_processed: number }>(`/events/${id}/apply-ratings`, { method: 'POST' }),
 }
 
 // ── Event player roster ───────────────────────────────────────────────────────
@@ -369,6 +373,7 @@ export interface EventFixtureSlot {
   round_number: number
   table_number: number
   match_category: string
+  fixture_strategy: string
   player_a: EventFixturePlayer
   player_b: EventFixturePlayer | null
   expected_rating_gap: number
@@ -381,7 +386,14 @@ export interface EventFixtures {
   total_rounds: number
   total_slots: number
   cross_academy_pct: number
+  fixture_state: string | null
   slots: EventFixtureSlot[]
+}
+
+export interface FixtureStatus {
+  fixture_state: string | null
+  can_regenerate: boolean
+  reason: string | null
 }
 
 // ── Matches ───────────────────────────────────────────────────────────────────

@@ -32,6 +32,12 @@ EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
 
+DO $$ BEGIN
+    CREATE TYPE fixture_lifecycle_state AS ENUM ('ROSTER_OPEN', 'FIXTURES_READY', 'FIXTURE_FROZEN', 'RESULTS_SUBMITTED', 'RATINGS_APPLIED');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
 -- Create the Event table
 CREATE TABLE IF NOT EXISTS event (
     event_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -45,6 +51,7 @@ CREATE TABLE IF NOT EXISTS event (
     start_date DATE NOT NULL,
     end_date DATE,
     status event_status NOT NULL DEFAULT 'SCHEDULED',
+    fixture_state fixture_lifecycle_state,  -- NULL for INTRA_ACADEMY, ROSTER_OPEN for INTER_ACADEMY LEAGUE
     created_by UUID REFERENCES users(user_id) NOT NULL,
     updated_by UUID REFERENCES users(user_id) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,

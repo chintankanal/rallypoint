@@ -9,7 +9,7 @@ def _fetch_event(cur, event_id: str) -> dict | None:
     cur.execute(
         """
         SELECT e.event_id, e.name, e.scheduling_mode, e.event_type,
-               e.default_match_format, e.tournament_format, e.status,
+               e.default_match_format, e.tournament_format, e.status, e.fixture_state,
                e.start_date, e.end_date, e.created_at,
                CASE WHEN e.season_id IS NOT NULL THEN
                    json_build_object('season_id', s.season_id, 'name', s.name)
@@ -42,13 +42,19 @@ def create_event(body, creator_role: str, creator_academy_id: str | None, create
     event_id = str(uuid.uuid4())
     with get_connection() as conn:
         with conn.cursor() as cur:
+            # Determine fixture_state: ROSTER_OPEN for INTER_ACADEMY LEAGUE, NULL for others
+            fixture_state = None
+            if (body.scheduling_mode.value == "INTER_ACADEMY" and 
+                body.event_type.value == "LEAGUE"):
+                fixture_state = "ROSTER_OPEN"
+            
             cur.execute(
                 """
                 INSERT INTO event (
                     event_id, season_id, name, scheduling_mode, event_type,
                     default_match_format, tournament_format, host_academy_id,
-                    start_date, end_date, created_by, updated_by
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    start_date, end_date, fixture_state, created_by, updated_by
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     event_id,
@@ -61,6 +67,7 @@ def create_event(body, creator_role: str, creator_academy_id: str | None, create
                     body.host_academy_id,
                     body.start_date,
                     body.end_date,
+                    fixture_state,
                     created_by,
                     created_by,
                 ),

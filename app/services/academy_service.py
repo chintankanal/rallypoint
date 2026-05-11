@@ -196,26 +196,7 @@ def get_asi_history(academy_id: str, limit: int) -> list[dict] | None:
 
 
 def get_academy_stats(academy_id: str) -> dict | None:
-    """
-    Get comprehensive statistics for an academy.
-    
-    Returns:
-    {
-        "tables_available": int,
-        "active_player_count": int,
-        "coach_count": int,
-        "total_match_volume": int,
-        "matches_30_days": int,
-        "current_asi": float | None,
-        "tier_distribution": {
-            "BEGINNER": int,
-            "INTERMEDIATE": int,
-            "ADVANCED": int,
-            "ELITE": int,
-            "NATIONAL_TRACK": int
-        }
-    }
-    """
+    """Get comprehensive statistics for an academy."""
     with get_connection() as conn:
         with conn.cursor() as cur:
             # Verify academy exists
@@ -225,12 +206,12 @@ def get_academy_stats(academy_id: str) -> dict | None:
             
             stats = {}
             
-            # 1. Tables available (from system_configuration)
+            # 1. Tables available (from system_configuration key-value store)
             cur.execute(
-                "SELECT total_tables FROM system_configuration LIMIT 1"
+                "SELECT value FROM system_configuration WHERE key = 'total_tables'"
             )
             result = cur.fetchone()
-            stats["tables_available"] = result["total_tables"] if result else 0
+            stats["tables_available"] = int(result["value"]) if result else 0
             
             # 2. Active Player Count
             cur.execute(
@@ -276,18 +257,23 @@ def get_academy_stats(academy_id: str) -> dict | None:
             # 6. Current ASI (mean rating of top non-provisional players)
             cur.execute(
                 f"""
-                SELECT AVG(current_rating)::float as asi_value
+                SELECT current_rating
                 FROM player
                 WHERE primary_academy_id = %s
                   AND status = 'ACTIVE'
                   AND NOT ({_IS_PROVISIONAL_SQL})
                   AND current_rating >= 1000
+                ORDER BY current_rating DESC
                 LIMIT 15
                 """,
                 (academy_id,)
             )
-            result = cur.fetchone()
-            stats["current_asi"] = result["asi_value"] if result["asi_value"] else None
+            rows = cur.fetchall()
+            if rows:
+                asi_value = sum(row["current_rating"] for row in rows) / len(rows)
+                stats["current_asi"] = float(asi_value)
+            else:
+                stats["current_asi"] = None
             
             # 7. Tier Distribution
             cur.execute(
@@ -298,19 +284,10 @@ def get_academy_stats(academy_id: str) -> dict | None:
                 FROM player
                 WHERE primary_academy_id = %s AND status = 'ACTIVE'
                 GROUP BY {_TIER_SQL}
-                ORDER BY
-                    CASE
-                        WHEN {_TIER_SQL} = 'BEGINNER' THEN 1
-                        WHEN {_TIER_SQL} = 'INTERMEDIATE' THEN 2
-                        WHEN {_TIER_SQL} = 'ADVANCED' THEN 3
-                        WHEN {_TIER_SQL} = 'ELITE' THEN 4
-                        ELSE 5
-                    END
                 """,
                 (academy_id,)
             )
             
-            # Initialize tier distribution with zeros
             tier_distribution = {
                 "BEGINNER": 0,
                 "INTERMEDIATE": 0,
@@ -319,7 +296,6 @@ def get_academy_stats(academy_id: str) -> dict | None:
                 "NATIONAL_TRACK": 0
             }
             
-            # Populate from query results
             for row in cur.fetchall():
                 tier_distribution[row["tier"]] = row["player_count"]
             

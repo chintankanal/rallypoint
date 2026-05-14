@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
 import {
-  leaderboardApi, matchesApi, playersApi, academiesApi, eventsApi, sessionsApi,
+  matchesApi, playersApi, academiesApi, eventsApi, sessionsApi,
   type PlayerSearchResult, type LeaderboardEntry, type SessionSummary, type FixtureSlot,
 } from '../api/client'
 import { Layout, TierBadge, CRBar, Spinner, ErrorMsg, ProtectedRoute } from '../components/Layout'
 import { useAuth } from '../auth/context'
+import { MatchSubmissionSchema, PlayerRegistrationSchema, getMatchFormatRules, validateEventAsync, validatePlayerNameAsync } from '../validation/schemas'
+import { useFormValidation } from '../validation/useFormValidation'
 
 export default function Dashboard() {
   return (
@@ -787,14 +788,28 @@ function SubmitMatchTab({ academyId }: { academyId: string }) {
     is_retirement: false,
   })
   const [result, setResult] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [apiError, setApiError] = useState<string | null>(null)
+  
+  // Validation hook
+  const validation = useFormValidation(MatchSubmissionSchema)
 
   const maxSets: Record<string, number> = { BEST_OF_3: 2, BEST_OF_5: 3, BEST_OF_7: 4 }
 
   const mutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
+      // Player selection validation
       if (!playerA || !playerB) throw new Error('Select both players')
-      if (!form.event_id) throw new Error('Event ID is required')
+      
+      // Form data validation using Zod schema with async checks
+      await validation.validateAsync({
+        event_id: form.event_id,
+        match_format: form.match_format,
+        sets_won_a: form.sets_won_a ? Number(form.sets_won_a) : 0,
+        sets_won_b: form.sets_won_b ? Number(form.sets_won_b) : 0,
+        match_date: form.match_date,
+        is_retirement: form.is_retirement,
+      })
+
       return matchesApi.submit({
         event_id: form.event_id,
         player_a_id: playerA.player_id,
@@ -809,19 +824,34 @@ function SubmitMatchTab({ academyId }: { academyId: string }) {
     onSuccess: m => {
       const winner = m.winner_id === m.player_a.player_id ? m.player_a.name : m.player_b.name
       setResult(`Match submitted! Winner: ${winner}. Status: ${m.confirmation_status}`)
-      setError(null)
+      setApiError(null)
       setPlayerA(null); setPlayerB(null)
       setForm(f => ({ ...f, sets_won_a: '', sets_won_b: '' }))
+      validation.clearError('sets_won_a')
+      validation.clearError('sets_won_b')
     },
-    onError: (e: Error) => { setError(e.message); setResult(null) },
+    onError: (e: Error) => { setApiError(e.message); setResult(null) },
   })
 
   const max = maxSets[form.match_format]
+  const matchFormatRules = getMatchFormatRules(form.match_format)
+
+  const handleSubmit = () => {
+    mutation.mutate()
+  }
 
   return (
     <div className="max-w-md space-y-4">
       {result && <div className="bg-green-900/40 border border-green-700 text-green-300 rounded p-3 text-sm">{result}</div>}
-      {error && <ErrorMsg message={error} />}
+      {apiError && <ErrorMsg message={apiError} />}
+      {validation.hasErrors && (
+        <div className="bg-red-900/20 border border-red-700 text-red-300 rounded p-3 text-sm space-y-1">
+          <p className="font-semibold">Form validation errors:</p>
+          {Object.entries(validation.errors).map(([field, msg]) => (
+            <p key={field} className="text-xs">• {msg}</p>
+          ))}
+        </div>
+      )}
 
       <PlayerPicker label="Player A" academyId={academyId} value={playerA} onChange={setPlayerA} />
       <PlayerPicker label="Player B" academyId={academyId} value={playerB} onChange={setPlayerB} />
@@ -832,6 +862,7 @@ function SubmitMatchTab({ academyId }: { academyId: string }) {
           className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm">
           {FORMATS.map(f => <option key={f} value={f}>{f.replace(/_/g, ' ')} (first to {maxSets[f]})</option>)}
         </select>
+        <p className="text-xs text-gray-500 mt-1">{matchFormatRules}</p>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -840,32 +871,85 @@ function SubmitMatchTab({ academyId }: { academyId: string }) {
             {playerA ? playerA.name.split(' ')[0] : 'Player A'} sets won
           </label>
           <input type="number" min={0} max={max} value={form.sets_won_a}
-            onChange={e => setForm(f => ({ ...f, sets_won_a: e.target.value }))}
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-center text-lg font-mono" />
+            onChange={e => {
+              setForm(f => ({ ...f, sets_won_a: e.target.value }))
+              validation.clearError('sets_won_a')
+            }}
+            className={`w-full bg-gray-800 rounded-lg px-3 py-2 text-white text-center text-lg font-mono ${
+              validation.getError('sets_won_a') 
+                ? 'border-2 border-red-500' 
+                : 'border border-gray-700'
+            }`} />
+          {validation.getError('sets_won_a') && (
+            <p className="text-xs text-red-400 mt-1">{validation.getError('sets_won_a')}</p>
+          )}
         </div>
         <div>
           <label className="block text-sm text-gray-400 mb-1">
             {playerB ? playerB.name.split(' ')[0] : 'Player B'} sets won
           </label>
           <input type="number" min={0} max={max} value={form.sets_won_b}
-            onChange={e => setForm(f => ({ ...f, sets_won_b: e.target.value }))}
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-center text-lg font-mono" />
+            onChange={e => {
+              setForm(f => ({ ...f, sets_won_b: e.target.value }))
+              validation.clearError('sets_won_b')
+            }}
+            className={`w-full bg-gray-800 rounded-lg px-3 py-2 text-white text-center text-lg font-mono ${
+              validation.getError('sets_won_b') 
+                ? 'border-2 border-red-500' 
+                : 'border border-gray-700'
+            }`} />
+          {validation.getError('sets_won_b') && (
+            <p className="text-xs text-red-400 mt-1">{validation.getError('sets_won_b')}</p>
+          )}
         </div>
       </div>
 
       <div>
         <label className="block text-sm text-gray-400 mb-1">Match Date</label>
         <input type="date" value={form.match_date}
-          onChange={e => setForm(f => ({ ...f, match_date: e.target.value }))}
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
+          onChange={e => {
+            setForm(f => ({ ...f, match_date: e.target.value }))
+            validation.clearError('match_date')
+          }}
+          className={`w-full bg-gray-800 rounded-lg px-3 py-2 text-white text-sm ${
+            validation.getError('match_date') 
+              ? 'border-2 border-red-500' 
+              : 'border border-gray-700'
+          }`} />
+        {validation.getError('match_date') && (
+          <p className="text-xs text-red-400 mt-1">{validation.getError('match_date')}</p>
+        )}
       </div>
 
       <div>
         <label className="block text-sm text-gray-400 mb-1">Event ID</label>
-        <input type="text" value={form.event_id} placeholder="Paste the event UUID"
-          onChange={e => setForm(f => ({ ...f, event_id: e.target.value }))}
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm font-mono placeholder-gray-600" />
+        <div className="relative">
+          <input type="text" value={form.event_id} placeholder="Paste the event UUID"
+            onChange={e => {
+              setForm(f => ({ ...f, event_id: e.target.value }))
+              validation.clearError('event_id')
+            }}
+            onBlur={() => {
+              // Validate event exists when field loses focus
+              if (form.event_id.trim()) {
+                validation.validateFieldAsync('event_id', () => validateEventAsync(form.event_id))
+              }
+            }}
+            className={`w-full bg-gray-800 rounded-lg px-3 py-2 pr-8 text-white text-sm font-mono placeholder-gray-600 ${
+              validation.getError('event_id') 
+                ? 'border-2 border-red-500' 
+                : 'border border-gray-700'
+            }`} />
+          {validation.isValidatingField('event_id') && (
+            <div className="absolute right-2 top-2.5 text-gray-400">
+              <div className="animate-spin text-xs">⟳</div>
+            </div>
+          )}
+        </div>
         <p className="text-xs text-gray-500 mt-1">Find event IDs in Admin → Events</p>
+        {validation.getError('event_id') && (
+          <p className="text-xs text-red-400 mt-1">{validation.getError('event_id')}</p>
+        )}
       </div>
 
       <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
@@ -875,7 +959,7 @@ function SubmitMatchTab({ academyId }: { academyId: string }) {
         Retirement / walkover
       </label>
 
-      <button onClick={() => mutation.mutate()} disabled={mutation.isPending || !playerA || !playerB}
+      <button onClick={handleSubmit} disabled={mutation.isPending || !playerA || !playerB}
         className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg transition-colors disabled:opacity-50">
         {mutation.isPending ? 'Submitting…' : 'Submit Match'}
       </button>
@@ -1266,69 +1350,130 @@ function RegisterPlayerTab({ academyId }: { academyId: string }) {
     nationality: 'India', guardian_name: '', guardian_phone: '', contact_email: '',
   })
   const [success, setSuccess] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [apiError, setApiError] = useState<string | null>(null)
   const qc = useQueryClient()
+  
+  // Validation hook
+  const validation = useFormValidation(PlayerRegistrationSchema)
 
   const mutation = useMutation({
-    mutationFn: () => playersApi.create({
-      name: form.name,
-      date_of_birth: form.date_of_birth,
-      gender: form.gender,
-      primary_academy_id: academyId,
-      seeding_level: form.seeding_level,
-      seeding_reference: form.seeding_reference || undefined,
-      virtual_matches: Number(form.virtual_matches),
-      nationality: form.nationality || undefined,
-      guardian_name: form.guardian_name || undefined,
-      guardian_phone: form.guardian_phone || undefined,
-      contact_email: form.contact_email || undefined,
-    }),
+    mutationFn: async () => {
+      // Form data validation using Zod schema with async checks
+      await validation.validateAsync({
+        name: form.name,
+        date_of_birth: form.date_of_birth,
+        gender: form.gender,
+        seeding_level: form.seeding_level,
+        seeding_reference: form.seeding_reference || null,
+        virtual_matches: Number(form.virtual_matches),
+        nationality: form.nationality || null,
+        guardian_name: form.guardian_name || null,
+        guardian_phone: form.guardian_phone || null,
+        contact_email: form.contact_email || null,
+      })
+
+      return playersApi.create({
+        name: form.name,
+        date_of_birth: form.date_of_birth,
+        gender: form.gender,
+        primary_academy_id: academyId,
+        seeding_level: form.seeding_level,
+        seeding_reference: form.seeding_reference || undefined,
+        virtual_matches: Number(form.virtual_matches),
+        nationality: form.nationality || undefined,
+        guardian_name: form.guardian_name || undefined,
+        guardian_phone: form.guardian_phone || undefined,
+        contact_email: form.contact_email || undefined,
+      })
+    },
     onSuccess: p => {
       setSuccess(`${p.name} registered with rating ${Math.round(p.current_rating)}`)
-      setError(null)
+      setApiError(null)
       setForm({
         name: '', date_of_birth: '', gender: '',
         seeding_level: 'UNSEEDED', seeding_reference: '', virtual_matches: '0',
         nationality: 'India', guardian_name: '', guardian_phone: '', contact_email: '',
       })
+      validation.clearAllErrors()
       qc.invalidateQueries({ queryKey: ['academy-leaderboard', academyId] })
     },
-    onError: (e: Error) => { setError(e.message); setSuccess(null) },
+    onError: (e: Error) => { setApiError(e.message); setSuccess(null) },
   })
 
   function set(k: keyof typeof form) {
-    return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       setForm(f => ({ ...f, [k]: e.target.value }))
+      validation.clearError(k)
+    }
   }
-
-  const canSubmit = !mutation.isPending && !!form.name && !!form.date_of_birth && !!form.gender
-    && (form.seeding_level === 'UNSEEDED' || !!form.seeding_reference)
 
   return (
     <div className="max-w-md space-y-4">
       {success && <div className="bg-green-900/40 border border-green-700 text-green-300 rounded p-3 text-sm">{success}</div>}
-      {error && <ErrorMsg message={error} />}
+      {apiError && <ErrorMsg message={apiError} />}
+      {validation.hasErrors && (
+        <div className="bg-red-900/20 border border-red-700 text-red-300 rounded p-3 text-sm space-y-1">
+          <p className="font-semibold">Form validation errors:</p>
+          {Object.entries(validation.errors).map(([field, msg]) => (
+            <p key={field} className="text-xs">• {msg}</p>
+          ))}
+        </div>
+      )}
 
       <div>
         <label className="block text-sm text-gray-400 mb-1">Full name <span className="text-red-400">*</span></label>
-        <input type="text" required value={form.name} onChange={set('name')} placeholder="Arjun Sharma"
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
+        <div className="relative">
+          <input type="text" required value={form.name} onChange={set('name')} placeholder="Arjun Sharma"
+            onBlur={() => {
+              // Validate player name uniqueness when field loses focus
+              if (form.name.trim()) {
+                validation.validateFieldAsync('name', () => validatePlayerNameAsync(form.name, academyId))
+              }
+            }}
+            className={`w-full bg-gray-800 rounded-lg px-3 py-2 pr-8 text-white text-sm ${
+              validation.getError('name') 
+                ? 'border-2 border-red-500' 
+                : 'border border-gray-700'
+            }`} />
+          {validation.isValidatingField('name') && (
+            <div className="absolute right-2 top-2.5 text-gray-400">
+              <div className="animate-spin text-xs">⟳</div>
+            </div>
+          )}
+        </div>
+        {validation.getError('name') && (
+          <p className="text-xs text-red-400 mt-1">{validation.getError('name')}</p>
+        )}
       </div>
 
       <div>
         <label className="block text-sm text-gray-400 mb-1">Date of birth <span className="text-red-400">*</span> <span className="text-gray-500 text-xs">(must be 6–18 years old)</span></label>
         <input type="date" required value={form.date_of_birth} onChange={set('date_of_birth')}
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
+          className={`w-full bg-gray-800 rounded-lg px-3 py-2 text-white text-sm ${
+            validation.getError('date_of_birth') 
+              ? 'border-2 border-red-500' 
+              : 'border border-gray-700'
+          }`} />
+        {validation.getError('date_of_birth') && (
+          <p className="text-xs text-red-400 mt-1">{validation.getError('date_of_birth')}</p>
+        )}
       </div>
 
       <div>
         <label className="block text-sm text-gray-400 mb-1">Gender <span className="text-red-400">*</span></label>
         <select value={form.gender} onChange={set('gender')}
-          className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm">
+          className={`w-full bg-gray-800 text-white rounded-lg px-3 py-2 text-sm ${
+            validation.getError('gender') 
+              ? 'border-2 border-red-500' 
+              : 'border border-gray-700'
+          }`}>
           <option value="">Select gender…</option>
           <option value="MALE">Male</option>
           <option value="FEMALE">Female</option>
         </select>
+        {validation.getError('gender') && (
+          <p className="text-xs text-red-400 mt-1">{validation.getError('gender')}</p>
+        )}
       </div>
 
       <div>
@@ -1349,20 +1494,41 @@ function RegisterPlayerTab({ academyId }: { academyId: string }) {
         <div>
           <label className="block text-sm text-gray-400 mb-1">Seeding reference <span className="text-red-400">*</span> <span className="text-gray-500 text-xs">(certificate / ranking ID)</span></label>
           <input type="text" value={form.seeding_reference} onChange={set('seeding_reference')}
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
+            className={`w-full bg-gray-800 rounded-lg px-3 py-2 text-white text-sm ${
+              validation.getError('seeding_reference') 
+                ? 'border-2 border-red-500' 
+                : 'border border-gray-700'
+            }`} />
+          {validation.getError('seeding_reference') && (
+            <p className="text-xs text-red-400 mt-1">{validation.getError('seeding_reference')}</p>
+          )}
         </div>
       )}
 
       <div>
         <label className="block text-sm text-gray-400 mb-1">Virtual matches <span className="text-gray-500 text-xs">(prior experience credit, 0–30)</span></label>
         <input type="number" min={0} max={30} value={form.virtual_matches} onChange={set('virtual_matches')}
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
+          className={`w-full bg-gray-800 rounded-lg px-3 py-2 text-white text-sm ${
+            validation.getError('virtual_matches') 
+              ? 'border-2 border-red-500' 
+              : 'border border-gray-700'
+          }`} />
+        {validation.getError('virtual_matches') && (
+          <p className="text-xs text-red-400 mt-1">{validation.getError('virtual_matches')}</p>
+        )}
       </div>
 
       <div>
         <label className="block text-sm text-gray-400 mb-1">Nationality</label>
         <input type="text" value={form.nationality} onChange={set('nationality')} placeholder="India"
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
+          className={`w-full bg-gray-800 rounded-lg px-3 py-2 text-white text-sm ${
+            validation.getError('nationality') 
+              ? 'border-2 border-red-500' 
+              : 'border border-gray-700'
+          }`} />
+        {validation.getError('nationality') && (
+          <p className="text-xs text-red-400 mt-1">{validation.getError('nationality')}</p>
+        )}
       </div>
 
       <div className="border-t border-gray-800 pt-4">
@@ -1371,22 +1537,43 @@ function RegisterPlayerTab({ academyId }: { academyId: string }) {
           <div>
             <label className="block text-sm text-gray-400 mb-1">Guardian name</label>
             <input type="text" value={form.guardian_name} onChange={set('guardian_name')} placeholder="Parent / guardian full name"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
+              className={`w-full bg-gray-800 rounded-lg px-3 py-2 text-white text-sm ${
+                validation.getError('guardian_name') 
+                  ? 'border-2 border-red-500' 
+                  : 'border border-gray-700'
+              }`} />
+            {validation.getError('guardian_name') && (
+              <p className="text-xs text-red-400 mt-1">{validation.getError('guardian_name')}</p>
+            )}
           </div>
           <div>
             <label className="block text-sm text-gray-400 mb-1">Guardian phone</label>
             <input type="tel" value={form.guardian_phone} onChange={set('guardian_phone')} placeholder="+91 98765 43210"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
+              className={`w-full bg-gray-800 rounded-lg px-3 py-2 text-white text-sm ${
+                validation.getError('guardian_phone') 
+                  ? 'border-2 border-red-500' 
+                  : 'border border-gray-700'
+              }`} />
+            {validation.getError('guardian_phone') && (
+              <p className="text-xs text-red-400 mt-1">{validation.getError('guardian_phone')}</p>
+            )}
           </div>
           <div>
             <label className="block text-sm text-gray-400 mb-1">Contact email</label>
             <input type="email" value={form.contact_email} onChange={set('contact_email')} placeholder="guardian@example.com"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
+              className={`w-full bg-gray-800 rounded-lg px-3 py-2 text-white text-sm ${
+                validation.getError('contact_email') 
+                  ? 'border-2 border-red-500' 
+                  : 'border border-gray-700'
+              }`} />
+            {validation.getError('contact_email') && (
+              <p className="text-xs text-red-400 mt-1">{validation.getError('contact_email')}</p>
+            )}
           </div>
         </div>
       </div>
 
-      <button onClick={() => mutation.mutate()} disabled={!canSubmit}
+      <button onClick={() => mutation.mutate()} disabled={mutation.isPending || !form.name || !form.date_of_birth || !form.gender}
         className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg transition-colors disabled:opacity-50">
         {mutation.isPending ? 'Registering…' : 'Register Player'}
       </button>

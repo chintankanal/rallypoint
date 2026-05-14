@@ -51,7 +51,7 @@ function netDelta(matches: RatingHistoryEntry[]): number {
   return matches.reduce((acc, m) => acc + m.delta, 0)
 }
 
-function formatScore(entry: RatingHistoryEntry, playerId: string): string {
+function formatScore(entry: RatingHistoryEntry): string {
   if (entry.sets_won_a === null || entry.sets_won_b === null) return '—'
   // We need to figure out which side this player was on.
   // We can't know player_a vs player_b from the entry alone, but result tells us winner.
@@ -329,7 +329,7 @@ export default function PlayerDetail() {
                           ? `Start · ${payload[0].payload.date}`
                           : `Match ${payload?.[0]?.payload?.seq} · ${payload?.[0]?.payload?.date ?? ''}`
                       }
-                      formatter={(value: number) => [value, 'Rating']}
+                      formatter={(value: any) => [value ?? '—', 'Rating']}
                     />
                     <Line type="monotone" dataKey="rating" stroke="#3b82f6" strokeWidth={2} dot={false} />
                   </LineChart>
@@ -446,7 +446,7 @@ export default function PlayerDetail() {
                                                 <div className="text-gray-300">vs {r.opponent_name ?? '—'}</div>
                                               </td>
                                               <td className="px-3 py-2 text-gray-400 hidden sm:table-cell font-mono">
-                                                {formatScore(r, id!)}
+                                                {formatScore(r)}
                                               </td>
                                               <td className="px-3 py-2">
                                                 <div className="flex flex-wrap gap-1 items-center">

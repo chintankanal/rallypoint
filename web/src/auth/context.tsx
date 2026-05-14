@@ -3,7 +3,7 @@ import type { TokenResponse } from '../api/client'
 
 interface AuthUser {
   user_id: string
-  role: 'ADMIN' | 'COACH' | 'PLAYER'
+  role: 'ADMIN' | 'COACH' | 'PLAYER' | 'REFEREE' | 'UMPIRE'
   academy_id: string | null
   expires_at: string
 }

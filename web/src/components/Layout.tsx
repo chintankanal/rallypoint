@@ -96,7 +96,7 @@ export function ProtectedRoute({
   roles,
   children,
 }: {
-  roles?: Array<'ADMIN' | 'COACH' | 'PLAYER'>
+  roles?: Array<'ADMIN' | 'COACH' | 'PLAYER' | 'REFEREE' | 'UMPIRE'>
   children: React.ReactNode
 }) {
   const { user } = useAuth()

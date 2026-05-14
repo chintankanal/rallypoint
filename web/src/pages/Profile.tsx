@@ -13,7 +13,7 @@ export default function Profile() {
 }
 
 function ProfileInner() {
-  const { user, logout } = useAuth()
+  const { logout } = useAuth()
   const [tab, setTab] = useState<'info' | 'password'>('info')
 
   return (
@@ -74,7 +74,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 function ChangePassword() {
   const [form, setForm] = useState({ current: '', next: '', confirm: '' })
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
+  const [success] = useState(false)
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(ev: React.FormEvent) {

@@ -1355,8 +1355,9 @@ function AcademiesTab() {
                     { tier: 'INTERMEDIATE', label: '🥈 Intermediate', color: 'bg-green-600' },
                     { tier: 'BEGINNER', label: '🥉 Beginner', color: 'bg-gray-600' },
                   ].map(({ tier, label, color }) => {
-                    const count = statsQ.data.tier_distribution[tier as keyof typeof statsQ.data.tier_distribution]
-                    const total = statsQ.data.active_player_count || 1
+                    const data = statsQ.data!
+                    const count = data.tier_distribution[tier as keyof typeof data.tier_distribution]
+                    const total = data.active_player_count || 1
                     const pct = ((count / total) * 100).toFixed(0)
                     return (
                       <div key={tier}>

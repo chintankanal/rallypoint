@@ -12,7 +12,7 @@ export default function Login() {
   const navigate = useNavigate()
   const [screen, setScreen] = useState<Screen>('login')
 
-  async function doLogin(body: Record<string, string>) {
+  async function doLogin(body: { email: string; password?: string; otp_code?: string }) {
     const resp = await authApi.login(body)
     login(resp)
     navigate('/', { replace: true })
@@ -42,7 +42,7 @@ export default function Login() {
 
 // ── Login form ────────────────────────────────────────────────────────────────
 
-function LoginForm({ doLogin }: { doLogin: (body: Record<string, string>) => Promise<void> }) {
+function LoginForm({ doLogin }: { doLogin: (body: { email: string; password?: string; otp_code?: string }) => Promise<void> }) {
   const [method, setMethod] = useState<LoginMethod>('password')
   const [otpStep, setOtpStep] = useState<OtpStep>('enter-email')
   const [email, setEmail] = useState('')

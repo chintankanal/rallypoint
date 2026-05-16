@@ -313,8 +313,9 @@ def generate_standard_fixtures(
     - BYE for odd player count (rotating)
     - recent_match_pairs: canonical (a,b) pairs to exclude from stretch round
     """
-    from app.utils.rating_math import get_tier
+    from app.utils.rating_math import get_tier, _load_config
 
+    cfg = _load_config()
     sorted_players = sorted(players, key=lambda p: float(p["current_rating"]), reverse=True)
     players_by_id = {p["player_id"]: p for p in players}
     n = len(sorted_players)
@@ -326,7 +327,7 @@ def generate_standard_fixtures(
         current_tier = None
         current_group: list[str] = []
         for pid in pids:
-            t = get_tier(float(players_by_id[pid]["current_rating"]))
+            t = get_tier(float(players_by_id[pid]["current_rating"]), cfg)
             if t != current_tier:
                 if current_group:
                     groups.append(current_group)
@@ -720,13 +721,14 @@ def _tier_matched(players_by_academy: dict, played_pairs: set[tuple]) -> dict:
     so nearly all matches are COMPETITIVE (gap ≤ 100).
     Rounds are numbered sequentially across tiers.
     """
-    from app.utils.rating_math import get_tier
+    from app.utils.rating_math import get_tier, _load_config
 
+    cfg = _load_config()
     # Build per-tier, per-academy groupings
     tier_by_academy: dict[str, dict[str, list[dict]]] = {}
     for academy_id, players in players_by_academy.items():
         for p in players:
-            tier = get_tier(float(p["current_rating"]))
+            tier = get_tier(float(p["current_rating"]), cfg)
             tier_by_academy.setdefault(tier, {}).setdefault(academy_id, []).append(p)
 
     all_slots: list[dict] = []

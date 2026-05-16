@@ -1,34 +1,67 @@
 from app.database import get_connection
+from app.utils.rating_math import _load_config
 
-_TIER_SQL = """
+
+def _get_tier_sql() -> str:
+    """Generate TIER CASE statement based on system config."""
+    cfg = _load_config()
+    beginner = int(cfg.get("tier_beginner_max", 899))
+    intermediate = int(cfg.get("tier_intermediate_max", 1099))
+    advanced = int(cfg.get("tier_advanced_max", 1299))
+    elite = int(cfg.get("tier_elite_max", 1499))
+    
+    return f"""
     CASE
-        WHEN current_rating < 900  THEN 'BEGINNER'
-        WHEN current_rating < 1100 THEN 'INTERMEDIATE'
-        WHEN current_rating < 1300 THEN 'ADVANCED'
-        WHEN current_rating < 1500 THEN 'ELITE'
+        WHEN current_rating <= {beginner}  THEN 'BEGINNER'
+        WHEN current_rating <= {intermediate} THEN 'INTERMEDIATE'
+        WHEN current_rating <= {advanced} THEN 'ADVANCED'
+        WHEN current_rating <= {elite} THEN 'ELITE'
         ELSE 'NATIONAL_TRACK'
     END
 """
 
-_IS_PROVISIONAL_SQL = """
-    (seeding_level = 'UNSEEDED' AND (rated_matches_completed + virtual_matches) < 15)
-"""
 
-_AGE_JAN1_SQL = """
+def _get_is_provisional_sql() -> str:
+    """Generate IS_PROVISIONAL condition based on system config."""
+    cfg = _load_config()
+    threshold = int(cfg.get("provisional_threshold", 15))
+    return f"(seeding_level = 'UNSEEDED' AND (rated_matches_completed + virtual_matches) < {threshold})"
+
+
+def _get_age_jan1_sql() -> str:
+    """Generate AGE_JAN1 calculation."""
+    return """
     DATE_PART('year',
         AGE(MAKE_DATE(EXTRACT(YEAR FROM CURRENT_DATE)::int, 1, 1), date_of_birth)
     )::int
 """
 
-_AGE_GROUP_SQL = f"""
+
+def _get_age_group_sql() -> str:
+    """Generate AGE_GROUP CASE statement based on system config."""
+    cfg = _load_config()
+    u10 = int(cfg.get("age_group_u10_max", 10))
+    u13 = int(cfg.get("age_group_u13_max", 13))
+    u15 = int(cfg.get("age_group_u15_max", 15))
+    u17 = int(cfg.get("age_group_u17_max", 17))
+    
+    age_jan1_sql = _get_age_jan1_sql().strip()
+    
+    return f"""
     CASE
-        WHEN {_AGE_JAN1_SQL} <= 10 THEN 'U10'
-        WHEN {_AGE_JAN1_SQL} <= 13 THEN 'U13'
-        WHEN {_AGE_JAN1_SQL} <= 15 THEN 'U15'
-        WHEN {_AGE_JAN1_SQL} <= 17 THEN 'U17'
+        WHEN {age_jan1_sql} <= {u10} THEN 'U10'
+        WHEN {age_jan1_sql} <= {u13} THEN 'U13'
+        WHEN {age_jan1_sql} <= {u15} THEN 'U15'
+        WHEN {age_jan1_sql} <= {u17} THEN 'U17'
         ELSE 'OPEN'
     END
 """
+
+
+_TIER_SQL = _get_tier_sql()
+_IS_PROVISIONAL_SQL = _get_is_provisional_sql()
+_AGE_JAN1_SQL = _get_age_jan1_sql()
+_AGE_GROUP_SQL = _get_age_group_sql()
 
 VALID_AGE_GROUPS = {"U10", "U13", "U15", "U17"}
 

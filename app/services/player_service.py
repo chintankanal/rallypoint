@@ -4,14 +4,41 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 
 from app.database import get_connection
-from app.utils.rating_math import get_age_as_of_jan1, get_age_group, get_cr, get_tier
+from app.utils.rating_math import get_age_as_of_jan1, get_age_group, get_cr, get_tier, _load_config
 
+# Default fallbacks (used if config unavailable)
 _SEEDING_DEFAULTS: dict[str, tuple[float, int]] = {
     "UNSEEDED": (1000.0, 0),
     "DISTRICT": (1200.0, 10),
     "STATE":    (1400.0, 20),
     "NATIONAL": (1500.0, 30),
 }
+
+
+def _get_seeding_defaults() -> dict[str, tuple[float, int]]:
+    """Load seeding defaults from config, with fallback to hardcoded values."""
+    try:
+        cfg = _load_config()
+        return {
+            "UNSEEDED": (
+                cfg.get("starting_rating_unseeded", 1000.0),
+                int(cfg.get("virtual_matches_unseeded", 0))
+            ),
+            "DISTRICT": (
+                cfg.get("starting_rating_district", 1200.0),
+                int(cfg.get("virtual_matches_district", 10))
+            ),
+            "STATE": (
+                cfg.get("starting_rating_state", 1400.0),
+                int(cfg.get("virtual_matches_state", 20))
+            ),
+            "NATIONAL": (
+                cfg.get("starting_rating_national", 1500.0),
+                int(cfg.get("virtual_matches_national", 30))
+            ),
+        }
+    except Exception:
+        return _SEEDING_DEFAULTS.copy()
 
 _PLAYER_SELECT = """
     SELECT p.player_id, p.name, p.date_of_birth, p.gender, p.nationality,
@@ -29,7 +56,8 @@ _PLAYER_SELECT = """
 
 
 def create_player(body, created_by_id: str) -> dict:
-    starting_rating, default_virtual = _SEEDING_DEFAULTS.get(
+    seeding_defaults = _get_seeding_defaults()
+    starting_rating, default_virtual = seeding_defaults.get(
         body.seeding_level.value, (1000.0, 0)
     )
     virtual_matches = body.virtual_matches if body.virtual_matches is not None else default_virtual
@@ -143,12 +171,17 @@ def get_computed_stats(player_id: str) -> dict | None:
     if not row:
         return None
 
+    from app.utils.rating_math import _load_config
+    cfg = _load_config()
+
     today = date.today()
     total_matches = row["rated_matches_completed"] + row["virtual_matches"]
     age_jan1 = get_age_as_of_jan1(row["date_of_birth"])
-    cr = get_cr(total_matches)
-    is_provisional = row["seeding_level"] == "UNSEEDED" and total_matches < 15
-    provisional_remaining = max(0, 15 - total_matches) if is_provisional else 0
+    cr = get_cr(total_matches, cfg)
+    
+    prov_threshold = int(cfg.get("provisional_threshold", 15))
+    is_provisional = row["seeding_level"] == "UNSEEDED" and total_matches < prov_threshold
+    provisional_remaining = max(0, prov_threshold - total_matches) if is_provisional else 0
 
     weeks_inactive: float | None = None
     if row["last_match_date"]:
@@ -158,11 +191,11 @@ def get_computed_stats(player_id: str) -> dict | None:
         "player_id": player_id,
         "as_of": today,
         "age_as_of_jan1": age_jan1,
-        "age_group": get_age_group(age_jan1),
+        "age_group": get_age_group(age_jan1, cfg),
         "total_matches": total_matches,
         "is_provisional": is_provisional,
         "provisional_matches_remaining": provisional_remaining,
-        "tier": get_tier(float(row["current_rating"])),
+        "tier": get_tier(float(row["current_rating"]), cfg),
         "confidence_ratio": round(cr, 4),
         "weeks_inactive": weeks_inactive,
         "inactivity_decay_active": weeks_inactive is not None and weeks_inactive >= 8,

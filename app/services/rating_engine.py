@@ -9,9 +9,6 @@ The caller owns the transaction; this module never commits or rolls back directl
 import json
 import uuid
 from datetime import date, datetime, timezone
-from threading import Lock
-
-from cachetools import TTLCache
 
 from app.utils.rating_math import (
     get_actual_score,
@@ -26,30 +23,15 @@ from app.utils.rating_math import (
     get_match_weight,
     get_academy_weight,
     get_tier,
+    invalidate_config_cache,
 )
-
-# ── Config cache: one entry, 60-second TTL ────────────────────────────────────
-_config_cache: TTLCache = TTLCache(maxsize=1, ttl=60)
-_cache_lock = Lock()
 
 
 def _load_config(cur) -> dict[str, float]:
-    """Return system_configuration as {key: float}, with 60s in-process cache."""
-    with _cache_lock:
-        cached = _config_cache.get("cfg")
-        if cached is not None:
-            return cached
-        cur.execute("SELECT key, value FROM system_configuration")
-        rows = cur.fetchall()
-        cfg = {r["key"]: float(r["value"]) for r in rows}
-        _config_cache["cfg"] = cfg
-        return cfg
-
-
-def invalidate_config_cache() -> None:
-    """Call after PATCH /config to force next read to hit the DB."""
-    with _cache_lock:
-        _config_cache.clear()
+    """Load config from database cursor (used within a transaction for efficiency)."""
+    cur.execute("SELECT key, value FROM system_configuration")
+    rows = cur.fetchall()
+    return {r["key"]: float(r["value"]) for r in rows}
 
 
 # ── ASI helpers ───────────────────────────────────────────────────────────────
@@ -231,21 +213,21 @@ def apply_ratings_batch(conn, match_ids: list[str]) -> list[dict]:
             r_adj_a = get_asi_adjusted_rating(r_a, global_avg, asi_a)
             r_adj_b = get_asi_adjusted_rating(r_b, global_avg, asi_b)
 
-            exp_a = get_expected_score(r_adj_a, r_adj_b)
+            exp_a = get_expected_score(r_adj_a, r_adj_b, cfg)
 
             same_academy = m["player_a_academy_id"] == m["player_b_academy_id"]
-            w_match = get_match_weight(eff_type)
-            w_academy = get_academy_weight(same_academy)
+            w_match = get_match_weight(eff_type, cfg)
+            w_academy = get_academy_weight(same_academy, cfg)
 
             n_a = p_a["rated_matches_completed"] + p_a["virtual_matches"]
             n_b = p_b["rated_matches_completed"] + p_b["virtual_matches"]
-            cr_a = get_cr(n_a)
-            cr_b = get_cr(n_b)
+            cr_a = get_cr(n_a, cfg)
+            cr_b = get_cr(n_b, cfg)
 
-            k_base_a = get_k_base(p_a["rated_matches_completed"])
-            k_base_b = get_k_base(p_b["rated_matches_completed"])
-            k_eff_a = get_k_eff(k_base_a, w_match, w_academy, cr_a)
-            k_eff_b = get_k_eff(k_base_b, w_match, w_academy, cr_b)
+            k_base_a = get_k_base(p_a["rated_matches_completed"], cfg)
+            k_base_b = get_k_base(p_b["rated_matches_completed"], cfg)
+            k_eff_a = get_k_eff(k_base_a, w_match, w_academy, cr_a, cfg)
+            k_eff_b = get_k_eff(k_base_b, w_match, w_academy, cr_b, cfg)
             k_shared = get_k_shared(k_eff_a, k_eff_b)
 
             # Identify winner and loser from stored canonical data
@@ -274,27 +256,29 @@ def apply_ratings_batch(conn, match_ids: list[str]) -> list[dict]:
             r_adj_winner = r_adj_a if winner_id == pid_a else r_adj_b
             r_adj_loser = r_adj_b if winner_id == pid_a else r_adj_a
             is_upset = r_adj_winner < r_adj_loser
-            age_bonus = get_age_bonus(dob_winner, dob_loser, is_upset)
+            age_bonus = get_age_bonus(dob_winner, dob_loser, is_upset, cfg)
 
             r_winner = float(player_map[winner_id]["current_rating"])
             r_loser = float(player_map[loser_id]["current_rating"])
 
-            tier_before_winner = get_tier(r_winner)
-            tier_before_loser = get_tier(r_loser)
+            tier_before_winner = get_tier(r_winner, cfg)
+            tier_before_loser = get_tier(r_loser, cfg)
             cr_before_winner = get_cr(
                 player_map[winner_id]["rated_matches_completed"]
-                + player_map[winner_id]["virtual_matches"]
+                + player_map[winner_id]["virtual_matches"],
+                cfg
             )
             cr_before_loser = get_cr(
                 player_map[loser_id]["rated_matches_completed"]
-                + player_map[loser_id]["virtual_matches"]
+                + player_map[loser_id]["virtual_matches"],
+                cfg
             )
 
             new_r_winner = r_winner + delta + age_bonus
             new_r_loser = r_loser - delta - age_bonus
 
-            tier_after_winner = get_tier(new_r_winner)
-            tier_after_loser = get_tier(new_r_loser)
+            tier_after_winner = get_tier(new_r_winner, cfg)
+            tier_after_loser = get_tier(new_r_loser, cfg)
 
             k_base_winner = (
                 k_base_a if winner_id == pid_a else k_base_b

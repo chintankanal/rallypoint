@@ -90,7 +90,7 @@ def update_config(key: str, body: ConfigUpdate, current_user: dict = _ADMIN):
                 (str(uuid.uuid4()), key, old_value, body.value, user_id),
             )
 
-    from app.services.rating_engine import invalidate_config_cache
+    from app.utils.rating_math import invalidate_config_cache
     invalidate_config_cache()
 
     return ConfigEntry(key=key, value=body.value, description=existing["description"])

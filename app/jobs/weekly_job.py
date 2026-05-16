@@ -7,18 +7,23 @@ then freezes those academies and records an AcademyStatusHistory entry.
 import uuid
 
 from app.database import get_connection
+from app.utils.rating_math import _load_config
 
 
 def run() -> dict:
     frozen_count = 0
+    
+    # Load inactivity threshold from config
+    cfg = _load_config()
+    inactivity_days = int(cfg.get("asi_inactivity_days", 56))
 
     with get_connection() as conn:
         with conn.cursor() as cur:
-            # Find ACTIVE academies where every active player has been inactive ≥ 56 days.
+            # Find ACTIVE academies where every active player has been inactive.
             # An academy qualifies if it has at least one active player and none of them
-            # have a last_match_date within the past 56 days.
+            # have a last_match_date within the configured inactivity period.
             cur.execute(
-                """
+                f"""
                 SELECT a.academy_id FROM academy a
                 WHERE a.status = 'ACTIVE'
                   AND EXISTS (
@@ -29,7 +34,7 @@ def run() -> dict:
                       SELECT 1 FROM player p
                       WHERE p.primary_academy_id = a.academy_id
                         AND p.status = 'ACTIVE'
-                        AND (p.last_match_date IS NULL OR p.last_match_date >= NOW() - INTERVAL '56 days')
+                        AND (p.last_match_date IS NULL OR p.last_match_date >= NOW() - INTERVAL '{inactivity_days} days')
                   )
                 """
             )

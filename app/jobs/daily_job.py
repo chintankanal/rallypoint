@@ -11,6 +11,7 @@ Steps:
 import uuid
 
 from app.database import get_connection
+from app.utils.rating_math import _load_config
 
 
 def run() -> dict:
@@ -18,6 +19,12 @@ def run() -> dict:
     disputes_expired = 0
     matches_rated = 0
     academies_recalculated = 0
+
+    # Load ASI criteria from config
+    cfg = _load_config()
+    asi_qualified_match_count = int(cfg.get("asi_qualified_match_count", 15))
+    asi_inactivity_days = int(cfg.get("asi_inactivity_days", 56))
+    asi_min_qualifying_players = int(cfg.get("asi_min_qualifying_players", 5))
 
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -101,19 +108,19 @@ def run() -> dict:
                     count = 0
                 else:
                     cur.execute(
-                        """
+                        f"""
                         SELECT AVG(current_rating) AS avg_rating, COUNT(*) AS cnt
                         FROM player
                         WHERE primary_academy_id = %s
                           AND status = 'ACTIVE'
-                          AND rated_matches_completed >= 15
-                          AND last_match_date >= NOW() - INTERVAL '56 days'
+                          AND rated_matches_completed >= {asi_qualified_match_count}
+                          AND last_match_date >= NOW() - INTERVAL '{asi_inactivity_days} days'
                         """,
                         (academy_id,),
                     )
                     r = cur.fetchone()
                     count = int(r["cnt"]) if r["cnt"] else 0
-                    if count >= 5:
+                    if count >= asi_min_qualifying_players:
                         asi_value = float(r["avg_rating"])
                         basis = "COMPUTED"
                     else:

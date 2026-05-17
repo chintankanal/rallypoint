@@ -125,6 +125,34 @@ def test_create_player_no_null_violations(client, admin_token, academy_id, test_
     assert row["virtual_matches"] == 10
 
 
+def test_create_player_duplicate_rejected(client, admin_token, academy_id):
+    body = {
+        "name": "Duplicate Test Player",
+        "date_of_birth": "2016-08-07",
+        "primary_academy_id": academy_id,
+        "seeding_level": "UNSEEDED",
+        "guardian_name": "Same Guardian",
+        "guardian_phone": "+911234567890",
+        "contact_email": "duplicate-test@example.com",
+    }
+
+    first = client.post(
+        "/api/v1/players",
+        json=body,
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert first.status_code == 201, first.text
+
+    second = client.post(
+        "/api/v1/players",
+        json=body,
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert second.status_code == 400, second.text
+    assert second.json()["error"] == "BAD_REQUEST"
+    assert "already exists" in second.json()["detail"]
+
+
 # ── GET /players/{id} ─────────────────────────────────────────────────────────
 
 def test_get_player_returns_correct_shape(client, admin_token, academy_id):

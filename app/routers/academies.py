@@ -59,6 +59,8 @@ def academy_leaderboard(
             last_match_date=r.get("last_match_date"),
             gender=r.get("gender"),
             age_group=r.get("age_group"),
+            claim_code=r.get("claim_code"),
+            is_claimed=r.get("is_claimed"),
         )
         for r in result["items"]
     ]

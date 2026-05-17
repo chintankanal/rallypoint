@@ -27,4 +27,6 @@ class TokenResponse(BaseModel):
     user_id: str
     role: str
     academy_id: str | None
+    academy_name: str | None = None
+    player_id: str | None = None
     expires_at: datetime

@@ -5,6 +5,8 @@ interface AuthUser {
   user_id: string
   role: 'ADMIN' | 'COACH' | 'PLAYER' | 'REFEREE' | 'UMPIRE'
   academy_id: string | null
+  academy_name: string | null
+  player_id: string | null
   expires_at: string
 }
 
@@ -13,6 +15,7 @@ interface AuthContextValue {
   token: string | null
   login: (resp: TokenResponse) => void
   logout: () => void
+  updateUser: (updates: Partial<AuthUser>) => void
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -44,6 +47,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user_id: resp.user_id,
       role: resp.role,
       academy_id: resp.academy_id,
+      academy_name: resp.academy_name ?? null,
+      player_id: resp.player_id ?? null,
       expires_at: resp.expires_at,
     }
     localStorage.setItem('jlrs_token', resp.token)
@@ -59,7 +64,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }, [])
 
-  return <AuthContext.Provider value={{ user, token, login, logout }}>{children}</AuthContext.Provider>
+  const updateUser = useCallback((updates: Partial<AuthUser>) => {
+    setUser((current) => {
+      if (!current) return current
+      const next = { ...current, ...updates }
+      localStorage.setItem('jlrs_user', JSON.stringify(next))
+      return next
+    })
+  }, [])
+
+  return <AuthContext.Provider value={{ user, token, login, logout, updateUser }}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {

@@ -48,7 +48,13 @@ class PlayerResponse(BaseModel):
     guardian_phone: str | None = None
     contact_email: str | None = None
     status: str
+    is_claimed: bool
+    claim_code: str | None = None
     created_at: datetime
+
+
+class ClaimPlayerRequest(BaseModel):
+    claim_code: str
 
 
 class LinkAccountRequest(BaseModel):

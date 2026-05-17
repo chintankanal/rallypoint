@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/context'
-import { authApi, academiesApi, type AcademyListItem } from '../api/client'
+import { authApi } from '../api/client'
 
 type Screen = 'login' | 'register'
 type LoginMethod = 'password' | 'otp'
@@ -10,19 +10,36 @@ type OtpStep = 'enter-email' | 'enter-code'
 export default function Login() {
   const { login } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const params = new URLSearchParams(location.search)
+  const next = params.get('next') ?? '/'
   const [screen, setScreen] = useState<Screen>('login')
 
   async function doLogin(body: { email: string; password?: string; otp_code?: string }) {
     const resp = await authApi.login(body)
     login(resp)
-    navigate('/', { replace: true })
+    const destination = next || '/'
+    if (resp.role === 'PLAYER' && !resp.player_id) {
+      if (next && next !== '/') {
+        navigate(destination, { replace: true })
+      } else {
+        navigate('/onboarding', { replace: true })
+      }
+      return
+    }
+    navigate(destination, { replace: true })
   }
 
   return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <h1 className="text-3xl font-bold text-white mb-1 text-center">JLRS</h1>
-        <p className="text-gray-400 text-sm text-center mb-6">Junior League Rating System</p>
+        <p className="text-gray-400 text-sm text-center mb-4">Junior League Rating System</p>
+        {next !== '/' && (
+          <div className="mb-4 rounded-lg border border-blue-700 bg-blue-950/30 p-3 text-sm text-blue-200 text-center">
+            After signing in or registering, you will be returned to the claim page and the code you received in email will be prefilled.
+          </div>
+        )}
 
         <div className="flex rounded-xl overflow-hidden border border-gray-700 mb-6">
           <TabBtn active={screen === 'login'} onClick={() => setScreen('login')}>Sign In</TabBtn>
@@ -129,28 +146,13 @@ function LoginForm({ doLogin }: { doLogin: (body: { email: string; password?: st
 
 // ── Register form ─────────────────────────────────────────────────────────────
 
-const SELF_ROLES = [
-  { value: 'PLAYER', label: 'Player' },
-  { value: 'COACH', label: 'Coach' },
-  { value: 'REFEREE', label: 'Referee' },
-  { value: 'UMPIRE', label: 'Umpire' },
-]
-
 function RegisterForm({ onSuccess }: { onSuccess: () => void }) {
   const [form, setForm] = useState({
-    name: '', email: '', password: '', role: 'PLAYER',
-    academy_id: '', phone: '', gender: '',
+    name: '', email: '', password: '', phone: '', gender: '',
   })
-  const [academies, setAcademies] = useState<AcademyListItem[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
-
-  useEffect(() => {
-    academiesApi.list('ACTIVE')
-      .then(r => setAcademies(r.items))
-      .catch(() => {/* academies unavailable — degrade gracefully */})
-  }, [])
 
   function set(key: keyof typeof form) {
     return (v: string) => setForm(f => ({ ...f, [key]: v }))
@@ -158,15 +160,11 @@ function RegisterForm({ onSuccess }: { onSuccess: () => void }) {
 
   async function handleSubmit(ev: React.FormEvent) {
     ev.preventDefault()
-    if (form.role === 'COACH' && !form.academy_id) {
-      setError('Please select your academy'); return
-    }
     setLoading(true); setError(null)
     try {
       await authApi.register({
         name: form.name, email: form.email, password: form.password,
-        role: form.role,
-        academy_id: form.academy_id || undefined,
+        role: 'PLAYER',
         phone: form.phone || undefined,
         gender: form.gender || undefined,
       })
@@ -198,32 +196,9 @@ function RegisterForm({ onSuccess }: { onSuccess: () => void }) {
       <Field label="Email address" type="email" value={form.email} onChange={set('email')} placeholder="you@example.com" />
       <Field label="Password" type="password" value={form.password} onChange={set('password')} placeholder="Min 8 characters" />
 
-      <div>
-        <label className="block text-sm text-gray-400 mb-1">Role</label>
-        <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value, academy_id: '' }))}
-          className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500">
-          {SELF_ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-        </select>
+      <div className="rounded-lg border border-dashed border-gray-700 p-4 bg-gray-950/80">
+        <p className="text-sm text-gray-400">New accounts are created as PLAYER only. You may use any email address; the claim code is what links your account to the player profile.</p>
       </div>
-
-      {form.role === 'COACH' && (
-        <div>
-          <label className="block text-sm text-gray-400 mb-1">Academy <span className="text-red-400">*</span></label>
-          {academies.length > 0 ? (
-            <select value={form.academy_id} onChange={e => setForm(f => ({ ...f, academy_id: e.target.value }))}
-              className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500">
-              <option value="">Select your academy…</option>
-              {academies.map(a => (
-                <option key={a.academy_id} value={a.academy_id}>
-                  {a.name} — {a.city}, {a.state}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <p className="text-yellow-500 text-xs">No academies found. Ask your admin to create one first.</p>
-          )}
-        </div>
-      )}
 
       <div>
         <label className="block text-sm text-gray-400 mb-1">Gender <span className="text-gray-600">(optional)</span></label>

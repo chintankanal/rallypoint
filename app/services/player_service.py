@@ -1,3 +1,5 @@
+import secrets
+import string
 import uuid
 from datetime import date
 
@@ -44,7 +46,8 @@ _PLAYER_SELECT = """
     SELECT p.player_id, p.name, p.date_of_birth, p.gender, p.nationality,
            p.current_rating, p.rated_matches_completed,
            p.virtual_matches, p.seeding_level, p.last_match_date, p.status,
-           p.guardian_name, p.guardian_phone, p.contact_email, p.created_at,
+           p.guardian_name, p.guardian_phone, p.contact_email,
+           p.is_claimed, p.claim_code, p.created_at,
            json_build_object(
                'academy_id', a.academy_id, 'name', a.name,
                'city', a.city, 'state', a.state
@@ -65,8 +68,48 @@ def create_player(body, created_by_id: str) -> dict:
     player_id = str(uuid.uuid4())
     history_id = str(uuid.uuid4())
 
+    def _generate_claim_code() -> str:
+        alphabet = string.ascii_uppercase + string.digits
+        return ''.join(secrets.choice(alphabet) for _ in range(8))
+
     with get_connection() as conn:
         with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT player_id FROM player
+                WHERE lower(name) = lower(%s)
+                  AND date_of_birth = %s
+                  AND primary_academy_id = %s
+                  AND guardian_name IS NOT DISTINCT FROM %s
+                  AND guardian_phone IS NOT DISTINCT FROM %s
+                  AND contact_email IS NOT DISTINCT FROM %s
+                """,
+                (
+                    body.name,
+                    body.date_of_birth,
+                    body.primary_academy_id,
+                    body.guardian_name,
+                    body.guardian_phone,
+                    body.contact_email,
+                ),
+            )
+            if cur.fetchone() is not None:
+                raise ValueError(
+                    "Player with same name, date of birth, academy, and contact information already exists"
+                )
+
+            claim_code = _generate_claim_code()
+            cur.execute(
+                "SELECT 1 FROM player WHERE claim_code = %s",
+                (claim_code,),
+            )
+            while cur.fetchone() is not None:
+                claim_code = _generate_claim_code()
+                cur.execute(
+                    "SELECT 1 FROM player WHERE claim_code = %s",
+                    (claim_code,),
+                )
+
             cur.execute(
                 """
                 INSERT INTO player (
@@ -74,8 +117,9 @@ def create_player(body, created_by_id: str) -> dict:
                     primary_academy_id, seeding_level, seeding_reference,
                     virtual_matches, current_rating,
                     guardian_name, guardian_phone, contact_email,
+                    claim_code, is_claimed,
                     created_by, updated_by
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     player_id,
@@ -91,6 +135,8 @@ def create_player(body, created_by_id: str) -> dict:
                     body.guardian_name,
                     body.guardian_phone,
                     body.contact_email,
+                    claim_code,
+                    False,
                     created_by_id,
                     created_by_id,
                 ),
@@ -155,6 +201,37 @@ def list_all_players() -> list[dict]:
                 """
             )
             return [dict(r) for r in cur.fetchall()]
+
+
+def claim_player(user_id: str, claim_code: str) -> dict:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT player_id, user_id, is_claimed, primary_academy_id FROM player WHERE claim_code = %s",
+                (claim_code,),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise LookupError("Claim code not found")
+            if row["is_claimed"] or row["user_id"] is not None:
+                raise ValueError("Player record has already been claimed")
+
+            cur.execute(
+                "UPDATE player SET user_id = %s, is_claimed = TRUE, updated_at = CURRENT_TIMESTAMP WHERE player_id = %s RETURNING player_id",
+                (user_id, row["player_id"]),
+            )
+            updated = cur.fetchone()
+            if not updated:
+                raise LookupError("Failed to claim player")
+
+            if row["primary_academy_id"]:
+                cur.execute(
+                    "UPDATE users SET academy_id = %s WHERE user_id = %s",
+                    (row["primary_academy_id"], user_id),
+                )
+
+            cur.execute(_PLAYER_SELECT, (row["player_id"],))
+            return cur.fetchone()
 
 
 def get_computed_stats(player_id: str) -> dict | None:
@@ -357,7 +434,7 @@ def link_account(player_id: str, user_id: str) -> dict:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT player_id, user_id FROM player WHERE player_id = %s",
+                "SELECT player_id, user_id, primary_academy_id FROM player WHERE player_id = %s",
                 (player_id,),
             )
             player = cur.fetchone()
@@ -377,8 +454,13 @@ def link_account(player_id: str, user_id: str) -> dict:
                 raise ValueError("Only users with role PLAYER can be linked to a player record")
 
             cur.execute(
-                "UPDATE player SET user_id = %s, updated_at = NOW() WHERE player_id = %s",
+                "UPDATE player SET user_id = %s, is_claimed = TRUE, updated_at = NOW() WHERE player_id = %s",
                 (user_id, player_id),
             )
+            if player["primary_academy_id"]:
+                cur.execute(
+                    "UPDATE users SET academy_id = %s WHERE user_id = %s",
+                    (player["primary_academy_id"], user_id),
+                )
             cur.execute(_PLAYER_SELECT, (player_id,))
             return cur.fetchone()

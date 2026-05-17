@@ -9,7 +9,8 @@ class Settings(BaseSettings):
     webhook_secret: str = ""
     webhook_url: str = ""
     internal_job_secret: str
-    resend_api_key: str = ""
+    resend_api_key: str = "re_69RLa5xi_FvBVq7ytu98QizFLjznt9Tc1"
+    from_email: str = "onboarding@resend.dev"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 

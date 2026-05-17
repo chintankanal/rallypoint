@@ -30,8 +30,11 @@ def login(request: Request, body: LoginRequest):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT user_id, role, academy_id, password_hash, is_active "
-                "FROM users WHERE email = %s",
+                "SELECT u.user_id, u.role, u.academy_id, a.name AS academy_name, u.password_hash, u.is_active, p.player_id "
+                "FROM users u "
+                "LEFT JOIN academy a ON a.academy_id = u.academy_id "
+                "LEFT JOIN player p ON p.user_id = u.user_id "
+                "WHERE u.email = %s",
                 (body.email,),
             )
             user = cur.fetchone()
@@ -63,6 +66,8 @@ def login(request: Request, body: LoginRequest):
         user_id=str(user["user_id"]),
         role=user["role"],
         academy_id=str(user["academy_id"]) if user["academy_id"] else None,
+        academy_name=user["academy_name"],
+        player_id=str(user["player_id"]) if user["player_id"] else None,
         expires_at=expires_at,
     )
 
@@ -91,21 +96,13 @@ def request_otp(request: Request, body: OTPRequest):
     return {"detail": "If that email is registered, a code has been sent"}
 
 
-_SELF_REGISTER_ROLES = {"PLAYER", "COACH", "REFEREE", "UMPIRE"}
-
-
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 def register(body: RegisterRequest):
     import uuid
-    if body.role not in _SELF_REGISTER_ROLES:
+    if body.role != "PLAYER":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Role must be one of {sorted(_SELF_REGISTER_ROLES)}",
-        )
-    if body.role == "COACH" and not body.academy_id:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="COACH role requires academy_id",
+            detail="Public registration only supports PLAYER accounts",
         )
 
     user_id = str(uuid.uuid4())
@@ -113,8 +110,8 @@ def register(body: RegisterRequest):
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO users (user_id, name, email, phone, role, gender, academy_id, password_hash)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO users (user_id, name, email, phone, role, gender, password_hash)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 RETURNING user_id, name, email, role, academy_id, is_active
                 """,
                 (
@@ -122,9 +119,8 @@ def register(body: RegisterRequest):
                     body.name,
                     body.email,
                     body.phone,
-                    body.role,
+                    "PLAYER",
                     body.gender,
-                    body.academy_id,
                     hash_password(body.password),
                 ),
             )

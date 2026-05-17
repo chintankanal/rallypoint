@@ -24,8 +24,9 @@ def get_current_user(
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT user_id, name, email, role, academy_id, is_active "
-                "FROM users WHERE user_id = %s",
+                "SELECT u.user_id, u.name, u.email, u.role, u.academy_id, u.is_active, p.player_id "
+                "FROM users u LEFT JOIN player p ON p.user_id = u.user_id "
+                "WHERE u.user_id = %s",
                 (user_id,),
             )
             user = cur.fetchone()

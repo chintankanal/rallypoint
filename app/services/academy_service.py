@@ -192,7 +192,9 @@ def academy_leaderboard(
                     p.rated_matches_completed AS rated_matches,
                     p.last_match_date,
                     p.gender,
-                    {_AGE_GROUP_SQL} AS age_group
+                    {_AGE_GROUP_SQL} AS age_group,
+                    p.claim_code,
+                    p.is_claimed
                 FROM player p
                 LEFT JOIN academy a ON a.academy_id = p.primary_academy_id
                 WHERE p.primary_academy_id = %s

@@ -14,6 +14,8 @@ class LeaderboardEntry(BaseModel):
     last_match_date: date | None
     gender: str | None = None
     age_group: str | None = None
+    claim_code: str | None = None
+    is_claimed: bool | None = None
 
 
 class LeaderboardResponse(BaseModel):

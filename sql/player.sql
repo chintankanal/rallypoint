@@ -18,6 +18,8 @@ END $$;
 CREATE TABLE IF NOT EXISTS player (
     player_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID UNIQUE REFERENCES users(user_id), -- Optional link to app account
+    claim_code VARCHAR(20) UNIQUE,
+    is_claimed BOOLEAN NOT NULL DEFAULT FALSE,
     name VARCHAR(255) NOT NULL,
     date_of_birth DATE NOT NULL,
     gender gender,

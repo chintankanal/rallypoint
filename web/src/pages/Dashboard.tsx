@@ -9,6 +9,30 @@ import { useAuth } from '../auth/context'
 import { MatchSubmissionSchema, PlayerRegistrationSchema, getMatchFormatRules, validateEventAsync, validatePlayerNameAsync } from '../validation/schemas'
 import { useFormValidation } from '../validation/useFormValidation'
 
+function SendClaimButton({ playerId }: { playerId: string }) {
+  const qc = useQueryClient()
+  const [busy, setBusy] = useState(false)
+  const mut = useMutation({
+    mutationFn: () => playersApi.sendClaim(playerId),
+    onSuccess: () => {
+      setBusy(false)
+      qc.invalidateQueries({ queryKey: ['players', 'roster'] })
+    },
+    onError: () => setBusy(false),
+  })
+
+  return (
+    <button
+      type="button"
+      onClick={() => { setBusy(true); mut.mutate() }}
+      className="text-green-300 hover:text-white text-xs font-semibold"
+      disabled={busy}
+    >
+      {busy ? 'Sending…' : 'Send'}
+    </button>
+  )
+}
+
 export default function Dashboard() {
   return (
     <ProtectedRoute roles={['COACH', 'ADMIN']}>
@@ -610,12 +634,25 @@ function activityLabel(lastMatchDate: string | null): string {
 // ── Roster ────────────────────────────────────────────────────────────────────
 
 function RosterTab({ academyId }: { academyId: string }) {
+  const { user } = useAuth()
   const [selectedPlayer, setSelectedPlayer] = useState<LeaderboardEntry | null>(null)
+  const [copiedClaimCode, setCopiedClaimCode] = useState<string | null>(null)
 
   const q = useQuery({
     queryKey: ['academy-leaderboard', academyId],
     queryFn: () => academiesApi.leaderboard(academyId, { limit: 100 }),
   })
+
+  function copyClaimCode(code: string) {
+    navigator.clipboard.writeText(code)
+      .then(() => {
+        setCopiedClaimCode(code)
+        window.setTimeout(() => setCopiedClaimCode(null), 1500)
+      })
+      .catch(() => {
+        setCopiedClaimCode(null)
+      })
+  }
   const asiQ = useQuery({
     queryKey: ['asi-history', academyId],
     queryFn: () => academiesApi.asiHistory(academyId, 6),
@@ -654,6 +691,7 @@ function RosterTab({ academyId }: { academyId: string }) {
               <th className="px-4 py-3">Player</th>
               <th className="px-4 py-3">Rating</th>
               <th className="px-4 py-3">Tier</th>
+              <th className="px-4 py-3 hidden lg:table-cell">Claim code</th>
               <th className="px-4 py-3 hidden lg:table-cell">Gender</th>
               <th className="px-4 py-3 hidden lg:table-cell">Age Cat.</th>
               <th className="px-4 py-3 hidden md:table-cell">Matches</th>
@@ -674,6 +712,23 @@ function RosterTab({ academyId }: { academyId: string }) {
                 </td>
                 <td className="px-4 py-3 font-mono font-semibold text-white">{Math.round(row.current_rating)}</td>
                 <td className="px-4 py-3"><TierBadge tier={row.tier} /></td>
+                <td className="px-4 py-3 hidden lg:table-cell text-gray-400 text-xs">
+                  {row.claim_code && !row.is_claimed ? (
+                    <div className="flex items-center gap-2">
+                      <span>{row.claim_code}</span>
+                      <button
+                        type="button"
+                        onClick={() => copyClaimCode(row.claim_code!)}
+                        className="text-blue-300 hover:text-white text-xs font-semibold"
+                      >
+                        {copiedClaimCode === row.claim_code ? 'Copied' : 'Copy'}
+                      </button>
+                      {user?.role === 'COACH' && (
+                        <SendClaimButton playerId={row.player_id} />
+                      )}
+                    </div>
+                  ) : '—'}
+                </td>
                 <td className="px-4 py-3 hidden lg:table-cell text-gray-400 text-xs">
                   {row.gender === 'MALE' ? 'M' : row.gender === 'FEMALE' ? 'F' : '—'}
                 </td>
@@ -1387,7 +1442,11 @@ function RegisterPlayerTab({ academyId }: { academyId: string }) {
       })
     },
     onSuccess: p => {
-      setSuccess(`${p.name} registered with rating ${Math.round(p.current_rating)}`)
+      setSuccess(
+        p.claim_code
+          ? `${p.name} registered with rating ${Math.round(p.current_rating)} — claim code ${p.claim_code}`
+          : `${p.name} registered with rating ${Math.round(p.current_rating)}`
+      )
       setApiError(null)
       setForm({
         name: '', date_of_birth: '', gender: '',

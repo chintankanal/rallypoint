@@ -29,6 +29,8 @@ export interface TokenResponse {
   user_id: string
   role: 'ADMIN' | 'COACH' | 'PLAYER' | 'REFEREE' | 'UMPIRE'
   academy_id: string | null
+  academy_name: string | null
+  player_id: string | null
   expires_at: string
 }
 
@@ -128,6 +130,8 @@ export interface LeaderboardEntry {
   last_match_date: string | null
   gender: string | null
   age_group: string | null
+  claim_code?: string | null
+  is_claimed?: boolean | null
 }
 
 export interface LeaderboardResponse {
@@ -206,6 +210,8 @@ export interface PlayerDetail {
   guardian_phone: string | null
   contact_email: string | null
   status: string
+  is_claimed: boolean
+  claim_code: string | null
   created_at: string
 }
 
@@ -280,6 +286,10 @@ export const playersApi = {
   }) => request<PlayerDetail>('/players', { method: 'POST', body: JSON.stringify(body) }),
   linkAccount: (playerId: string, userId: string) =>
     request<PlayerDetail>(`/players/${playerId}/link-account`, { method: 'PATCH', body: JSON.stringify({ user_id: userId }) }),
+  claim: (claimCode: string) =>
+    request<PlayerDetail>('/players/claim', { method: 'POST', body: JSON.stringify({ claim_code: claimCode }) }),
+  sendClaim: (playerId: string) =>
+    request<{ detail: string }>(`/players/${playerId}/send-claim-code`, { method: 'POST' }),
 }
 
 export interface VelocityReport {
@@ -455,8 +465,7 @@ export const matchesApi = {
   }) => request<MatchResponse>('/matches', { method: 'POST', body: JSON.stringify(body) }),
   get: (id: string) => request<MatchResponse>(`/matches/${id}`),
   confirm: (id: string, body: { confirmed: boolean; dispute_reason?: string }) =>
-    request<MatchResponse>(`/matches/${id}/confirm`, { method: 'POST', body: JSON.stringify(body) }),
-}
+    request<MatchResponse>(`/matches/${id}/confirm`, { method: 'POST', body: JSON.stringify(body) }),  pending: () => request<MatchResponse[]>('/matches/pending'),}
 
 // ── Sessions & Fixtures ───────────────────────────────────────────────────────
 

@@ -137,6 +137,12 @@ export interface LeaderboardResponse {
   items: LeaderboardEntry[]
 }
 
+export interface OverviewStats {
+  total_players: number
+  matches_processed: number
+  participating_academies: number
+}
+
 export interface AgeGroupEntry {
   rank: number
   player_id: string
@@ -160,6 +166,10 @@ export const leaderboardApi = {
   },
   ageGroup: (ageGroup: string) =>
     request<{ age_group: string; total: number; items: AgeGroupEntry[] }>(`/analytics/leaderboard?age_group=${ageGroup}`),
+}
+
+export const overviewApi = {
+  get: () => request<OverviewStats>('/overview'),
 }
 
 // ── Players ───────────────────────────────────────────────────────────────────

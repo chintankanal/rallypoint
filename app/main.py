@@ -16,7 +16,7 @@ from app.database import close_pool, init_pool
 from app.rate_limit import limiter
 from app.routers import (
     academies, analytics, auth, config, disputes, events,
-    internal, leaderboard, matches, players, seasons, sessions, users,
+    internal, leaderboard, matches, overview, players, seasons, sessions, users,
 )
 
 logger = structlog.get_logger()
@@ -77,6 +77,7 @@ app.include_router(matches.router, prefix=_PREFIX)
 app.include_router(disputes.router, prefix=_PREFIX)
 app.include_router(sessions.router, prefix=_PREFIX)
 app.include_router(leaderboard.router, prefix=_PREFIX)
+app.include_router(overview.router, prefix=_PREFIX)
 app.include_router(analytics.router, prefix=_PREFIX)
 app.include_router(config.router, prefix=_PREFIX)
 app.include_router(internal.router)

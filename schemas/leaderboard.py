@@ -42,6 +42,12 @@ class AgeGroupLeaderboardResponse(BaseModel):
     items: list[AgeGroupLeaderboardEntry]
 
 
+class OverviewResponse(BaseModel):
+    total_players: int
+    matches_processed: int
+    participating_academies: int
+
+
 class VelocityReport(BaseModel):
     player_id: str
     period: str

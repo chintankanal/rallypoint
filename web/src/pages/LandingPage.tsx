@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Layout, Spinner, ErrorMsg } from '../components/Layout'
+import { useAuth } from '../auth/context'
 import { overviewApi } from '../api/client'
 
 function formatCount(value: number | undefined) {
@@ -14,7 +15,10 @@ export default function LandingPage() {
     staleTime: 60_000,
   })
 
+  const { user } = useAuth()
   const overview = overviewQuery.data
+
+  const trackHref = user?.player_id ? `/player/${user.player_id}` : '/profile'
 
   return (
     <Layout>
@@ -36,18 +40,27 @@ export default function LandingPage() {
               </div>
 
               <div className="flex flex-wrap gap-3">
-                <Link
-                  to="/leaderboard"
-                  className="inline-flex items-center justify-center rounded-full bg-blue-500 px-6 py-3 text-sm font-semibold text-white transition hover:bg-blue-400"
-                >
-                  View Live Leaderboards
-                </Link>
-                <Link
-                  to="/login"
+                {user ? (
+                  <Link
+                    to={trackHref}
+                    className="inline-flex items-center justify-center rounded-full bg-blue-500 px-6 py-3 text-sm font-semibold text-white transition hover:bg-blue-400"
+                  >
+                    Track Your Performance
+                  </Link>
+                ) : (
+                  <Link
+                    to="/login"
+                    className="inline-flex items-center justify-center rounded-full bg-blue-500 px-6 py-3 text-sm font-semibold text-white transition hover:bg-blue-400"
+                  >
+                    Register for JLRS
+                  </Link>
+                )}
+                <a
+                  href="#faq"
                   className="inline-flex items-center justify-center rounded-full border border-blue-500/40 bg-white/5 px-6 py-3 text-sm font-semibold text-blue-200 transition hover:bg-white/10"
                 >
-                  Register for JLRS
-                </Link>
+                  About JLRS
+                </a>
               </div>
             </div>
 

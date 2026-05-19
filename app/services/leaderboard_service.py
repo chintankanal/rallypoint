@@ -40,7 +40,7 @@ def _get_age_jan1_sql() -> str:
 def _get_age_group_sql() -> str:
     """Generate AGE_GROUP CASE statement based on system config."""
     cfg = _load_config()
-    u10 = int(cfg.get("age_group_u10_max", 10))
+    u11 = int(cfg.get("age_group_u11_max", cfg.get("age_group_u10_max", 11)))
     u13 = int(cfg.get("age_group_u13_max", 13))
     u15 = int(cfg.get("age_group_u15_max", 15))
     u17 = int(cfg.get("age_group_u17_max", 17))
@@ -49,7 +49,7 @@ def _get_age_group_sql() -> str:
     
     return f"""
     CASE
-        WHEN {age_jan1_sql} <= {u10} THEN 'U10'
+        WHEN {age_jan1_sql} <= {u11} THEN 'U11'
         WHEN {age_jan1_sql} <= {u13} THEN 'U13'
         WHEN {age_jan1_sql} <= {u15} THEN 'U15'
         WHEN {age_jan1_sql} <= {u17} THEN 'U17'
@@ -63,7 +63,7 @@ _IS_PROVISIONAL_SQL = _get_is_provisional_sql()
 _AGE_JAN1_SQL = _get_age_jan1_sql()
 _AGE_GROUP_SQL = _get_age_group_sql()
 
-VALID_AGE_GROUPS = {"U10", "U13", "U15", "U17"}
+VALID_AGE_GROUPS = {"U11", "U13", "U15", "U17"}
 
 
 def global_leaderboard(tier: str | None, limit: int, offset: int) -> dict:

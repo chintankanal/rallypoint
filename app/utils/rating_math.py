@@ -28,7 +28,7 @@ _DEFAULTS = {
     "elo_divisor": 400.0,
     "age_bonus_max": 10.0,
     "age_bonus_multiplier": 2.0,
-    "age_group_u10_max": 10.0,
+    "age_group_u11_max": 11.0,
     "age_group_u13_max": 13.0,
     "age_group_u15_max": 15.0,
     "age_group_u17_max": 17.0,
@@ -106,13 +106,16 @@ def get_age_group(age_as_of_jan1: int, cfg: dict[str, float] | None = None) -> s
     if cfg is None:
         cfg = _load_config()
     
-    u10_max = cfg.get("age_group_u10_max", _DEFAULTS["age_group_u10_max"])
+    u11_max = cfg.get(
+        "age_group_u11_max",
+        cfg.get("age_group_u10_max", _DEFAULTS["age_group_u11_max"]),
+    )
     u13_max = cfg.get("age_group_u13_max", _DEFAULTS["age_group_u13_max"])
     u15_max = cfg.get("age_group_u15_max", _DEFAULTS["age_group_u15_max"])
     u17_max = cfg.get("age_group_u17_max", _DEFAULTS["age_group_u17_max"])
     
-    if age_as_of_jan1 <= u10_max:
-        return "U10"
+    if age_as_of_jan1 <= u11_max:
+        return "U11"
     if age_as_of_jan1 <= u13_max:
         return "U13"
     if age_as_of_jan1 <= u15_max:

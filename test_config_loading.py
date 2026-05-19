@@ -33,7 +33,7 @@ def test_config_loading_from_db():
             'k_base_provisional_threshold', 'k_base_intermediate_threshold',
             'w_league', 'w_tournament', 'w_friendly', 'w_same_academy', 'w_cross_academy',
             'elo_divisor', 'cr_match_threshold', 'age_bonus_max', 'age_bonus_multiplier',
-            'age_group_u10_max', 'age_group_u13_max', 'age_group_u15_max', 'age_group_u17_max',
+            'age_group_u11_max', 'age_group_u13_max', 'age_group_u15_max', 'age_group_u17_max',
             'provisional_threshold'
         ]
         
@@ -161,15 +161,15 @@ def test_age_group_function_with_config():
     try:
         cfg = _load_config()
         
-        u10_max = int(cfg.get("age_group_u10_max", 10))
+        u11_max = int(cfg.get("age_group_u11_max", cfg.get("age_group_u10_max", 11)))
         u13_max = int(cfg.get("age_group_u13_max", 13))
         u15_max = int(cfg.get("age_group_u15_max", 15))
         u17_max = int(cfg.get("age_group_u17_max", 17))
         
         test_cases = [
-            (5, "U10"),
-            (u10_max, "U10"),
-            (u10_max + 1, "U13"),
+            (5, "U11"),
+            (u11_max, "U11"),
+            (u11_max + 1, "U13"),
             (u13_max, "U13"),
             (u13_max + 1, "U15"),
             (u15_max, "U15"),
@@ -179,8 +179,8 @@ def test_age_group_function_with_config():
         ]
         
         print(f"Age group boundaries from config:")
-        print(f"  U10: <= {u10_max}")
-        print(f"  U13: {u10_max+1} - {u13_max}")
+        print(f"  U11: <= {u11_max}")
+        print(f"  U13: {u11_max+1} - {u13_max}")
         print(f"  U15: {u13_max+1} - {u15_max}")
         print(f"  U17: {u15_max+1} - {u17_max}")
         print(f"  OPEN: > {u17_max}")

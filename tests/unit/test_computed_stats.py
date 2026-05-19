@@ -80,9 +80,9 @@ def test_age_as_of_jan1_after_birthday():
 # ---------- age group ----------
 
 @pytest.mark.parametrize("age,expected", [
-    (6,  "U10"),
-    (10, "U10"),
-    (11, "U13"),
+    (6,  "U11"),
+    (11, "U11"),
+    (12, "U13"),
     (13, "U13"),
     (14, "U15"),
     (15, "U15"),

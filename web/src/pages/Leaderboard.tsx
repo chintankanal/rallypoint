@@ -51,7 +51,7 @@ export default function Leaderboard() {
             className="bg-gray-800 border border-gray-700 text-gray-200 rounded-lg px-3 py-2 text-sm"
           >
             <option value="">All Ages</option>
-            <option value="U10">U10</option>
+            <option value="U11">U11</option>
             <option value="U13">U13</option>
             <option value="U15">U15</option>
             <option value="U17">U17</option>

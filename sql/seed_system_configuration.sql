@@ -18,7 +18,7 @@ INSERT INTO system_configuration (key, value, description) VALUES
     ('elo_divisor',             '400',     'Divisor in expected score calculation'),
     ('age_bonus_max',           '10',      'Maximum age bonus points per match'),
     ('age_bonus_multiplier',    '2',       'Multiplier for age difference in age bonus calculation'),
-    ('age_group_u10_max',       '10',      'Maximum age for U10 group'),
+    ('age_group_u11_max',       '11',      'Maximum age for U11 group'),
     ('age_group_u13_max',       '13',      'Maximum age for U13 group'),
     ('age_group_u15_max',       '15',      'Maximum age for U15 group'),
     ('age_group_u17_max',       '17',      'Maximum age for U17 group'),

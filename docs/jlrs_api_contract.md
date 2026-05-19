@@ -274,7 +274,7 @@ Returns stored fields only. For computated stats (tier, CR, provisional status),
 **Notes:**
 
 - `as_of` is the server timestamp at which these values were computed  
-- `age_group` is derived from `age_as_of_jan1`: U10 (≤10), U13 (11–13), U15 (14–15), U17 (16–17)  
+- `age_group` is derived from `age_as_of_jan1`: U11 (≤11), U13 (12–13), U15 (14–15), U17 (16–17)  
 - `inactivity_decay_active`: true when `weeks_inactive > inactivity_threshold_weeks` config value  
 
 ---
@@ -1458,7 +1458,7 @@ GET /api/v1/leaderboards?tier=ELITE&limit=20&offset=0
 
 GET /api/v1/analytics/leaderboard?age_group=U13&limit=20&offset=0
 
-age_group values: U10, U13, U15, U17
+age_group values: U11, U13, U15, U17
 
 ---
 

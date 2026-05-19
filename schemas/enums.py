@@ -74,7 +74,7 @@ class Tier(str, Enum):
 
 
 class AgeGroup(str, Enum):
-    U10 = "U10"
+    U11 = "U11"
     U13 = "U13"
     U15 = "U15"
     U17 = "U17"

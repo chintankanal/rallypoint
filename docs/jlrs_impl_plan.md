@@ -465,7 +465,7 @@ The pool is initialised once in `app/main.py`'s lifespan handler and shared acro
 
 1. `GET /api/v1/leaderboard?tier=&limit=&offset=` — raw SQL with `ROW_NUMBER() OVER (ORDER BY current_rating DESC)`. Uses `idx_player_rating` DDL index.
 2. `GET /api/v1/academies/{id}/leaderboard?tier=&limit=&offset=` — filtered by `primary_academy_id`. Uses `idx_player_academy_rating` DDL index.
-3. `GET /api/v1/analytics/leaderboard?age_group=U13` — age as of January 1 of current year. U10 (≤10), U13 (11–13), U15 (14–15), U17 (16–17). Percentile: `PERCENT_RANK() OVER (ORDER BY current_rating)` within the age group.
+3. `GET /api/v1/analytics/leaderboard?age_group=U13` — age as of January 1 of current year. U11 (≤11), U13 (12–13), U15 (14–15), U17 (16–17). Percentile: `PERCENT_RANK() OVER (ORDER BY current_rating)` within the age group.
 4. `GET /api/v1/analytics/players/{id}/velocity?period=1m|3m|6m|1y` — aggregate from RatingHistory: start rating, end rating, matches played, win rate, stretch win rate (match_category = STRETCH), tier changes
 5. `GET /api/v1/analytics/academies/{id}/report?season_id=` — total rated matches, cross-academy %, confirmation rate, ASI trend (from AcademyASIHistory), tier distribution, top movers (highest delta in period)
 6. `GET /api/v1/academies/{id}/asi-history?limit=12`

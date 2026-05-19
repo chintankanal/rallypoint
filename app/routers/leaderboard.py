@@ -41,7 +41,7 @@ def global_leaderboard(
 
 @router.get("/analytics/leaderboard", response_model=AgeGroupLeaderboardResponse)
 def age_group_leaderboard(
-    age_group: str = Query(..., description="U10, U13, U15, or U17"),
+    age_group: str = Query(..., description="U11, U13, U15, or U17"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ):

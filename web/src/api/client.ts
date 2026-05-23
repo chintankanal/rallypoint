@@ -288,6 +288,8 @@ export const playersApi = {
     request<PlayerDetail>(`/players/${playerId}/link-account`, { method: 'PATCH', body: JSON.stringify({ user_id: userId }) }),
   claim: (claimCode: string) =>
     request<PlayerDetail>('/players/claim', { method: 'POST', body: JSON.stringify({ claim_code: claimCode }) }),
+  fixtures: (playerId: string) =>
+    request<PlayerEventFixtures>(`/players/${playerId}/fixtures`),
   sendClaim: (playerId: string) =>
     request<{ detail: string }>(`/players/${playerId}/send-claim-code`, { method: 'POST' }),
 }
@@ -431,6 +433,24 @@ export interface EventFixtures {
   slots: EventFixtureSlot[]
 }
 
+export interface PlayerEventFixtureItem {
+  event_id: string
+  name: string
+  scheduling_mode: string
+  event_type: string
+  status: string
+  fixture_state: string | null
+  start_date: string
+  end_date: string | null
+  default_match_format: string | null
+  slots: EventFixtureSlot[]
+}
+
+export interface PlayerEventFixtures {
+  player_id: string
+  items: PlayerEventFixtureItem[]
+}
+
 export interface FixtureStatus {
   fixture_state: string | null
   can_regenerate: boolean
@@ -438,6 +458,12 @@ export interface FixtureStatus {
 }
 
 // ── Matches ───────────────────────────────────────────────────────────────────
+
+export interface SetScore {
+  set_number: number
+  points_a: number
+  points_b: number
+}
 
 export interface MatchResponse {
   match_id: string
@@ -454,6 +480,7 @@ export interface MatchResponse {
   confirmation_status: string
   confirmation_deadline: string
   match_date: string
+  set_scores?: SetScore[] | null
 }
 
 export const matchesApi = {
@@ -461,7 +488,7 @@ export const matchesApi = {
     event_id: string; player_a_id: string; player_b_id: string
     match_format: string; sets_won_a: number; sets_won_b: number
     match_date: string; is_retirement?: boolean; session_id?: string
-    fixture_slot_id?: string
+    fixture_slot_id?: string; set_scores?: Array<{ points_a: number; points_b: number }> | null
   }) => request<MatchResponse>('/matches', { method: 'POST', body: JSON.stringify(body) }),
   get: (id: string) => request<MatchResponse>(`/matches/${id}`),
   confirm: (id: string, body: { confirmed: boolean; dispute_reason?: string }) =>

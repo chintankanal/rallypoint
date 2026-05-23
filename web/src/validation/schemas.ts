@@ -140,7 +140,68 @@ function validatePhoneNumber(phone: string): { valid: boolean; error?: string } 
   return { valid: true }
 }
 
+/**
+ * Validates set points according to table tennis rules.
+ * Rules:
+ * - Points must be non-negative and ≤30 (to handle deuces)
+ * - Both points cannot be 0 (unfilled sets are allowed to be omitted)
+ * - Winning player must have ≥11 points
+ * - If winner ≥10, loser must be ≥(winner-2) OR both ≥9 (deuce handling)
+ */
+function validateSetPoints(
+  pointsA: number,
+  pointsB: number,
+): { valid: boolean; error?: string } {
+  if (pointsA < 0 || pointsB < 0) {
+    return { valid: false, error: 'Points cannot be negative' }
+  }
+
+  if (pointsA > 30 || pointsB > 30) {
+    return { valid: false, error: 'Points cannot exceed 30' }
+  }
+
+  // Both zero is allowed (unfilled set)
+  if (pointsA === 0 && pointsB === 0) {
+    return { valid: true }
+  }
+
+  const winner = Math.max(pointsA, pointsB)
+  const loser = Math.min(pointsA, pointsB)
+
+  if (winner < 11) {
+    return { valid: false, error: 'Winning score must be ≥11' }
+  }
+
+  // Check deuce rules: if winner ≥10, loser must be ≥(winner-2)
+  if (winner >= 10) {
+    if (!(loser >= winner - 2)) {
+      return { valid: false, error: 'Invalid point spread' }
+    }
+  }
+
+  return { valid: true }
+}
+
 // ── Schemas ────────────────────────────────────────────────────────────────
+
+/**
+ * Set score validation schema for per-set point entry.
+ * Used in match submission forms to validate individual set scores.
+ */
+export const SetScoreSchema = z
+  .object({
+    points_a: z.number().int().min(0).max(30),
+    points_b: z.number().int().min(0).max(30),
+  })
+  .superRefine((data, ctx) => {
+    const validation = validateSetPoints(data.points_a, data.points_b)
+    if (!validation.valid) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: validation.error || 'Invalid set points',
+      })
+    }
+  })
 
 /**
  * Match submission validation schema.
@@ -173,6 +234,15 @@ export const MatchSubmissionSchema = z.object({
   is_retirement: z
     .boolean()
     .default(false),
+  
+  session_id: z.string().uuid().optional().nullable(),
+  fixture_slot_id: z.string().uuid().optional().nullable(),
+  
+  // NEW: Optional per-set point scores
+  set_scores: z
+    .array(SetScoreSchema)
+    .optional()
+    .nullable(),
 }).superRefine(async (data, ctx) => {
   // Validate match sets against format rules
   const setsValidation = validateMatchSets(
@@ -201,6 +271,18 @@ export const MatchSubmissionSchema = z.object({
       message: 'Match date cannot be in the future',
       path: ['match_date'],
     })
+  }
+
+  // NEW: Validate set_scores if provided
+  if (data.set_scores && data.set_scores.length > 0) {
+    const totalSetsPLayed = data.sets_won_a + data.sets_won_b
+    if (data.set_scores.length !== totalSetsPLayed) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Expected ${totalSetsPLayed} set scores but got ${data.set_scores.length}`,
+        path: ['set_scores'],
+      })
+    }
   }
 
   // Async: Verify event exists

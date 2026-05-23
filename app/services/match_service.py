@@ -95,7 +95,7 @@ def submit_match(conn, body, submitted_by_user_id: str, caller_role: str = "") -
     with conn.cursor() as cur:
         # Resolve event to get scheduling_mode and default match format
         cur.execute(
-            "SELECT event_id, scheduling_mode, event_type, default_match_format, status "
+            "SELECT event_id, scheduling_mode, event_type, default_match_format, status, fixture_state "
             "FROM event WHERE event_id = %s",
             (body.event_id,),
         )
@@ -105,10 +105,17 @@ def submit_match(conn, body, submitted_by_user_id: str, caller_role: str = "") -
         if event["status"] not in ("SCHEDULED", "IN_PROGRESS"):
             raise ValueError(f"Cannot submit matches for event with status '{event['status']}'")
 
-        if event["scheduling_mode"] == "INTER_ACADEMY" and caller_role == "COACH":
-            raise PermissionError("Coaches cannot submit match results for inter-academy events — only players, umpires, or referees may submit")
+        if event["scheduling_mode"] == "INTER_ACADEMY":
+            if event["fixture_state"] not in ("FIXTURE_FROZEN", "RESULTS_SUBMITTED"):
+                raise PermissionError(
+                    "Inter-academy fixtures must be locked before submitting results"
+                )
+            if caller_role == "COACH":
+                raise PermissionError(
+                    "Coaches cannot submit match results for inter-academy events — only players, umpires, or referees may submit"
+                )
 
-        # Load players
+        # Load players and validate active status
         for pid in (body.player_a_id, body.player_b_id):
             cur.execute(
                 "SELECT player_id, current_rating, rated_matches_completed, primary_academy_id "
@@ -117,6 +124,21 @@ def submit_match(conn, body, submitted_by_user_id: str, caller_role: str = "") -
             )
             if not cur.fetchone():
                 raise ValueError(f"Player {pid} not found or inactive")
+
+        if caller_role == "PLAYER":
+            cur.execute(
+                "SELECT player_id FROM player WHERE user_id = %s AND status = 'ACTIVE'",
+                (submitted_by_user_id,),
+            )
+            linked_player = cur.fetchone()
+            if not linked_player:
+                raise PermissionError(
+                    "PLAYER accounts must be linked to an active player profile to submit results"
+                )
+            if linked_player["player_id"] not in (body.player_a_id, body.player_b_id):
+                raise PermissionError(
+                    "Players can only submit results for matches they participated in"
+                )
 
         cur.execute(
             "SELECT player_id, current_rating, primary_academy_id "
@@ -190,6 +212,12 @@ def submit_match(conn, body, submitted_by_user_id: str, caller_role: str = "") -
 
         match_id = str(uuid.uuid4())
         now_utc = datetime.now(timezone.utc)
+        auto_confirm_roles = ("ADMIN", "COACH", "UMPIRE", "REFEREE")
+        confirmation_status = (
+            "AUTO_CONFIRMED" if caller_role in auto_confirm_roles else "PENDING"
+        )
+        confirmed_by = submitted_by_user_id if confirmation_status == "AUTO_CONFIRMED" else None
+        confirmed_at = now_utc if confirmation_status == "AUTO_CONFIRMED" else None
 
         cur.execute(
             """
@@ -204,7 +232,8 @@ def submit_match(conn, body, submitted_by_user_id: str, caller_role: str = "") -
                 rating_eligible, not_eligible_reason,
                 diminishing_signal_applied,
                 match_date, match_timestamp,
-                submitted_by, confirmation_deadline,
+                submitted_by, confirmation_status, confirmed_by, confirmed_at,
+                confirmation_deadline,
                 match_category
             ) VALUES (
                 %s, %s, %s, %s,
@@ -217,7 +246,8 @@ def submit_match(conn, body, submitted_by_user_id: str, caller_role: str = "") -
                 %s, %s,
                 %s,
                 %s, %s,
-                %s, %s,
+                %s, %s, %s, %s,
+                %s,
                 %s
             )
             """,
@@ -232,10 +262,15 @@ def submit_match(conn, body, submitted_by_user_id: str, caller_role: str = "") -
                 rating_eligible, not_eligible_reason,
                 diminishing,
                 body.match_date, now_utc,
-                submitted_by_user_id, deadline_utc,
+                submitted_by_user_id, confirmation_status, confirmed_by, confirmed_at,
+                deadline_utc,
                 slot_match_category,
             ),
         )
+
+        # If per-set point scores were provided, persist them
+        if getattr(body, "set_scores", None):
+            store_set_scores(conn, match_id, body.set_scores)
 
         if body.fixture_slot_id:
             if is_event_slot:
@@ -388,6 +423,45 @@ def void_match(conn, match_id: str, void_reason: str, acting_user_id: str) -> di
         return _fetch_match(cur, match_id, event["scheduling_mode"])
 
 
+def store_set_scores(conn, match_id: str, set_scores: list) -> None:
+    """
+    Insert or update per-set point scores into match_set_score table.
+    Expects `set_scores` as an iterable of objects/dicts with `points_a` and `points_b`.
+    """
+    with conn.cursor() as cur:
+        for set_num, score in enumerate(set_scores, start=1):
+            # score may be a pydantic model or dict-like
+            points_a = getattr(score, "points_a", None) if not isinstance(score, dict) else score.get("points_a")
+            points_b = getattr(score, "points_b", None) if not isinstance(score, dict) else score.get("points_b")
+            cur.execute(
+                """
+                INSERT INTO match_set_score (match_id, set_number, points_a, points_b)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (match_id, set_number)
+                DO UPDATE SET points_a = EXCLUDED.points_a, points_b = EXCLUDED.points_b
+                """,
+                (match_id, set_num, points_a, points_b),
+            )
+
+
+def get_set_scores(cur, match_id: str) -> list | None:
+    """
+    Retrieve per-set point scores for a match using an open cursor.
+    Returns list of dicts or None if no scores.
+    """
+    cur.execute(
+        """
+        SELECT set_number, points_a, points_b
+        FROM match_set_score
+        WHERE match_id = %s
+        ORDER BY set_number ASC
+        """,
+        (match_id,),
+    )
+    rows = cur.fetchall()
+    return [dict(r) for r in rows] if rows else None
+
+
 def _fetch_match(cur, match_id: str, scheduling_mode: str) -> dict:
     cur.execute(
         """
@@ -415,4 +489,9 @@ def _fetch_match(cur, match_id: str, scheduling_mode: str) -> dict:
     )
     row = dict(cur.fetchone())
     row["ratings_trigger"] = _RATINGS_TRIGGER.get(scheduling_mode, "EVENT_COMPLETION")
+    # Attach per-set scores if present
+    try:
+        row["set_scores"] = get_set_scores(cur, match_id)
+    except Exception:
+        row["set_scores"] = None
     return row

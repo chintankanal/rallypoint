@@ -372,6 +372,106 @@ def get_rating_history(
     return {"items": items, "total": total}
 
 
+def get_player_event_fixtures(player_id: str) -> dict | None:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT player_id FROM player WHERE player_id = %s", (player_id,))
+            if not cur.fetchone():
+                return None
+
+            cur.execute(
+                """
+                SELECT e.event_id::text, e.name, e.scheduling_mode, e.event_type,
+                       e.status, e.fixture_state, e.start_date, e.end_date,
+                       e.default_match_format
+                FROM event e
+                JOIN event_player_registration epr ON epr.event_id = e.event_id
+                WHERE epr.player_id = %s
+                  AND epr.status IN ('REGISTERED', 'CHECKED_IN')
+                  AND e.status IN ('SCHEDULED', 'IN_PROGRESS')
+                ORDER BY e.start_date, e.name
+                """,
+                (player_id,),
+            )
+            events = [dict(r) for r in cur.fetchall()]
+            if not events:
+                return {"player_id": player_id, "items": []}
+
+            event_ids = [str(ev["event_id"]) for ev in events]
+            cur.execute(
+                """
+                SELECT efs.event_id::text, efs.slot_id::text, efs.round_number, efs.table_number,
+                       efs.match_category, efs.expected_rating_gap, efs.status, efs.match_id::text,
+                       efs.fixture_strategy,
+                       efs.player_a_id::text, pa.name AS player_a_name,
+                       pa.current_rating AS player_a_rating,
+                       pa.primary_academy_id::text AS player_a_academy_id,
+                       aa.name AS player_a_academy_name,
+                       efs.player_b_id::text, pb.name AS player_b_name,
+                       pb.current_rating AS player_b_rating,
+                       pb.primary_academy_id::text AS player_b_academy_id,
+                       ab.name AS player_b_academy_name
+                FROM event_fixture_slot efs
+                JOIN player pa ON pa.player_id = efs.player_a_id
+                JOIN academy aa ON aa.academy_id = pa.primary_academy_id
+                LEFT JOIN player pb ON pb.player_id = efs.player_b_id
+                LEFT JOIN academy ab ON ab.academy_id = pb.primary_academy_id
+                WHERE efs.event_id = ANY(%s::uuid[])
+                  AND (efs.player_a_id = %s OR efs.player_b_id = %s)
+                ORDER BY efs.event_id, efs.round_number, efs.table_number
+                """,
+                (event_ids, player_id, player_id),
+            )
+            rows = [dict(r) for r in cur.fetchall()]
+
+    slots_by_event: dict[str, list[dict]] = {}
+    for row in rows:
+        slot = {
+            "slot_id": row["slot_id"],
+            "round_number": row["round_number"],
+            "table_number": row["table_number"],
+            "match_category": row["match_category"],
+            "expected_rating_gap": float(row["expected_rating_gap"]),
+            "status": row["status"],
+            "fixture_strategy": row["fixture_strategy"],
+            "match_id": row["match_id"],
+            "player_a": {
+                "player_id": row["player_a_id"],
+                "name": row["player_a_name"],
+                "current_rating": float(row["player_a_rating"]),
+                "academy_id": row["player_a_academy_id"],
+                "academy_name": row["player_a_academy_name"],
+            },
+            "player_b": {
+                "player_id": row["player_b_id"],
+                "name": row["player_b_name"],
+                "current_rating": float(row["player_b_rating"]),
+                "academy_id": row["player_b_academy_id"],
+                "academy_name": row["player_b_academy_name"],
+            } if row["player_b_id"] else None,
+        }
+        slots_by_event.setdefault(row["event_id"], []).append(slot)
+
+    return {
+        "player_id": player_id,
+        "items": [
+            {
+                "event_id": ev["event_id"],
+                "name": ev["name"],
+                "scheduling_mode": ev["scheduling_mode"],
+                "event_type": ev["event_type"],
+                "status": ev["status"],
+                "fixture_state": ev["fixture_state"],
+                "start_date": ev["start_date"],
+                "end_date": ev["end_date"],
+                "default_match_format": ev["default_match_format"],
+                "slots": slots_by_event.get(ev["event_id"], []),
+            }
+            for ev in events
+        ],
+    }
+
+
 def transfer_academy(player_id: str, new_academy_id: str, effective_date: date) -> dict:
     """
     Raises LookupError if player not found.

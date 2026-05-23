@@ -9,6 +9,7 @@ import {
 
 type FixtureState = 'ROSTER_OPEN' | 'FIXTURES_READY' | 'FIXTURE_FROZEN' | 'RESULTS_SUBMITTED' | 'RATINGS_APPLIED' | null
 import { Layout, Spinner, ErrorMsg, ProtectedRoute } from '../components/Layout'
+import { SetPointsInput } from '../components/SetPointsInput'
 
 type Tab = 'seasons' | 'events' | 'academies' | 'disputes' | 'config'
 
@@ -1017,6 +1018,7 @@ function EventResultModal({ slot, eventId, matchFormat, onClose, onSuccess }: {
   const [setsA, setSetsA] = useState('')
   const [setsB, setSetsB] = useState('')
   const [isRetirement, setIsRetirement] = useState(false)
+  const [setScores, setSetScores] = useState<Array<{ points_a: number; points_b: number }> | null>(null)
   const [matchDate, setMatchDate] = useState(new Date().toISOString().slice(0, 10))
   const [error, setError] = useState<string | null>(null)
 
@@ -1039,6 +1041,7 @@ function EventResultModal({ slot, eventId, matchFormat, onClose, onSuccess }: {
       sets_won_b: nB,
       match_date: matchDate,
       is_retirement: isRetirement,
+      set_scores: setScores,
     }),
     onSuccess: () => onSuccess(),
     onError: (e: Error) => setError(e.message),
@@ -1089,6 +1092,21 @@ function EventResultModal({ slot, eventId, matchFormat, onClose, onSuccess }: {
             className="w-4 h-4 accent-blue-500" />
           Retirement / walkover
         </label>
+
+        {setsA !== '' && setsB !== '' && (() => {
+          const nA = Number(setsA)
+          const nB = Number(setsB)
+          const maxSets = ({ BEST_OF_3: 3, BEST_OF_5: 5, BEST_OF_7: 7 } as const)[matchFormat as 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7']!
+          return nA + nB > 0 && nA <= maxSets && nB <= maxSets && nA + nB <= maxSets ? (
+            <SetPointsInput
+              matchFormat={matchFormat as 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7'}
+              setsWonA={nA}
+              setsWonB={nB}
+              isRetirement={isRetirement}
+              onSetScoresChange={setSetScores}
+            />
+          ) : null
+        })()}
 
         <div className="flex gap-2 pt-1">
           <button onClick={onClose}

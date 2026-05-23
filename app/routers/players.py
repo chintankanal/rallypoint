@@ -13,6 +13,7 @@ from schemas.player import (
     PlayerAcademyHistoryResponse,
     PlayerComputedStats,
     PlayerCreate,
+    PlayerEventFixturesResponse,
     PlayerResponse,
 )
 from schemas.rating import PaginatedRatingHistory, RatingHistoryEntry
@@ -101,6 +102,14 @@ def get_player(player_id: str, _: dict = _ANY_USER):
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Player not found")
     return PlayerResponse(**row)
+
+
+@router.get("/{player_id}/fixtures", response_model=PlayerEventFixturesResponse)
+def get_player_fixtures(player_id: str, _: dict = _ANY_USER):
+    result = player_service.get_player_event_fixtures(player_id)
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Player not found")
+    return PlayerEventFixturesResponse(**result)
 
 
 @router.get("/{player_id}/computed-stats", response_model=PlayerComputedStats)

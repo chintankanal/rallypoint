@@ -5,6 +5,7 @@ import {
   type PlayerSearchResult, type LeaderboardEntry, type SessionSummary, type FixtureSlot,
 } from '../api/client'
 import { Layout, TierBadge, CRBar, Spinner, ErrorMsg, ProtectedRoute } from '../components/Layout'
+import { SetPointsInput } from '../components/SetPointsInput'
 import { useAuth } from '../auth/context'
 import { MatchSubmissionSchema, PlayerRegistrationSchema, getMatchFormatRules, validateEventAsync, validatePlayerNameAsync } from '../validation/schemas'
 import { useFormValidation } from '../validation/useFormValidation'
@@ -842,6 +843,7 @@ function SubmitMatchTab({ academyId }: { academyId: string }) {
     match_date: new Date().toISOString().slice(0, 10),
     is_retirement: false,
   })
+  const [setScores, setSetScores] = useState<Array<{ points_a: number; points_b: number }> | null>(null)
   const [result, setResult] = useState<string | null>(null)
   const [apiError, setApiError] = useState<string | null>(null)
   
@@ -863,6 +865,7 @@ function SubmitMatchTab({ academyId }: { academyId: string }) {
         sets_won_b: form.sets_won_b ? Number(form.sets_won_b) : 0,
         match_date: form.match_date,
         is_retirement: form.is_retirement,
+        set_scores: setScores,
       })
 
       return matchesApi.submit({
@@ -874,6 +877,7 @@ function SubmitMatchTab({ academyId }: { academyId: string }) {
         sets_won_b: Number(form.sets_won_b),
         match_date: form.match_date,
         is_retirement: form.is_retirement,
+        set_scores: setScores,
       })
     },
     onSuccess: m => {
@@ -882,6 +886,7 @@ function SubmitMatchTab({ academyId }: { academyId: string }) {
       setApiError(null)
       setPlayerA(null); setPlayerB(null)
       setForm(f => ({ ...f, sets_won_a: '', sets_won_b: '' }))
+      setSetScores(null)
       validation.clearError('sets_won_a')
       validation.clearError('sets_won_b')
     },
@@ -1014,6 +1019,21 @@ function SubmitMatchTab({ academyId }: { academyId: string }) {
         Retirement / walkover
       </label>
 
+      {form.sets_won_a !== '' && form.sets_won_b !== '' && (() => {
+        const nA = Number(form.sets_won_a)
+        const nB = Number(form.sets_won_b)
+        const maxSets = ({ BEST_OF_3: 3, BEST_OF_5: 5, BEST_OF_7: 7 } as const)[form.match_format as 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7']!
+        return nA + nB > 0 && nA <= maxSets && nB <= maxSets && nA + nB <= maxSets ? (
+          <SetPointsInput
+            matchFormat={form.match_format as 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7'}
+            setsWonA={nA}
+            setsWonB={nB}
+            isRetirement={form.is_retirement}
+            onSetScoresChange={(scores) => setSetScores(scores)}
+          />
+        ) : null
+      })()}
+
       <button onClick={handleSubmit} disabled={mutation.isPending || !playerA || !playerB}
         className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg transition-colors disabled:opacity-50">
         {mutation.isPending ? 'Submitting…' : 'Submit Match'}
@@ -1040,6 +1060,7 @@ function ResultEntryModal({
   const [setsA, setSetsA] = useState('')
   const [setsB, setSetsB] = useState('')
   const [isRetirement, setIsRetirement] = useState(false)
+  const [setScores, setSetScores] = useState<Array<{ points_a: number; points_b: number }> | null>(null)
   const [matchDate, setMatchDate] = useState(sessionDate)
   const [error, setError] = useState<string | null>(null)
 
@@ -1063,6 +1084,7 @@ function ResultEntryModal({
       sets_won_b: nB,
       match_date: matchDate,
       is_retirement: isRetirement,
+      set_scores: setScores,
     }),
     onSuccess: () => onSuccess(),
     onError: (e: Error) => setError(e.message),
@@ -1119,6 +1141,21 @@ function ResultEntryModal({
             className="w-4 h-4 accent-blue-500" />
           Retirement / walkover
         </label>
+
+        {setsA !== '' && setsB !== '' && (() => {
+          const nA = Number(setsA)
+          const nB = Number(setsB)
+          const maxTotalSets = ({ BEST_OF_3: 3, BEST_OF_5: 5, BEST_OF_7: 7 } as const)[matchFormat as 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7']!
+          return nA + nB > 0 && nA + nB <= maxTotalSets ? (
+            <SetPointsInput
+              matchFormat={matchFormat as 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7'}
+              setsWonA={nA}
+              setsWonB={nB}
+              isRetirement={isRetirement}
+              onSetScoresChange={setSetScores}
+            />
+          ) : null
+        })()}
 
         <div className="flex gap-2 pt-1">
           <button onClick={onClose}

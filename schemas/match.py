@@ -14,6 +14,24 @@ class SetScore(BaseModel):
         return self
 
 
+class SetPoints(BaseModel):
+    points_a: int
+    points_b: int
+
+    @model_validator(mode="after")
+    def validate_set_points(self) -> "SetPoints":
+        if self.points_a < 0 or self.points_b < 0:
+            raise ValueError("Set points cannot be negative")
+        if self.points_a == 0 and self.points_b == 0:
+            raise ValueError("A set must have points scored")
+        if self.points_a > 30 or self.points_b > 30:
+            raise ValueError("Set points cannot exceed 30")
+        # Require winner to have at least 11 points
+        if max(self.points_a, self.points_b) < 11:
+            raise ValueError("Winning player in a set must have ≥11 points")
+        return self
+
+
 _REQUIRED_WINNER_SETS = {"BEST_OF_3": 2, "BEST_OF_5": 3, "BEST_OF_7": 4}
 
 
@@ -32,6 +50,8 @@ class MatchSubmit(BaseModel):
     is_retirement: bool = False
     match_date: date
     umpire_id: str | None = None
+    # Optional per-set point scores for analytics; nullable for backward compatibility
+    set_scores: list[SetPoints] | None = None
 
     @model_validator(mode="after")
     def validate_match(self) -> "MatchSubmit":
@@ -104,3 +124,4 @@ class MatchResponse(BaseModel):
     match_date: date
     match_timestamp: datetime
     created_at: datetime
+    set_scores: list[dict] | None = None

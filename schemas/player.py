@@ -1,6 +1,7 @@
 from datetime import datetime, date
 from pydantic import BaseModel, field_validator, model_validator
 from schemas.enums import Gender, SeedingLevel
+from schemas.event import EventFixtureSlotResponse
 
 
 class PlayerCreate(BaseModel):
@@ -108,3 +109,21 @@ class PlayerAcademyHistoryEntry(BaseModel):
 class PlayerAcademyHistoryResponse(BaseModel):
     player_id: str
     history: list[PlayerAcademyHistoryEntry]
+
+
+class PlayerEventFixtureItem(BaseModel):
+    event_id: str
+    name: str
+    scheduling_mode: str
+    event_type: str
+    status: str
+    fixture_state: str | None
+    start_date: date
+    end_date: date | None
+    default_match_format: str | None
+    slots: list[EventFixtureSlotResponse]
+
+
+class PlayerEventFixturesResponse(BaseModel):
+    player_id: str
+    items: list[PlayerEventFixtureItem]

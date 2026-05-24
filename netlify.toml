@@ -1,0 +1,17 @@
+[build]
+  publish = "public"
+
+[build.environment]
+  PYTHON_VERSION = "3.13.3"
+
+# Route all /api/* requests to the api function
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api"
+  status = 200
+
+# Serve index.html for all other paths (SPA fallback)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

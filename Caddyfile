@@ -21,7 +21,7 @@
     }
 
     # health check for railway
-    rewrite /health /*
+    rewrite /health /api/v1/health
 
     # Proxy API requests to the Python backend
     # Adjust this path if your API routes use a different prefix
@@ -32,17 +32,9 @@
     # Serve the React app from the 'dist' folder
     handle {
         root * /app/dist
-
-        # Add a debug header to confirm Caddy is serving the request
         header +X-Served-By "Caddy-Static"
-
-        # enable gzipping responses
         encode gzip
-
-        # if path doesn't exist, redirect it to 'index.html' for client side routing
         try_files {path} /index.html
-
-        # serve files from 'dist'
         file_server
     }
 }

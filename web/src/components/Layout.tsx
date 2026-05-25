@@ -60,6 +60,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
           JLRS
         </Link>
         {navLink('/leaderboard', 'Leaderboard')}
+        {user?.player_id && navLink('/player/dashboard', 'Dashboard')}
+        {user?.player_id && navLink(`/player/${user.player_id}`, 'My Performance')}
         {user?.role === 'COACH' && navLink('/dashboard', 'Dashboard')}
         {user?.role === 'ADMIN' && navLink('/admin', 'Admin')}
         {user && navLink('/profile', 'My Profile')}

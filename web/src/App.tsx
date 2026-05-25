@@ -4,6 +4,7 @@ import LandingPage from './pages/LandingPage'
 import Leaderboard from './pages/Leaderboard'
 import PlayerDetail from './pages/PlayerDetail'
 import Dashboard from './pages/Dashboard'
+import PlayerDashboard from './pages/PlayerDashboard'
 import Admin from './pages/Admin'
 import Profile from './pages/Profile'
 import ClaimPlayer from './pages/ClaimPlayer'
@@ -16,6 +17,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/leaderboard" element={<Leaderboard />} />
       <Route path="/player/:id" element={<PlayerDetail />} />
+      <Route path="/player/dashboard" element={<PlayerDashboard />} />
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/admin" element={<Admin />} />
       <Route path="/profile" element={<Profile />} />

@@ -1,5 +1,6 @@
 import uuid
 from contextlib import asynccontextmanager
+from urllib.parse import urlparse
 
 import psycopg2.errors
 import structlog
@@ -70,9 +71,27 @@ app.add_middleware(
 
 _PREFIX = "/api/v1"
 
+
+def _normalize_origin(url: str) -> str:
+    parsed = urlparse(url)
+    hostname = (parsed.hostname or "").lower()
+    port = parsed.port
+    if port is None:
+        return hostname
+    if parsed.scheme == "http" and port == 80:
+        return hostname
+    if parsed.scheme == "https" and port == 443:
+        return hostname
+    return f"{hostname}:{port}"
+
+
 def _should_redirect_to_frontend(request: Request) -> bool:
-    request_origin = f"{request.url.scheme}://{request.url.netloc}"
-    return request_origin != settings.frontend_url
+    request_origin = request.url.hostname.lower() if request.url.hostname else ""
+    request_port = request.url.port
+    if request_port and request_port not in (80, 443):
+        request_origin = f"{request_origin}:{request_port}"
+    frontend_origin = _normalize_origin(settings.frontend_url)
+    return request_origin != frontend_origin
 
 
 @app.get("/", include_in_schema=False)

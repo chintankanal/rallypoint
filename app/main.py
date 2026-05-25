@@ -72,10 +72,11 @@ app.add_middleware(
 _PREFIX = "/api/v1"
 
 
-@app.get("/", include_in_schema=False)
-def root():
-    """Base URL redirecting to API docs for unified service."""
-    return RedirectResponse(url="/api/v1/docs")
+# Remove or comment out the root redirect to let Caddy handle the root URL
+# @app.get("/", include_in_schema=False)
+# def root():
+#     """Base URL redirecting to API docs for unified service."""
+#     return RedirectResponse(url="/api/v1/docs")
 
 
 @app.get("/overview", include_in_schema=False)

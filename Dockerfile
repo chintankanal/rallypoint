@@ -6,7 +6,7 @@ WORKDIR /app
 COPY web/package*.json ./
 RUN npm ci --legacy-peer-deps
 COPY web/ ./
-RUN npm run build
+RUN npx vite build
 
 # Stage 2: Build the Python backend and final image
 FROM python:3.13-slim

@@ -4,7 +4,7 @@ ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 ENV NPM_CONFIG_FUND=false
 WORKDIR /app
 COPY web/package*.json ./
-RUN npm ci
+RUN npm ci --legacy-peer-deps
 COPY web/ ./
 RUN npm run build
 

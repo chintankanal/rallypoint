@@ -70,16 +70,31 @@ app.add_middleware(
 
 _PREFIX = "/api/v1"
 
+def _should_redirect_to_frontend(request: Request) -> bool:
+    request_origin = f"{request.url.scheme}://{request.url.netloc}"
+    return request_origin != settings.frontend_url
+
+
 @app.get("/", include_in_schema=False)
-def root():
+def root(request: Request):
     """Redirect base URL to the frontend landing page."""
-    return RedirectResponse(url=settings.frontend_url)
+    if _should_redirect_to_frontend(request):
+        return RedirectResponse(url=settings.frontend_url)
+    return JSONResponse(
+        content={"detail": "Frontend is not served from this backend host. Configure a separate frontend host or use /api/v1 endpoints."},
+        status_code=status.HTTP_200_OK,
+    )
 
 
 @app.get("/overview", include_in_schema=False)
-def overview_redirect():
+def overview_redirect(request: Request):
     """Redirect direct /overview browser requests to the frontend landing page."""
-    return RedirectResponse(url=settings.frontend_url)
+    if _should_redirect_to_frontend(request):
+        return RedirectResponse(url=settings.frontend_url)
+    return JSONResponse(
+        content={"detail": "/overview is an API browser proxy and is not available on this backend host. Use the configured frontend host."},
+        status_code=status.HTTP_200_OK,
+    )
 
 
 app.include_router(auth.router, prefix=_PREFIX)

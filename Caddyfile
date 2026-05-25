@@ -21,7 +21,8 @@
     }
 
     # health check for railway
-    rewrite /health /*
+    # This maps the Railway health check to the FastAPI health check
+    rewrite /health /api/v1/health
 
     # Proxy API requests to the Python backend
     # Adjust this path if your API routes use a different prefix

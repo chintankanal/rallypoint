@@ -14,6 +14,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
+      <Route path="/overview" element={<Navigate to="/" replace />} />
       <Route path="/login" element={<Login />} />
       <Route path="/leaderboard" element={<Leaderboard />} />
       <Route path="/player/:id" element={<PlayerDetail />} />

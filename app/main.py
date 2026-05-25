@@ -6,7 +6,7 @@ import structlog
 import structlog.contextvars
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -38,8 +38,11 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_pool(settings.database_url)
-    logger.info("database_pool_initialised")
+    try:
+        init_pool(settings.database_url)
+        logger.info("database_pool_initialised")
+    except Exception as e:
+        logger.error("database_pool_initialization_failed", error=str(e))
     yield
     close_pool()
     logger.info("database_pool_closed")
@@ -66,6 +69,18 @@ app.add_middleware(
 )
 
 _PREFIX = "/api/v1"
+
+@app.get("/", include_in_schema=False)
+def root():
+    """Redirect base URL to the frontend landing page."""
+    return RedirectResponse(url=settings.frontend_url)
+
+
+@app.get("/overview", include_in_schema=False)
+def overview_redirect():
+    """Redirect direct /overview browser requests to the frontend landing page."""
+    return RedirectResponse(url=settings.frontend_url)
+
 
 app.include_router(auth.router, prefix=_PREFIX)
 app.include_router(users.router, prefix=_PREFIX)

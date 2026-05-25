@@ -27,6 +27,11 @@ def test_overview_endpoint():
         assert isinstance(data.get("matches_processed"), int)
         assert isinstance(data.get("participating_academies"), int)
         print("Overview endpoint returned valid stats.")
+
+        redirect_response = client.get("/overview", allow_redirects=False)
+        assert redirect_response.status_code in (301, 302, 307, 308), redirect_response.text
+        assert redirect_response.headers["location"] == settings.frontend_url
+        print("Direct /overview browser path redirects to frontend landing page.")
     finally:
         close_pool()
 

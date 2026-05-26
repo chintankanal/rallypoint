@@ -5,6 +5,7 @@ import {
   type PlayerSearchResult, type LeaderboardEntry, type SessionSummary, type FixtureSlot,
 } from '../api/client'
 import { Layout, TierBadge, CRBar, Spinner, ErrorMsg, ProtectedRoute } from '../components/Layout'
+import { EventDetailPanel } from '../components/EventDetailPanel'
 import { SetPointsInput } from '../components/SetPointsInput'
 import { useAuth } from '../auth/context'
 import { MatchSubmissionSchema, PlayerRegistrationSchema, getMatchFormatRules, validateEventAsync, validatePlayerNameAsync } from '../validation/schemas'
@@ -98,12 +99,20 @@ const MATCH_FORMATS = [
 function EventsTab({ academyId }: { academyId: string }) {
   const qc = useQueryClient()
   const [showForm, setShowForm] = useState(false)
+  const [expandedLeagueEventId, setExpandedLeagueEventId] = useState<string | null>(null)
   const [form, setForm] = useState({
     name: '', start_date: '', end_date: '', default_match_format: 'BEST_OF_3',
   })
   const [error, setError] = useState<string | null>(null)
 
   const q = useQuery({ queryKey: ['events'], queryFn: () => eventsApi.list() })
+  const myEvents = q.data?.items.filter(ev => 
+    // host academy OR participating academy membership
+    (ev.host_academy_id && ev.host_academy_id === academyId) ||
+    (Array.isArray((ev as any).participating_academies) && (ev as any).participating_academies.some((a: any) => a.academy_id === academyId))
+  ) ?? []
+  const intraEvents = myEvents.filter(ev => ev.scheduling_mode === 'INTRA_ACADEMY')
+  const leagueEvents = myEvents.filter(ev => ev.scheduling_mode === 'INTER_ACADEMY' && ev.event_type === 'LEAGUE')
 
   const createMut = useMutation({
     mutationFn: () => eventsApi.create({
@@ -185,22 +194,71 @@ function EventsTab({ academyId }: { academyId: string }) {
         </div>
       )}
 
-      <div className="space-y-2">
-        {q.data?.items.map(ev => (
-          <div key={ev.event_id} className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <div className="font-medium text-white text-sm">{ev.name}</div>
-                <div className="text-xs text-gray-500">{ev.event_type.replace(/_/g, ' ')} · {ev.start_date}</div>
-              </div>
-              <span className={`text-xs px-2 py-0.5 rounded font-medium ${EVENT_STATUS_COLOR[ev.status] ?? ''}`}>
-                {ev.status}
-              </span>
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="text-base font-semibold text-white">Training events</h4>
+              <p className="text-xs text-gray-500">Intra-academy friendly events hosted by your academy.</p>
             </div>
-            <div className="text-xs text-gray-700 font-mono mt-1 truncate">{ev.event_id}</div>
+            <span className="text-xs text-gray-400">{intraEvents.length} events</span>
           </div>
-        ))}
-        {!q.data?.items.length && <p className="text-gray-500 text-sm">No events yet. Create one to start running training sessions.</p>}
+
+          {intraEvents.map(ev => (
+            <div key={ev.event_id} className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <div className="font-medium text-white text-sm">{ev.name}</div>
+                  <div className="text-xs text-gray-500">{ev.event_type.replace(/_/g, ' ')} · {ev.start_date}</div>
+                </div>
+                <span className={`text-xs px-2 py-0.5 rounded font-medium ${EVENT_STATUS_COLOR[ev.status] ?? ''}`}>
+                  {ev.status}
+                </span>
+              </div>
+              <div className="text-xs text-gray-700 font-mono mt-1 truncate">{ev.event_id}</div>
+            </div>
+          ))}
+          {!intraEvents.length && (
+            <p className="text-gray-500 text-sm">No intra-academy events yet. Create one to start running training sessions.</p>
+          )}
+        </div>
+
+        {leagueEvents.length > 0 && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-base font-semibold text-white">Hosted League Events</h4>
+                <p className="text-xs text-gray-500">View roster and fixtures for your inter-academy league events in read-only mode.</p>
+              </div>
+              <span className="text-xs text-gray-400">{leagueEvents.length} hosted leagues</span>
+            </div>
+            {leagueEvents.map(ev => {
+              const isExpanded = expandedLeagueEventId === ev.event_id
+              return (
+                <div key={ev.event_id} className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="font-medium text-white text-sm">{ev.name}</div>
+                      <div className="text-xs text-gray-500">{ev.event_type.replace(/_/g, ' ')} · {ev.start_date}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setExpandedLeagueEventId(isExpanded ? null : ev.event_id)}
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded-lg">
+                        {isExpanded ? 'Hide details' : 'View roster & fixtures'}
+                      </button>
+                      <span className={`text-xs px-2 py-0.5 rounded font-medium ${EVENT_STATUS_COLOR[ev.status] ?? ''}`}>
+                        {ev.status}
+                      </span>
+                    </div>
+                  </div>
+                  {isExpanded && (
+                    <EventDetailPanel eventId={ev.event_id} canManage={false} />
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )

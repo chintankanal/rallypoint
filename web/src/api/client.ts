@@ -354,6 +354,8 @@ export interface EventListItem {
   status: string
   start_date: string
   end_date: string | null
+  host_academy_id?: string
+  participating_academies?: { academy_id: string; name: string }[]
 }
 
 export const eventsApi = {

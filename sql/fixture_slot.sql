@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS fixture_slot (
     table_number INTEGER NOT NULL,
     match_category match_category NOT NULL,
     player_a_id UUID REFERENCES player(player_id) NOT NULL,
-    player_b_id UUID REFERENCES player(player_id) NOT NULL,
+    player_b_id UUID REFERENCES player(player_id), -- NULL = BYE
     expected_rating_gap DECIMAL(10, 2) NOT NULL,
     status fixture_slot_status NOT NULL DEFAULT 'SCHEDULED',
     match_id UUID, -- FK to Match, added later to avoid circular dependency

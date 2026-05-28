@@ -1152,3 +1152,439 @@ def test_league_fixtures_match_category_assignments():
                 assert category in ("STRETCH", "ANCHOR"), (
                     f"Gap {gap} in (100, 250] should be STRETCH/ANCHOR, got {category}"
                 )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Phase 1 invariant tests — production-grade contracts derived from the
+# fixture_engine critique (docs/fixture_engine_best_of_both_critique.md).
+#
+# These pin down the legality floor and strategy contracts that every generator
+# must honor. Failures here indicate a real bug, not a flaky edge case.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+# ── Fixture corpus ────────────────────────────────────────────────────────────
+#
+# Pure-Python pools shared across invariant tests. No DB dependency.
+
+def _flat_pool(n: int, base: float = 1000.0) -> list[dict]:
+    """N players, all rated `base`. DISCOVERY shape."""
+    return [{"player_id": f"f{i}", "current_rating": base} for i in range(n)]
+
+
+def _mixed_pool(n: int, base: float = 1000.0, step: float = 12.0) -> list[dict]:
+    """N players evenly spaced. Spread = (n-1)*step. Choose step so spread is in TRANSITION band."""
+    return [{"player_id": f"m{i}", "current_rating": base + i * step} for i in range(n)]
+
+
+def _wide_pool(n: int, base: float = 900.0, step: float = 30.0) -> list[dict]:
+    """N players widely spaced. STANDARD shape, multi-tier."""
+    return [{"player_id": f"w{i}", "current_rating": base + i * step} for i in range(n)]
+
+
+# ── Generic invariant assertions ──────────────────────────────────────────────
+
+def _assert_no_duplicate_player_per_round(slots: list[dict]) -> None:
+    """Every player appears at most once per (round_number, sub_round | wave_number)."""
+    buckets: dict[tuple, list[str]] = {}
+    for slot in slots:
+        wave = slot.get("wave_number", slot.get("sub_round"))
+        key = (slot["round_number"], wave)
+        buckets.setdefault(key, []).append(slot["player_a_id"])
+        if slot["player_b_id"] is not None:
+            buckets[key].append(slot["player_b_id"])
+    for key, pids in buckets.items():
+        dups = [p for p in set(pids) if pids.count(p) > 1]
+        assert not dups, f"Round/wave {key}: players scheduled multiple times: {dups}"
+
+
+def _assert_attending_players_covered(
+    slots: list[dict], attending: set[str], rounds: set[int] | None = None
+) -> None:
+    """In every round, every attending player appears as match participant or BYE."""
+    by_round: dict[int, set[str]] = {}
+    for slot in slots:
+        rn = slot["round_number"]
+        by_round.setdefault(rn, set()).add(slot["player_a_id"])
+        if slot["player_b_id"] is not None:
+            by_round[rn].add(slot["player_b_id"])
+    target_rounds = rounds if rounds is not None else set(by_round.keys())
+    for rn in target_rounds:
+        missing = attending - by_round.get(rn, set())
+        assert not missing, f"Round {rn}: attending players missing: {missing}"
+
+
+# ── #1 Transition legality: one match per player per round ────────────────────
+
+def test_transition_no_duplicate_player_per_round():
+    """
+    Critique #1: within_half_pairs uses sliding adjacent windows that schedule
+    interior players multiple times in the same round. Every round must be a
+    legal one-match-per-player matching.
+    """
+    players = _make_players([1300.0, 1250.0, 1200.0, 1150.0, 1100.0, 1050.0, 1000.0, 950.0])
+    slots = generate_transition_fixtures(players, matches_per_player=3, num_tables=4)
+    _assert_no_duplicate_player_per_round(slots)
+
+
+def test_transition_every_attending_player_appears_each_round():
+    """
+    Every round must cover every attending player exactly once — either in a
+    match or as an explicit BYE. The old half-split sliding window dropped
+    interior players from cross-half rounds when N was odd.
+    """
+    players = _make_players(
+        [1300.0, 1250.0, 1200.0, 1150.0, 1100.0, 1050.0, 1000.0, 950.0, 900.0]
+    )
+    attending = {p["player_id"] for p in players}
+    slots = generate_transition_fixtures(players, matches_per_player=3, num_tables=5)
+    _assert_attending_players_covered(slots, attending)
+
+
+def test_transition_handles_odd_count_with_explicit_bye():
+    """Odd-N transition must emit explicit BYE slots; players never silent-drop."""
+    players = _make_players([1300.0, 1250.0, 1200.0, 1150.0, 1100.0, 1050.0, 1000.0])
+    slots = generate_transition_fixtures(players, matches_per_player=3, num_tables=4)
+    by_round = _slots_by_round(slots)
+    for rn, rs in by_round.items():
+        has_bye = any(s["player_b_id"] is None for s in rs)
+        assert has_bye, f"Round {rn}: odd-N transition expected a BYE slot"
+
+
+# ── #4 CROSS_ACADEMY_ONLY contract ────────────────────────────────────────────
+
+def test_cross_academy_only_never_emits_same_academy_pair():
+    """
+    Critique #4: novelty swap must never create a same-academy match. This must
+    hold for every pool shape, especially saturated/skewed ones.
+    """
+    # Use a pool where novelty swap has incentive (some prior played pairs).
+    players_by_academy = _make_inter_academy_players({
+        "a": [("a1", 1300.0), ("a2", 1200.0), ("a3", 1100.0)],
+        "b": [("b1", 1280.0), ("b2", 1180.0), ("b3", 1080.0)],
+        "c": [("c1", 1260.0), ("c2", 1160.0), ("c3", 1060.0)],
+    })
+    # Pre-played: many cross-academy pairs, forcing the swap heuristic to look hard.
+    played = {
+        _canonical("a_a1", "b_b1"),
+        _canonical("a_a2", "b_b2"),
+        _canonical("a_a3", "c_c3"),
+    }
+    result = generate_league_fixtures(players_by_academy, played, strategy="CROSS_ACADEMY_ONLY")
+    for slot in result["slots"]:
+        if slot["player_b_id"] is None:
+            continue
+        a_acad = slot["player_a_id"].split("_")[0]
+        b_acad = slot["player_b_id"].split("_")[0]
+        assert a_acad != b_acad, (
+            f"CROSS_ACADEMY_ONLY violated: same-academy pair "
+            f"{slot['player_a_id']} vs {slot['player_b_id']} in round {slot['round_number']}"
+        )
+
+
+# ── #5 TIER_MATCHED contract ──────────────────────────────────────────────────
+
+def test_tier_matched_no_same_academy_pair_when_multiple_academies_in_tier():
+    """
+    Critique #5: within a tier that contains players from ≥2 academies,
+    TIER_MATCHED must not produce intra-academy pairs (the strategy promise).
+    """
+    # ELITE tier with 2 academies (a, b), ADVANCED tier with 2 academies (a, b).
+    # The default round-robin used to mix academies freely → some intra-academy.
+    players_by_academy = _make_inter_academy_players({
+        "a": [("e1", 1390.0), ("e2", 1380.0), ("ad1", 1150.0), ("ad2", 1140.0)],
+        "b": [("e1", 1370.0), ("e2", 1360.0), ("ad1", 1130.0), ("ad2", 1120.0)],
+    })
+    result = generate_league_fixtures(players_by_academy, set(), strategy="TIER_MATCHED")
+    for slot in result["slots"]:
+        if slot["player_b_id"] is None:
+            continue
+        a_acad = slot["player_a_id"].split("_")[0]
+        b_acad = slot["player_b_id"].split("_")[0]
+        assert a_acad != b_acad, (
+            f"TIER_MATCHED with ≥2 academies per tier emitted intra-academy pair: "
+            f"{slot['player_a_id']} vs {slot['player_b_id']} in round {slot['round_number']}"
+        )
+
+
+# ── #6 Singleton tier policy ──────────────────────────────────────────────────
+
+def test_tier_matched_singleton_tier_player_not_silently_dropped():
+    """
+    Critique #6: a tier with only 1 player must not disappear. The player must
+    still appear somewhere in the schedule — either via an adjacent-tier
+    fallback, a labeled exception pairing, or an explicit BYE.
+    """
+    # ELITE tier: only academy a has 1 ELITE player. Without fallback the player
+    # gets silently dropped from the schedule.
+    players_by_academy = _make_inter_academy_players({
+        "a": [("elite", 1400.0), ("ad1", 1150.0), ("ad2", 1100.0)],
+        "b": [("ad1", 1140.0), ("ad2", 1080.0)],
+    })
+    all_pids: set[str] = set()
+    for ps in players_by_academy.values():
+        for p in ps:
+            all_pids.add(p["player_id"])
+
+    result = generate_league_fixtures(players_by_academy, set(), strategy="TIER_MATCHED")
+    appearing: set[str] = set()
+    for slot in result["slots"]:
+        appearing.add(slot["player_a_id"])
+        if slot["player_b_id"] is not None:
+            appearing.add(slot["player_b_id"])
+
+    assert "a_elite" in appearing, (
+        "Singleton-tier player 'a_elite' silently dropped from the schedule"
+    )
+
+
+# ── #12 round_offset honored by every phase ───────────────────────────────────
+
+def test_transition_honors_round_offset():
+    """
+    Critique #12: round_offset must shift the numbering of every phase. The
+    transition generator currently restarts from 1 regardless of offset.
+    """
+    players = _make_players([1300.0, 1250.0, 1200.0, 1150.0, 1100.0, 1050.0, 1000.0, 950.0])
+    slots = generate_transition_fixtures(
+        players, matches_per_player=2, num_tables=4, round_offset=5
+    )
+    round_numbers = {s["round_number"] for s in slots}
+    assert min(round_numbers) >= 6, (
+        f"Transition ignored round_offset=5; first round is {min(round_numbers)} (expected ≥6)"
+    )
+
+
+def test_standard_honors_round_offset():
+    """Critique #12: standard generator must also accept round_offset."""
+    players = _make_players(
+        [1600.0, 1500.0, 1400.0, 1300.0, 1200.0, 1100.0, 1000.0, 900.0]
+    )
+    slots = generate_standard_fixtures(
+        players, set(), matches_per_player=2, num_tables=4, round_offset=10
+    )
+    round_numbers = {s["round_number"] for s in slots}
+    assert min(round_numbers) >= 11, (
+        f"Standard ignored round_offset=10; first round is {min(round_numbers)} "
+        f"(expected ≥11)"
+    )
+
+
+# ── #2 Additive category model ────────────────────────────────────────────────
+
+def test_slot_includes_round_intent_and_gap_band():
+    """
+    Critique #2: every slot must include the additive fields round_intent,
+    gap_band, player_a_role, player_b_role. match_category is preserved as a
+    compatibility field.
+    """
+    players = _make_players(
+        [1600.0, 1500.0, 1400.0, 1300.0, 1200.0, 1100.0, 1000.0, 900.0]
+    )
+    slots = generate_standard_fixtures(players, set(), matches_per_player=2, num_tables=4)
+    for slot in slots:
+        assert "round_intent" in slot
+        assert "gap_band" in slot
+        assert "player_a_role" in slot
+        assert "player_b_role" in slot
+        assert "match_category" in slot, "compat field match_category must remain present"
+
+        assert slot["round_intent"] in ("COMPETITIVE", "DEVELOPMENTAL")
+        assert slot["gap_band"] in ("COMPETITIVE", "STRETCH", "OUT_OF_BAND", "BYE")
+        assert slot["player_a_role"] in ("PEER", "STRETCHING", "ANCHORING", "BYE")
+        assert slot["player_b_role"] in ("PEER", "STRETCHING", "ANCHORING", "BYE")
+
+
+def test_bye_slot_has_bye_roles_and_gap_band():
+    """A BYE slot must report gap_band=BYE and the absent player's role=BYE."""
+    players = _make_players([1500.0, 1400.0, 1200.0, 1100.0, 1000.0])  # 5p → BYE
+    slots = generate_standard_fixtures(players, set(), matches_per_player=2, num_tables=4)
+    bye_slots = [s for s in slots if s["player_b_id"] is None]
+    assert bye_slots, "Expected at least one BYE slot for odd-N pool"
+    for s in bye_slots:
+        assert s["gap_band"] == "BYE"
+        assert s["player_b_role"] == "BYE"
+
+
+def test_anchor_role_emitted_when_higher_rated_player_anchors_lower():
+    """
+    Critique #2: ANCHOR/STRETCHING roles are part of the design but the old
+    engine never emits ANCHOR. A developmental round pairing a high-rated with
+    a low-rated player must label the higher player ANCHORING and the lower
+    STRETCHING.
+    """
+    # Wide pool guarantees standard phase + at least one stretch round.
+    players = _make_players(
+        [1600.0, 1500.0, 1400.0, 1300.0, 1200.0, 1100.0, 1000.0, 900.0]
+    )
+    slots = generate_standard_fixtures(players, set(), matches_per_player=4, num_tables=4)
+
+    has_anchor = False
+    has_stretching = False
+    for s in slots:
+        if s["player_b_id"] is None:
+            continue
+        if s["player_a_role"] == "ANCHORING" or s["player_b_role"] == "ANCHORING":
+            has_anchor = True
+        if s["player_a_role"] == "STRETCHING" or s["player_b_role"] == "STRETCHING":
+            has_stretching = True
+    assert has_anchor, "Expected at least one ANCHORING role across stretch rounds"
+    assert has_stretching, "Expected at least one STRETCHING role across stretch rounds"
+
+
+# ── #3 Standard phase: OUT_OF_BAND label, never hidden COMPETITIVE/STRETCH ────
+
+def test_standard_out_of_band_leftover_labeled_explicitly():
+    """
+    Critique #3: when leftover handling forces a pairing whose gap exceeds the
+    stretch band, the slot must be labeled gap_band=OUT_OF_BAND. The old
+    engine silently labeled extreme gaps as STRETCH or COMPETITIVE.
+    """
+    # Construct a pool that forces a wide leftover pairing: NT (1500), one
+    # isolated INT (950), and an even pair in between (1200, 1200). NT and
+    # INT both end up as leftovers → forced cross-tier pair with gap 550.
+    players = [
+        {"player_id": "nt",   "current_rating": 1500.0},
+        {"player_id": "adv1", "current_rating": 1200.0},
+        {"player_id": "adv2", "current_rating": 1200.0},
+        {"player_id": "int",  "current_rating": 950.0},
+    ]
+    slots = generate_standard_fixtures(players, set(), matches_per_player=1, num_tables=4)
+    for s in slots:
+        if s["player_b_id"] is None:
+            continue
+        gap = s["expected_rating_gap"]
+        if gap > 250:
+            assert s["gap_band"] == "OUT_OF_BAND", (
+                f"Gap {gap} must be labeled OUT_OF_BAND, got {s['gap_band']}"
+            )
+
+
+# ── #10 stretch_pairs monotonic-scan short-circuit ────────────────────────────
+
+def test_stretch_pairs_does_not_produce_invalid_extreme_pairings():
+    """
+    Critique #10: the greedy descending scan in stretch_pairs continues past
+    legality once gap > _STRETCH_MAX. The result must never include a stretch
+    slot whose gap is > 250 silently labeled STRETCH.
+    """
+    # Outlier 1600 with the rest clustered 950-1100 — natural stretch gap is
+    # always > 250 for the outlier, so the scan must short-circuit cleanly
+    # (no false stretch slot, BYE or OUT_OF_BAND label allowed).
+    players = _make_players([1600.0, 1100.0, 1080.0, 1060.0, 1040.0, 1020.0, 1000.0, 980.0])
+    slots = generate_standard_fixtures(players, set(), matches_per_player=2, num_tables=4)
+    for s in slots:
+        if s["player_b_id"] is None:
+            continue
+        if s["gap_band"] == "STRETCH":
+            assert s["expected_rating_gap"] <= 250, (
+                f"STRETCH gap_band carries gap {s['expected_rating_gap']} > 250"
+            )
+
+
+# ── #18 Phase boundary alignment with design doc ──────────────────────────────
+
+@pytest.mark.parametrize("spread,expected_phase", [
+    (100, "DISCOVERY"),    # design: <= 100 → DISCOVERY
+    (101, "TRANSITION"),
+    (250, "TRANSITION"),   # design: > 250 → STANDARD; 250 stays TRANSITION
+    (251, "STANDARD"),
+])
+def test_detect_phase_design_boundaries(spread, expected_phase):
+    """
+    Critique #18: code uses `< 100` / `>= 250`. Design says `<= 100` / `> 250`.
+    Align with the design.
+    """
+    players = [
+        {"player_id": "a", "current_rating": 1000.0},
+        {"player_id": "b", "current_rating": 1000.0 + spread},
+    ]
+    assert detect_phase(players) == expected_phase
+
+
+# ── #19 Small-session round-robin fallback ────────────────────────────────────
+
+def test_small_session_under_6_players_uses_pure_round_robin():
+    """
+    Critique #19: the design specifies that sessions with <6 players use a
+    pure round-robin instead of phase-based generation. Verify the dispatcher
+    routes accordingly: every pair of attending players faces each other
+    within the available rounds (subject to capacity).
+    """
+    # 5 players, generous session capacity → at minimum a full round-robin
+    # cycle of n-1=4 rounds should be reachable.
+    players = _make_players([1100.0, 1050.0, 1000.0, 950.0, 900.0])
+    result = generate_fixtures(
+        players=players,
+        recent_match_pairs=set(),
+        round_offset=0,
+        session_minutes=240,
+        num_tables=2,
+        match_format="BEST_OF_3",
+    )
+    # Pure round-robin: every player appears in every round (as match or BYE).
+    attending = {p["player_id"] for p in players}
+    by_round = _slots_by_round(result["slots"])
+    for rn, rs in by_round.items():
+        present = {s["player_a_id"] for s in rs}
+        present |= {s["player_b_id"] for s in rs if s["player_b_id"]}
+        missing = attending - present
+        assert not missing, (
+            f"Round {rn}: small-session round-robin missing players {missing}"
+        )
+
+
+# ── #20 Deterministic discovery ordering ──────────────────────────────────────
+
+def test_discovery_deterministic_ordering_independent_of_input_order():
+    """
+    Critique #20: the design requires deterministic non-rating ordering in
+    discovery. The same set of players, passed in different order, must
+    produce the same set of round-1 pairs.
+    """
+    pool_a = [
+        {"player_id": "p1", "current_rating": 1000.0},
+        {"player_id": "p2", "current_rating": 1000.0},
+        {"player_id": "p3", "current_rating": 1000.0},
+        {"player_id": "p4", "current_rating": 1000.0},
+        {"player_id": "p5", "current_rating": 1000.0},
+        {"player_id": "p6", "current_rating": 1000.0},
+    ]
+    pool_b = list(reversed(pool_a))  # same players, reversed input order
+
+    slots_a = generate_discovery_fixtures(pool_a, round_offset=0, matches_per_player=1, num_tables=3)
+    slots_b = generate_discovery_fixtures(pool_b, round_offset=0, matches_per_player=1, num_tables=3)
+
+    pairs_a = {_canonical(s["player_a_id"], s["player_b_id"]) for s in slots_a if s["player_b_id"]}
+    pairs_b = {_canonical(s["player_a_id"], s["player_b_id"]) for s in slots_b if s["player_b_id"]}
+    assert pairs_a == pairs_b, (
+        f"Discovery ordering not deterministic: order A produced {pairs_a}, "
+        f"order B produced {pairs_b}"
+    )
+
+
+# ── Universal generator-level invariant sweep ─────────────────────────────────
+
+@pytest.mark.parametrize("pool,tables", [
+    (_flat_pool(8), 4),
+    (_flat_pool(9), 4),
+    (_mixed_pool(8, step=20), 4),    # spread = 140 → TRANSITION
+    (_mixed_pool(9, step=20), 4),
+    (_wide_pool(8), 4),              # spread = 210 → TRANSITION, but wider tiers
+    (_wide_pool(9), 4),
+    (_wide_pool(12, step=40), 6),    # spread = 440 → STANDARD
+])
+def test_no_duplicate_player_across_all_phase_dispatches(pool, tables):
+    """
+    Sweep across DISCOVERY / TRANSITION / STANDARD shapes: no player may appear
+    more than once per round in any slot output by the dispatcher.
+    """
+    result = generate_fixtures(
+        players=pool,
+        recent_match_pairs=set(),
+        round_offset=0,
+        session_minutes=300,
+        num_tables=tables,
+        match_format="BEST_OF_3",
+    )
+    _assert_no_duplicate_player_per_round(result["slots"])

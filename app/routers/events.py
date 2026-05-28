@@ -359,6 +359,14 @@ def generate_event_fixtures(
             )
 
     response_slots = _build_slot_responses(slot_rows, players_by_id)
+
+    from app.services.fixture_preflight import preflight_event
+    warnings = preflight_event(
+        players_by_academy,
+        strategy=body.fixture_strategy,
+        num_tables=body.num_tables,
+    )
+
     return EventFixturesResponse(
         event_id=event_id,
         total_rounds=result["total_rounds"],
@@ -366,6 +374,7 @@ def generate_event_fixtures(
         cross_academy_pct=result["cross_academy_pct"],
         fixture_state="FIXTURES_READY",
         slots=response_slots,
+        warnings=warnings,
     )
 
 

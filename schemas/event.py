@@ -173,6 +173,14 @@ class EventFixtureSlotResponse(BaseModel):
     match_id: str | None
 
 
+class FixtureWarning(BaseModel):
+    """Pre-flight feasibility warning surfaced to the operator (Phase 6)."""
+    code: str
+    severity: str  # INFO | WARN | ERROR
+    message: str
+    context: dict = {}
+
+
 class EventFixturesResponse(BaseModel):
     event_id: str
     total_rounds: int
@@ -180,3 +188,4 @@ class EventFixturesResponse(BaseModel):
     cross_academy_pct: float
     fixture_state: str | None = None
     slots: list[EventFixtureSlotResponse]
+    warnings: list[FixtureWarning] = []

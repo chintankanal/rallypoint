@@ -433,6 +433,13 @@ export interface EventFixtureSlot {
   match_id: string | null
 }
 
+export interface FixtureWarning {
+  code: string
+  severity: 'INFO' | 'WARN' | 'ERROR'
+  message: string
+  context: Record<string, unknown>
+}
+
 export interface EventFixtures {
   event_id: string
   total_rounds: number
@@ -440,6 +447,7 @@ export interface EventFixtures {
   cross_academy_pct: number
   fixture_state: string | null
   slots: EventFixtureSlot[]
+  warnings?: FixtureWarning[]
 }
 
 export interface PlayerEventFixtureItem {
@@ -559,6 +567,7 @@ export interface FixturesResponse {
   matches_per_player: number
   fixture_slots_created: number
   slots: FixtureSlot[]
+  warnings?: FixtureWarning[]
 }
 
 export const sessionsApi = {

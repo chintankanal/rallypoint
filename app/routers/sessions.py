@@ -246,12 +246,20 @@ def generate_session_fixtures(
         for sr in slot_rows
     ]
 
+    from app.services.fixture_preflight import preflight_session
+    warnings = preflight_session(
+        players,
+        num_tables=session["num_tables"],
+        matches_per_player_estimate=result["matches_per_player"],
+    )
+
     return SessionFixturesResponse(
         session_id=session_id,
         bootstrap_phase=result["phase"],
         matches_per_player=result["matches_per_player"],
         fixture_slots_created=len(response_slots),
         slots=response_slots,
+        warnings=warnings,
     )
 
 

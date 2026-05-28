@@ -74,12 +74,21 @@ class FixtureSlotResponse(BaseModel):
     match_result: dict | None = None  # populated when status == PLAYED
 
 
+class FixtureWarning(BaseModel):
+    """Pre-flight feasibility warning surfaced to the operator (Phase 6)."""
+    code: str
+    severity: str  # INFO | WARN | ERROR
+    message: str
+    context: dict = {}
+
+
 class SessionFixturesResponse(BaseModel):
     session_id: str
     bootstrap_phase: str
     matches_per_player: int
     fixture_slots_created: int
     slots: list[FixtureSlotResponse]
+    warnings: list[FixtureWarning] = []
 
 
 class SessionStatusUpdate(BaseModel):

@@ -400,6 +400,21 @@ export function EventDetailPanel({ eventId, canManage }: { eventId: string; canM
                       )}
                       {genError && <span className="text-xs text-red-400">{genError}</span>}
                     </div>
+                    {fixtures?.warnings && fixtures.warnings.length > 0 && (
+                      <div className="space-y-1 mt-2">
+                        {fixtures.warnings.map((w, i) => {
+                          const colorClass =
+                            w.severity === 'ERROR' ? 'text-red-400' :
+                            w.severity === 'WARN'  ? 'text-yellow-400' :
+                                                     'text-gray-400'
+                          return (
+                            <p key={`${w.code}-${i}`} className={`text-xs ${colorClass}`}>
+                              <span className="font-semibold">{w.severity}:</span> {w.message}
+                            </p>
+                          )
+                        })}
+                      </div>
+                    )}
                     {fixtureStrategy === 'TIER_MATCHED' && (
                       <p className="text-xs text-gray-500">Players are grouped by rating tier. Cross-academy round-robin within each tier — maximises competitive matches.</p>
                     )}

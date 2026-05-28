@@ -324,16 +324,25 @@ def generate_event_fixtures(
                     """
                     INSERT INTO event_fixture_slot (
                         slot_id, event_id, round_number, table_number,
+                        round_intent, gap_band, player_a_role, player_b_role,
                         match_category, player_a_id, player_b_id,
                         expected_rating_gap, status, fixture_strategy
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (
+                        %s, %s, %s, %s,
+                        %s, %s, %s, %s,
+                        %s, %s, %s,
+                        %s, %s, %s
+                    )
                     RETURNING slot_id::text, round_number, table_number,
+                              round_intent, gap_band, player_a_role, player_b_role,
                               match_category, player_a_id::text, player_b_id::text,
                               expected_rating_gap, status, match_id, fixture_strategy
                     """,
                     (
                         slot_id, event_id,
                         slot["round_number"], slot["table_number"],
+                        slot["round_intent"], slot["gap_band"],
+                        slot["player_a_role"], slot["player_b_role"],
                         slot["match_category"],
                         slot["player_a_id"], slot["player_b_id"],
                         slot["expected_rating_gap"], slot_status,
@@ -372,6 +381,8 @@ def get_event_fixtures(event_id: str, _: dict = _ANY):
             cur.execute(
                 """
                 SELECT efs.slot_id::text, efs.round_number, efs.table_number,
+                       efs.round_intent, efs.gap_band,
+                       efs.player_a_role, efs.player_b_role,
                        efs.match_category, efs.expected_rating_gap, efs.status,
                        efs.match_id::text, efs.fixture_strategy,
                        efs.player_a_id::text, pa.name AS player_a_name,
@@ -407,6 +418,10 @@ def get_event_fixtures(event_id: str, _: dict = _ANY):
             slot_id=r["slot_id"],
             round_number=r["round_number"],
             table_number=r["table_number"],
+            round_intent=r["round_intent"],
+            gap_band=r["gap_band"],
+            player_a_role=r["player_a_role"],
+            player_b_role=r["player_b_role"],
             match_category=r["match_category"],
             player_a=EventFixturePlayer(
                 player_id=r["player_a_id"],
@@ -591,6 +606,10 @@ def _build_slot_responses(
                 slot_id=sr["slot_id"],
                 round_number=sr["round_number"],
                 table_number=sr["table_number"],
+                round_intent=sr["round_intent"],
+                gap_band=sr["gap_band"],
+                player_a_role=sr["player_a_role"],
+                player_b_role=sr["player_b_role"],
                 match_category=sr["match_category"],
                 player_a=EventFixturePlayer(
                     player_id=pa["player_id"],

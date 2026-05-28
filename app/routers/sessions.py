@@ -199,15 +199,20 @@ def generate_session_fixtures(
                     """
                     INSERT INTO fixture_slot (
                         slot_id, session_id, round_number, sub_round, table_number,
-                        match_category, player_a_id, player_b_id, expected_rating_gap, status
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        round_intent, gap_band, player_a_role, player_b_role,
+                        match_category, player_a_id, player_b_id,
+                        expected_rating_gap, status
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING slot_id, round_number, sub_round, table_number,
+                              round_intent, gap_band, player_a_role, player_b_role,
                               match_category, player_a_id::text, player_b_id::text,
                               expected_rating_gap, status, match_id
                     """,
                     (
                         slot_id, session_id,
                         slot["round_number"], slot["sub_round"], slot["table_number"],
+                        slot["round_intent"], slot["gap_band"],
+                        slot["player_a_role"], slot["player_b_role"],
                         slot["match_category"], slot["player_a_id"], slot["player_b_id"],
                         slot["expected_rating_gap"], slot_status,
                     ),
@@ -221,6 +226,10 @@ def generate_session_fixtures(
             round_number=sr["round_number"],
             sub_round=sr["sub_round"],
             table_number=sr["table_number"],
+            round_intent=sr["round_intent"],
+            gap_band=sr["gap_band"],
+            player_a_role=sr["player_a_role"],
+            player_b_role=sr["player_b_role"],
             match_category=sr["match_category"],
             player_a=players_by_id.get(sr["player_a_id"]),
             player_b=players_by_id.get(sr["player_b_id"]) if sr["player_b_id"] else None,
@@ -253,6 +262,7 @@ def get_session_fixtures(session_id: str, _: dict = _ANY):
                 """
                 SELECT
                     fs.slot_id, fs.round_number, fs.sub_round, fs.table_number,
+                    fs.round_intent, fs.gap_band, fs.player_a_role, fs.player_b_role,
                     fs.match_category, fs.expected_rating_gap, fs.status, fs.match_id,
                     json_build_object(
                         'player_id', pa.player_id, 'name', pa.name,
@@ -290,6 +300,10 @@ def get_session_fixtures(session_id: str, _: dict = _ANY):
             round_number=s["round_number"],
             sub_round=s["sub_round"],
             table_number=s["table_number"],
+            round_intent=s["round_intent"],
+            gap_band=s["gap_band"],
+            player_a_role=s["player_a_role"],
+            player_b_role=s["player_b_role"],
             match_category=s["match_category"],
             player_a=s["player_a"],
             player_b=s["player_b"],

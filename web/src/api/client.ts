@@ -417,6 +417,12 @@ export interface EventFixtureSlot {
   slot_id: string
   round_number: number
   table_number: number
+  // Critique §2 additive fields. See app/services/fixture_engine.py for semantics.
+  round_intent: string
+  gap_band: string
+  player_a_role: string
+  player_b_role: string
+  // Legacy compatibility field — kept until downstream consumers migrate.
   match_category: string
   fixture_strategy: string
   player_a: EventFixturePlayer
@@ -524,6 +530,12 @@ export interface FixtureSlot {
   round_number: number
   sub_round: string | null
   table_number: number
+  // Critique §2 additive fields. See app/services/fixture_engine.py for semantics.
+  round_intent: string
+  gap_band: string
+  player_a_role: string
+  player_b_role: string
+  // Legacy compatibility field — kept until downstream consumers migrate.
   match_category: string
   player_a: FixturePlayer
   player_b: FixturePlayer | null

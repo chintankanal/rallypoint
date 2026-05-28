@@ -11,11 +11,20 @@ CREATE TYPE fixture_strategy AS ENUM (
     'FULL_ROUND_ROBIN'
 );
 
+-- round_intent / gap_band / player_role enums are defined in fixture_slot.sql
+-- and (idempotently) in migrations/004_add_fixture_slot_additive_fields.sql.
+
 CREATE TABLE IF NOT EXISTS event_fixture_slot (
     slot_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     event_id            UUID NOT NULL REFERENCES event(event_id) ON DELETE CASCADE,
     round_number        INT NOT NULL,
     table_number        INT NOT NULL DEFAULT 1,
+    -- Round-level intent and per-slot semantics (critique §2).
+    round_intent        round_intent NOT NULL DEFAULT 'COMPETITIVE',
+    gap_band            gap_band     NOT NULL DEFAULT 'COMPETITIVE',
+    player_a_role       player_role  NOT NULL DEFAULT 'PEER',
+    player_b_role       player_role  NOT NULL DEFAULT 'BYE',
+    -- Legacy compatibility field — derived from gap_band by the engine.
     match_category      match_category NOT NULL,
     player_a_id         UUID NOT NULL REFERENCES player(player_id),
     player_b_id         UUID REFERENCES player(player_id),  -- NULL = BYE
@@ -29,3 +38,4 @@ CREATE TABLE IF NOT EXISTS event_fixture_slot (
 );
 
 CREATE INDEX IF NOT EXISTS idx_event_fixture_slot_event ON event_fixture_slot(event_id, round_number);
+CREATE INDEX IF NOT EXISTS idx_event_fixture_slot_band  ON event_fixture_slot(gap_band);

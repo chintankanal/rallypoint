@@ -56,6 +56,14 @@ class FixtureSlotResponse(BaseModel):
     round_number: int
     sub_round: str | None
     table_number: int
+    # Critique §2 additive fields. round_intent is the round-level intent;
+    # gap_band is per-slot and derived from the actual rating gap; the role
+    # fields name each player's purpose in the match.
+    round_intent: str
+    gap_band: str
+    player_a_role: str
+    player_b_role: str
+    # Legacy compatibility field — kept until downstream consumers migrate.
     match_category: str
     player_a: dict
     player_b: dict | None  # None when player_b is a BYE

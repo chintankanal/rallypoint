@@ -37,12 +37,16 @@ def _make_players(ratings: list[float]) -> list[dict]:
 # ── Phase detection ────────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("spread,expected_phase", [
+    # Aligned with docs/jlrs_fixtures_design and critique §18:
+    # spread ≤ 100 → DISCOVERY, 100 < spread ≤ 250 → TRANSITION, spread > 250 → STANDARD.
     (0,   "DISCOVERY"),
     (50,  "DISCOVERY"),
     (99,  "DISCOVERY"),
-    (100, "TRANSITION"),
+    (100, "DISCOVERY"),
+    (101, "TRANSITION"),
     (249, "TRANSITION"),
-    (250, "STANDARD"),
+    (250, "TRANSITION"),
+    (251, "STANDARD"),
     (500, "STANDARD"),
 ])
 def test_detect_phase_boundaries(spread, expected_phase):
@@ -228,23 +232,34 @@ def test_standard_fixtures_no_self_pairings():
 
 
 def test_standard_fixtures_stretch_excludes_recent_pairs():
-    """Pairs in recent_match_pairs should not appear in the dedicated stretch round."""
-    # 4 players, spread=600 → STANDARD
-    # fold=floor(4/4)=1: p0(1600) vs p1(1400), p2(1200) vs p3(1000)
-    players = _make_players([1600.0, 1400.0, 1200.0, 1000.0])
-    pids = [p["player_id"] for p in players]  # p0, p1, p2, p3
+    """
+    Pairs in recent_match_pairs should not appear in the dedicated stretch
+    round when a legal non-rematch alternative exists.
 
-    # Canonical order for (p0, p1)
-    excluded = _canonical(pids[0], pids[1])
-    recent = {excluded}
-
-    slots = generate_standard_fixtures(players, recent, matches_per_player=2, num_tables=4)
-    # Bug 2 fix: cross-tier competitive pairs with gap 100–250 are now labeled STRETCH.
-    # Filter by round_number == 2 (the dedicated stretch round, step=1) to avoid
-    # picking up the round-1 cross-tier pairs that also carry the STRETCH label.
+    Pool shape: 6 players across 3 even-sized tiers (NT×2, ELITE×2, ADV×2)
+    → no odd tier groups → C-S-C-S pattern → round 2 (step=1) is the
+    dedicated stretch round.
+    """
+    players = [
+        {"player_id": "a", "current_rating": 1600.0},   # NT
+        {"player_id": "b", "current_rating": 1550.0},   # NT
+        {"player_id": "c", "current_rating": 1400.0},   # ELITE
+        {"player_id": "d", "current_rating": 1350.0},   # ELITE
+        {"player_id": "e", "current_rating": 1200.0},   # ADV
+        {"player_id": "f", "current_rating": 1150.0},   # ADV
+    ]
+    # (a, c) gap=200 sits squarely in the stretch band; exclude it and the
+    # engine must find a different stretch partner for `a`.
+    excluded = _canonical("a", "c")
+    slots = generate_standard_fixtures(players, {excluded}, matches_per_player=2, num_tables=4)
     stretch_slots = [s for s in slots if s["round_number"] == 2]
-    stretch_pairs = {_canonical(s["player_a_id"], s["player_b_id"]) for s in stretch_slots if s["player_b_id"]}
-    assert excluded not in stretch_pairs
+    stretch_pairs = {
+        _canonical(s["player_a_id"], s["player_b_id"])
+        for s in stretch_slots if s["player_b_id"]
+    }
+    assert excluded not in stretch_pairs, (
+        f"stretch round 2 still contains excluded recent pair {excluded}: {stretch_pairs}"
+    )
 
 
 def test_standard_fixtures_stretch_gap_filter():

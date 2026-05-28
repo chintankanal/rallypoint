@@ -29,9 +29,31 @@ later phase.
 import math
 from typing import Optional
 
+from app.services.fixture_config import (
+    DEFAULT_FIXTURE_CONFIG,
+    FixtureConfig,
+    load_fixture_config,
+)
 from app.services.pairing_solver import solve_round_with_fallback
+from app.services.rating_regime import (
+    REGIME_DEVELOPING,
+    detect_pool_regime,
+    regime_thresholds,
+)
 from app.services.rematch_policy import RematchContext
 from app.services.session_scheduler import schedule_round
+
+
+def _safe_load_fixture_config() -> FixtureConfig:
+    """
+    Defensive loader: never raise into the engine — fall back to defaults if
+    the DB layer is unavailable (matches the existing pattern in
+    rating_math._load_config and keeps the engine usable in unit-tests).
+    """
+    try:
+        return load_fixture_config()
+    except Exception:
+        return DEFAULT_FIXTURE_CONFIG
 
 
 def _build_rematch_context(
@@ -88,21 +110,88 @@ _SMALL_SESSION_PLAYER_COUNT = 6
 
 # ── Phase detection ───────────────────────────────────────────────────────────
 
-def detect_phase(players: list[dict]) -> str:
-    """
-    Phase boundaries per docs/jlrs_fixtures_design and critique §18:
 
-      DISCOVERY  : spread ≤ 100
-      TRANSITION : 100 < spread ≤ 250
-      STANDARD   : spread > 250
+def _percentile(values: list[float], p: float) -> float:
+    """
+    Linear-interpolation percentile (numpy-free). p ∈ [0, 100]. Returns the
+    sorted-position p-percentile of `values`. Used for core_spread (critique §7).
+    """
+    if not values:
+        return 0.0
+    if len(values) == 1:
+        return values[0]
+    s = sorted(values)
+    k = (len(s) - 1) * (p / 100.0)
+    lo = math.floor(k)
+    hi = math.ceil(k)
+    if lo == hi:
+        return s[int(k)]
+    frac = k - lo
+    return s[lo] + (s[hi] - s[lo]) * frac
+
+
+def detect_phase(
+    players: list[dict],
+    *,
+    cfg: FixtureConfig | None = None,
+) -> str:
+    """
+    Robust phase detection (critique §7 + §18).
+
+    Hierarchy of signals:
+      1. If a majority of players are provisional / low-maturity → DISCOVERY.
+         The pool is too noisy to support standard-tier logic regardless of
+         spread.
+      2. Otherwise compute core_spread = P90(rating) - P10(rating) and apply
+         the design boundaries (≤ discovery_spread_max → DISCOVERY,
+         ≤ transition_spread_max → TRANSITION, else STANDARD).
+
+    Falling back to raw max-min spread (critique §7) is brittle because a single
+    outlier can drag the whole session into STANDARD. P90/P10 gives a more
+    representative "core" picture.
+
+    Optional `cfg` arg lets tests inject custom thresholds; production callers
+    use the cached system_configuration view via _safe_load_fixture_config().
     """
     if len(players) < 2:
         return "DISCOVERY"
-    ratings = [float(p["current_rating"]) for p in players]
-    spread = max(ratings) - min(ratings)
-    if spread <= 100:
+
+    fcfg = cfg or _safe_load_fixture_config()
+
+    # Provisional-majority check (critique §7). Players carrying explicit
+    # `is_provisional` get counted; otherwise we infer from total-match evidence
+    # if present, else skip.
+    provisional_count = 0
+    classifiable = 0
+    for p in players:
+        if "is_provisional" in p:
+            provisional_count += 1 if bool(p["is_provisional"]) else 0
+            classifiable += 1
+            continue
+        total = p.get("rated_matches_completed")
+        virtual = p.get("virtual_matches", 0) or 0
+        if total is not None:
+            classifiable += 1
+            if int(total) + int(virtual) < 5:
+                provisional_count += 1
+    if classifiable > 0 and (provisional_count / classifiable) >= fcfg.provisional_majority_threshold:
         return "DISCOVERY"
-    if spread <= 250:
+
+    ratings = [float(p["current_rating"]) for p in players]
+    # P90-P10 is only meaningful with a sample large enough to have non-trivial
+    # tails. For small pools (< 10 players) we fall back to raw max-min spread
+    # so the design boundaries from critique §18 still apply cleanly. The
+    # outlier-robustness benefit (critique §7) shows up in larger pools.
+    if len(ratings) < 10:
+        spread = max(ratings) - min(ratings)
+    else:
+        spread = _percentile(ratings, fcfg.core_spread_p_high) - _percentile(
+            ratings, fcfg.core_spread_p_low
+        )
+
+    if spread <= fcfg.discovery_spread_max:
+        return "DISCOVERY"
+    if spread <= fcfg.transition_spread_max:
         return "TRANSITION"
     return "STANDARD"
 

@@ -1580,6 +1580,48 @@ def test_discovery_deterministic_ordering_independent_of_input_order():
 
 # ── Universal generator-level invariant sweep ─────────────────────────────────
 
+# ── Phase 5: robust phase detection (critique §7) ────────────────────────────
+
+def test_detect_phase_outlier_does_not_force_standard():
+    """
+    Critique §7: one rating outlier must not push the whole session into
+    STANDARD when the core pool is tightly clustered. Robust detection uses
+    P90-P10, not raw max-min.
+    """
+    # 9 players clustered around 1000 ± 30, one extreme outlier at 1500.
+    # Raw max-min = 530 → STANDARD under the old logic.
+    # P90-P10 of [970..1030] is ~60 → DISCOVERY.
+    players = (
+        [{"player_id": f"core{i}", "current_rating": 1000.0 + i * 7} for i in range(9)]
+        + [{"player_id": "outlier", "current_rating": 1500.0}]
+    )
+    assert detect_phase(players) == "DISCOVERY"
+
+
+def test_detect_phase_provisional_majority_forces_discovery():
+    """
+    Critique §7: when most players are provisional, the rating spread is too
+    noisy to support tiered/standard pairing — force DISCOVERY.
+    """
+    players = [
+        {"player_id": f"p{i}", "current_rating": 1000.0 + i * 50, "is_provisional": True}
+        for i in range(6)
+    ]
+    # Spread = 250 normally → TRANSITION, but provisional majority overrides.
+    assert detect_phase(players) == "DISCOVERY"
+
+
+def test_detect_phase_mature_pool_uses_core_spread():
+    """
+    Mature pool with wide P90-P10 core spread still reaches STANDARD.
+    """
+    players = [
+        {"player_id": f"p{i}", "current_rating": 900.0 + i * 50, "rated_matches_completed": 50}
+        for i in range(15)
+    ]  # P90-P10 ~ 580 → STANDARD
+    assert detect_phase(players) == "STANDARD"
+
+
 # ── Phase 3 multi-wave numbering ──────────────────────────────────────────────
 
 def test_multi_wave_unique_numbering_three_plus_waves():

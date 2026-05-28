@@ -29,7 +29,28 @@ later phase.
 import math
 from typing import Optional
 
+from app.services.pairing_solver import solve_round_with_fallback
+from app.services.rematch_policy import RematchContext
 from app.services.session_scheduler import schedule_round
+
+
+def _build_rematch_context(
+    recent_match_pairs: set[tuple],
+    session_pairs: set[tuple],
+    recent_match_counts: Optional[dict] = None,
+) -> RematchContext:
+    """
+    Compose the rematch context for the pairing solver. The caller can pass
+    actual occurrence counts via `recent_match_counts`; if only a set is
+    available, every pair is treated as one prior meeting (the legacy contract).
+    """
+    counts = dict(recent_match_counts) if recent_match_counts else {}
+    for pair in recent_match_pairs:
+        counts.setdefault(pair, 1)
+    return RematchContext(
+        recent_match_counts=counts,
+        session_pairs=frozenset(session_pairs),
+    )
 
 # Match duration in minutes (not including 5-min changeover)
 _MATCH_DURATION = {"BEST_OF_3": 20, "BEST_OF_5": 30, "BEST_OF_7": 40}
@@ -567,57 +588,27 @@ def generate_standard_fixtures(
             rot = bye_rotation % len(leftovers)
             leftovers = leftovers[rot:] + leftovers[:rot]
 
-        # Critique §3: pair leftovers by rating proximity rather than by list
-        # order. Apply a soft rematch-avoidance preference (two-pass): first try
-        # partners not in recent_match_pairs ∪ session_pairs; only if no such
-        # partner exists within _MAX_EXCEPTION_GAP do we fall back to a recent
-        # one. Gaps > _MAX_EXCEPTION_GAP convert to BYE so the rating engine
-        # never sees a non-eligible pairing. _build_slot labels gaps in
-        # (_STRETCH_MAX, _MAX_EXCEPTION_GAP] as gap_band=OUT_OF_BAND.
-        leftover_pids = sorted(
-            leftovers, key=lambda pid: float(players_by_id[pid]["current_rating"]),
-            reverse=True,
+        # Critique §3 + §17: pair leftovers via the constrained-matching solver.
+        # The solver minimizes a cost that combines rating gap + rematch harm +
+        # out-of-band penalty, runs maximum-cardinality matching, then falls
+        # back to "least-harmful rematch" only for leftovers the strict pass
+        # couldn't place (the hard rematch cap is relaxed in the fallback pass
+        # rather than allowing strategy-contract violations).
+        # _build_slot labels gaps in (_STRETCH_MAX, _MAX_EXCEPTION_GAP] as
+        # gap_band=OUT_OF_BAND so operators see exception pairings explicitly.
+        rematch_ctx = _build_rematch_context(recent_match_pairs, session_pairs)
+        solver_pairs, solver_byes = solve_round_with_fallback(
+            leftovers,
+            gap_fn=lambda a, b: _gap(players_by_id, a, b),
+            max_gap=_MAX_EXCEPTION_GAP,
+            rematch_ctx=rematch_ctx,
+            rematch_phase="STANDARD",
+            competitive_max=_COMPETITIVE_MAX,
+            stretch_max=_STRETCH_MAX,
         )
-        soft_exclude = recent_match_pairs | session_pairs
-        used: set[str] = set()
-        for i, pid_a in enumerate(leftover_pids):
-            if pid_a in used:
-                continue
-            # Pass 1: closest partner that is NOT a recent rematch.
-            best_partner: str | None = None
-            best_gap: float = float("inf")
-            for pid_b in leftover_pids[i + 1:]:
-                if pid_b in used:
-                    continue
-                if _canonical(pid_a, pid_b) in soft_exclude:
-                    continue
-                g = _gap(players_by_id, pid_a, pid_b)
-                if g < best_gap:
-                    best_gap = g
-                    best_partner = pid_b
-            # Pass 2 (fallback): no non-rematch within reach → allow recent.
-            if best_partner is None or best_gap > _MAX_EXCEPTION_GAP:
-                fb_partner: str | None = None
-                fb_gap = float("inf")
-                for pid_b in leftover_pids[i + 1:]:
-                    if pid_b in used:
-                        continue
-                    g = _gap(players_by_id, pid_a, pid_b)
-                    if g < fb_gap:
-                        fb_gap = g
-                        fb_partner = pid_b
-                if fb_partner is not None and fb_gap <= _MAX_EXCEPTION_GAP and (
-                    best_partner is None or fb_gap < best_gap
-                ):
-                    best_partner, best_gap = fb_partner, fb_gap
-            if best_partner is not None and best_gap <= _MAX_EXCEPTION_GAP:
-                pairs.append((pid_a, best_partner))
-                used.add(pid_a)
-                used.add(best_partner)
-            else:
-                # No acceptable opponent within the exception cap → BYE.
-                pairs.append((pid_a, None))
-                used.add(pid_a)
+        pairs.extend(solver_pairs)
+        for pid in solver_byes:
+            pairs.append((pid, None))
 
         return pairs
 
@@ -713,38 +704,29 @@ def generate_standard_fixtures(
         if is_stretch:
             pairs = stretch_pairs(priority_pid=last_bye_pid, extra_exclude=session_pairs)
 
-            # Critique §3 + §6: any player still unpaired after the strict
-            # 100–250 sweep gets matched to their nearest available partner via
-            # rating-proximity nearest-neighbor. Pairings whose gap exceeds
-            # _MAX_EXCEPTION_GAP fall back to BYE rather than create matches
-            # the rating engine would reject. _build_slot will label gaps in
-            # (_STRETCH_MAX, _MAX_EXCEPTION_GAP] as gap_band=OUT_OF_BAND.
+            # Critique §3 + §6 + §17: any player still unpaired after the
+            # strict 100–250 stretch sweep is handed to the constrained-matching
+            # solver. The solver respects _MAX_EXCEPTION_GAP, applies the
+            # rematch harm penalty + out-of-band penalty, and falls back to
+            # least-harmful rematch only when no clean alternative exists.
             paired_ids = {pid for pair in pairs for pid in pair if pid is not None}
             unpaired = [pid for pid in pids if pid not in paired_ids]
-            unpaired.sort(
-                key=lambda pid: float(players_by_id[pid]["current_rating"]),
-                reverse=True,
-            )
-            used: set[str] = set()
-            for i, pid_a in enumerate(unpaired):
-                if pid_a in used:
-                    continue
-                best_partner: str | None = None
-                best_gap = float("inf")
-                for pid_b in unpaired[i + 1:]:
-                    if pid_b in used:
-                        continue
-                    g = _gap(players_by_id, pid_a, pid_b)
-                    if g < best_gap:
-                        best_gap = g
-                        best_partner = pid_b
-                if best_partner is not None and best_gap <= _MAX_EXCEPTION_GAP:
-                    pairs.append(_canonical(pid_a, best_partner))
-                    used.add(pid_a)
-                    used.add(best_partner)
-                else:
-                    pairs.append((pid_a, None))
-                    used.add(pid_a)
+            if unpaired:
+                rematch_ctx = _build_rematch_context(
+                    recent_match_pairs, session_pairs,
+                )
+                solver_pairs, solver_byes = solve_round_with_fallback(
+                    unpaired,
+                    gap_fn=lambda a, b: _gap(players_by_id, a, b),
+                    max_gap=_MAX_EXCEPTION_GAP,
+                    rematch_ctx=rematch_ctx,
+                    rematch_phase="STANDARD",
+                    competitive_max=_COMPETITIVE_MAX,
+                    stretch_max=_STRETCH_MAX,
+                )
+                pairs.extend(solver_pairs)
+                for pid in solver_byes:
+                    pairs.append((pid, None))
 
             slots.extend(_assign_tables(
                 pairs, num_tables, round_number, _INTENT_DEVELOPMENTAL, players_by_id

@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS event_fixture_slot (
     slot_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     event_id            UUID NOT NULL REFERENCES event(event_id) ON DELETE CASCADE,
     round_number        INT NOT NULL,
+    wave_number         INT NOT NULL DEFAULT 1, -- numeric multi-wave scheduling (Phase 3)
     table_number        INT NOT NULL DEFAULT 1,
     -- Round-level intent and per-slot semantics (critique §2).
     round_intent        round_intent NOT NULL DEFAULT 'COMPETITIVE',
@@ -34,7 +35,7 @@ CREATE TABLE IF NOT EXISTS event_fixture_slot (
     match_id            UUID,  -- FK to match added later to avoid circular dependency
     created_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT uq_event_fixture_slot_round_table UNIQUE (event_id, round_number, table_number)
+    CONSTRAINT uq_event_fixture_slot_round_wave_table UNIQUE (event_id, round_number, wave_number, table_number)
 );
 
 CREATE INDEX IF NOT EXISTS idx_event_fixture_slot_event ON event_fixture_slot(event_id, round_number);

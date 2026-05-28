@@ -307,11 +307,12 @@ def generate_event_fixtures(
                 (event_id,),
             )
 
-            # Generate fixtures
+            # Generate fixtures. num_tables drives the wave scheduler (Phase 3).
             result = generate_league_fixtures(
                 players_by_academy=players_by_academy,
                 played_pairs=played_pairs,
                 strategy=body.fixture_strategy,
+                num_tables=body.num_tables,
             )
 
             # Persist fixture slots
@@ -323,24 +324,24 @@ def generate_event_fixtures(
                 cur.execute(
                     """
                     INSERT INTO event_fixture_slot (
-                        slot_id, event_id, round_number, table_number,
+                        slot_id, event_id, round_number, wave_number, table_number,
                         round_intent, gap_band, player_a_role, player_b_role,
                         match_category, player_a_id, player_b_id,
                         expected_rating_gap, status, fixture_strategy
                     ) VALUES (
-                        %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s,
                         %s, %s, %s, %s,
                         %s, %s, %s,
                         %s, %s, %s
                     )
-                    RETURNING slot_id::text, round_number, table_number,
+                    RETURNING slot_id::text, round_number, wave_number, table_number,
                               round_intent, gap_band, player_a_role, player_b_role,
                               match_category, player_a_id::text, player_b_id::text,
                               expected_rating_gap, status, match_id, fixture_strategy
                     """,
                     (
                         slot_id, event_id,
-                        slot["round_number"], slot["table_number"],
+                        slot["round_number"], slot["wave_number"], slot["table_number"],
                         slot["round_intent"], slot["gap_band"],
                         slot["player_a_role"], slot["player_b_role"],
                         slot["match_category"],
@@ -380,7 +381,7 @@ def get_event_fixtures(event_id: str, _: dict = _ANY):
 
             cur.execute(
                 """
-                SELECT efs.slot_id::text, efs.round_number, efs.table_number,
+                SELECT efs.slot_id::text, efs.round_number, efs.wave_number, efs.table_number,
                        efs.round_intent, efs.gap_band,
                        efs.player_a_role, efs.player_b_role,
                        efs.match_category, efs.expected_rating_gap, efs.status,
@@ -399,7 +400,7 @@ def get_event_fixtures(event_id: str, _: dict = _ANY):
                 LEFT JOIN player pb ON pb.player_id = efs.player_b_id
                 LEFT JOIN academy ab ON ab.academy_id = pb.primary_academy_id
                 WHERE efs.event_id = %s
-                ORDER BY efs.round_number, efs.table_number
+                ORDER BY efs.round_number, efs.wave_number, efs.table_number
                 """,
                 (event_id,),
             )
@@ -417,6 +418,7 @@ def get_event_fixtures(event_id: str, _: dict = _ANY):
         EventFixtureSlotResponse(
             slot_id=r["slot_id"],
             round_number=r["round_number"],
+            wave_number=r["wave_number"],
             table_number=r["table_number"],
             round_intent=r["round_intent"],
             gap_band=r["gap_band"],
@@ -605,6 +607,7 @@ def _build_slot_responses(
             EventFixtureSlotResponse(
                 slot_id=sr["slot_id"],
                 round_number=sr["round_number"],
+                wave_number=sr["wave_number"],
                 table_number=sr["table_number"],
                 round_intent=sr["round_intent"],
                 gap_band=sr["gap_band"],

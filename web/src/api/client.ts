@@ -416,6 +416,7 @@ export interface EventFixturePlayer {
 export interface EventFixtureSlot {
   slot_id: string
   round_number: number
+  wave_number: number  // numeric multi-wave scheduling (Phase 3)
   table_number: number
   // Critique §2 additive fields. See app/services/fixture_engine.py for semantics.
   round_intent: string
@@ -528,7 +529,8 @@ export interface FixturePlayer {
 export interface FixtureSlot {
   slot_id: string
   round_number: number
-  sub_round: string | null
+  wave_number: number  // numeric multi-wave scheduling (Phase 3)
+  sub_round: string | null  // legacy display label
   table_number: number
   // Critique §2 additive fields. See app/services/fixture_engine.py for semantics.
   round_intent: string

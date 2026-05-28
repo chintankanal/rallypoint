@@ -156,6 +156,7 @@ class EventFixturePlayer(BaseModel):
 class EventFixtureSlotResponse(BaseModel):
     slot_id: str
     round_number: int
+    wave_number: int  # numeric multi-wave scheduling (Phase 3)
     table_number: int
     # Critique §2 additive fields. See schemas/session.py for full semantics.
     round_intent: str

@@ -198,19 +198,24 @@ def generate_session_fixtures(
                 cur.execute(
                     """
                     INSERT INTO fixture_slot (
-                        slot_id, session_id, round_number, sub_round, table_number,
+                        slot_id, session_id, round_number, wave_number, sub_round, table_number,
                         round_intent, gap_band, player_a_role, player_b_role,
                         match_category, player_a_id, player_b_id,
                         expected_rating_gap, status
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    RETURNING slot_id, round_number, sub_round, table_number,
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s,
+                        %s, %s, %s,
+                        %s, %s
+                    )
+                    RETURNING slot_id, round_number, wave_number, sub_round, table_number,
                               round_intent, gap_band, player_a_role, player_b_role,
                               match_category, player_a_id::text, player_b_id::text,
                               expected_rating_gap, status, match_id
                     """,
                     (
                         slot_id, session_id,
-                        slot["round_number"], slot["sub_round"], slot["table_number"],
+                        slot["round_number"], slot["wave_number"], slot["sub_round"], slot["table_number"],
                         slot["round_intent"], slot["gap_band"],
                         slot["player_a_role"], slot["player_b_role"],
                         slot["match_category"], slot["player_a_id"], slot["player_b_id"],
@@ -224,6 +229,7 @@ def generate_session_fixtures(
         FixtureSlotResponse(
             slot_id=str(sr["slot_id"]),
             round_number=sr["round_number"],
+            wave_number=sr["wave_number"],
             sub_round=sr["sub_round"],
             table_number=sr["table_number"],
             round_intent=sr["round_intent"],
@@ -261,7 +267,7 @@ def get_session_fixtures(session_id: str, _: dict = _ANY):
             cur.execute(
                 """
                 SELECT
-                    fs.slot_id, fs.round_number, fs.sub_round, fs.table_number,
+                    fs.slot_id, fs.round_number, fs.wave_number, fs.sub_round, fs.table_number,
                     fs.round_intent, fs.gap_band, fs.player_a_role, fs.player_b_role,
                     fs.match_category, fs.expected_rating_gap, fs.status, fs.match_id,
                     json_build_object(
@@ -288,7 +294,7 @@ def get_session_fixtures(session_id: str, _: dict = _ANY):
                 LEFT JOIN player pb ON pb.player_id = fs.player_b_id
                 LEFT JOIN match m ON m.match_id = fs.match_id
                 WHERE fs.session_id = %s
-                ORDER BY fs.round_number, fs.sub_round NULLS FIRST, fs.table_number
+                ORDER BY fs.round_number, fs.wave_number, fs.table_number
                 """,
                 (session_id,),
             )
@@ -298,6 +304,7 @@ def get_session_fixtures(session_id: str, _: dict = _ANY):
         FixtureSlotResponse(
             slot_id=str(s["slot_id"]),
             round_number=s["round_number"],
+            wave_number=s["wave_number"],
             sub_round=s["sub_round"],
             table_number=s["table_number"],
             round_intent=s["round_intent"],

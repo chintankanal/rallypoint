@@ -54,7 +54,8 @@ class GenerateFixturesRequest(BaseModel):
 class FixtureSlotResponse(BaseModel):
     slot_id: str
     round_number: int
-    sub_round: str | None
+    wave_number: int  # numeric multi-wave scheduling (Phase 3)
+    sub_round: str | None  # legacy display label, derived from wave_number for 2-wave rounds
     table_number: int
     # Critique §2 additive fields. round_intent is the round-level intent;
     # gap_band is per-slot and derived from the actual rating gap; the role

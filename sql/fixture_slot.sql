@@ -43,7 +43,8 @@ CREATE TABLE IF NOT EXISTS fixture_slot (
     slot_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     session_id UUID REFERENCES session(session_id) NOT NULL,
     round_number INTEGER NOT NULL,
-    sub_round VARCHAR(1), -- A / B, Nullable. To be superseded by a numeric wave column in Phase 3.
+    wave_number INTEGER NOT NULL DEFAULT 1, -- numeric multi-wave scheduling (Phase 3)
+    sub_round VARCHAR(1), -- legacy A / B display label, derived from wave_number for 2-wave rounds.
     table_number INTEGER NOT NULL,
     -- Round-level intent and per-slot semantics (critique §2).
     round_intent round_intent NOT NULL DEFAULT 'COMPETITIVE',
@@ -61,7 +62,7 @@ CREATE TABLE IF NOT EXISTS fixture_slot (
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT uq_fixture_slot_session_round_table UNIQUE (session_id, round_number, sub_round, table_number)
+    CONSTRAINT uq_fixture_slot_session_round_wave_table UNIQUE (session_id, round_number, wave_number, table_number)
 );
 
 CREATE INDEX IF NOT EXISTS idx_fixture_slot_band ON fixture_slot(gap_band);

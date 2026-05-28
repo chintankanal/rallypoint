@@ -29,6 +29,8 @@ later phase.
 import math
 from typing import Optional
 
+from app.services.session_scheduler import schedule_round
+
 # Match duration in minutes (not including 5-min changeover)
 _MATCH_DURATION = {"BEST_OF_3": 20, "BEST_OF_5": 30, "BEST_OF_7": 40}
 _CHANGEOVER = 5
@@ -114,10 +116,15 @@ def calculate_session_capacity(
     matches_per_player = min(4, math.floor(total_slots * 2 / num_players)) if num_players > 0 else 0
     pairs_per_round = num_players // 2  # integer div handles odd counts (BYE slot)
     num_rounds = min(4, math.floor(total_slots / pairs_per_round)) if pairs_per_round > 0 else 0
+    # Critique §13: matches_per_player is best-effort — actual participation
+    # may differ due to BYEs, odd pools, and strategy-specific exceptions.
+    # Expose an explicit *_estimate alias and document the legacy field as the
+    # same value for compatibility.
     return {
         "matches_per_table": matches_per_table,
         "total_slots": total_slots,
         "matches_per_player": matches_per_player,
+        "matches_per_player_estimate": matches_per_player,
         "num_rounds": num_rounds,
     }
 
@@ -184,6 +191,7 @@ def _derive_roles(
 def _build_slot(
     *,
     round_number: int,
+    wave_number: int,
     table_number: int,
     sub_round: str | None,
     round_intent: str,
@@ -194,8 +202,9 @@ def _build_slot(
 ) -> dict:
     """
     Construct a fully-populated slot dict including additive fields
-    (round_intent, gap_band, player_a_role, player_b_role) and the legacy
-    match_category for compatibility with downstream consumers.
+    (round_intent, gap_band, player_a_role, player_b_role, wave_number) and
+    the legacy match_category / sub_round for compatibility with downstream
+    consumers.
 
     All slot construction in this module must flow through this helper so the
     invariants in tests/unit/test_fixture_engine.py (Phase 1) stay enforced.
@@ -203,6 +212,7 @@ def _build_slot(
     if player_b_id is None:
         return {
             "round_number": round_number,
+            "wave_number": wave_number,
             "sub_round": sub_round,
             "table_number": table_number,
             "round_intent": round_intent,
@@ -222,6 +232,7 @@ def _build_slot(
     role_a, role_b = _derive_roles(round_intent, band, players_by_id, canon_a, canon_b)
     return {
         "round_number": round_number,
+        "wave_number": wave_number,
         "sub_round": sub_round,
         "table_number": table_number,
         "round_intent": round_intent,
@@ -247,49 +258,39 @@ def _assign_tables(
     strategy: str = "TIER_MATCHED",
 ) -> list[dict]:
     """
-    Assign pairs to tables. If more pairs than tables, split into sub-rounds A/B
-    (a multi-wave numeric scheduler is on the Phase 3 roadmap; until then sub_round
-    remains the 2-wave A/B label for the intra-academy DDL).
+    Assign pairs to (wave_number, table_number) via the session scheduler.
+    More pairs than tables → 2+ waves with numeric wave_number; the legacy
+    A/B sub_round display label is derived for 2-wave rounds.
 
     `round_intent` is the round-level COMPETITIVE / DEVELOPMENTAL label; the
     per-slot gap_band is derived inside _build_slot from the actual rating gap.
     """
-    slots: list[dict] = []
-    if not pairs:
-        return slots
-
-    needs_subrounds = len(pairs) > num_tables
-
-    for i, (pid_a, pid_b) in enumerate(pairs):
-        sub = ("A" if i < num_tables else "B") if needs_subrounds else None
-        table = (i % num_tables) + 1
-        if pid_a is None and pid_b is None:
-            # Defensive: never emit a fully-empty slot.
+    # Filter out fully-empty pairs defensively before scheduling.
+    cleaned: list[tuple] = []
+    for pa, pb in pairs:
+        if pa is None and pb is None:
             continue
-        if pid_a is None or pid_b is None:
-            active_id = pid_a if pid_a is not None else pid_b
-            slots.append(_build_slot(
-                round_number=round_number,
-                table_number=table,
-                sub_round=sub,
-                round_intent=round_intent,
-                players_by_id=players_by_id,
-                player_a_id=active_id,
-                player_b_id=None,
-                fixture_strategy=strategy,
-            ))
-            continue
-        slots.append(_build_slot(
+        if pa is None:
+            cleaned.append((pb, None))
+        else:
+            cleaned.append((pa, pb))
+    if not cleaned:
+        return []
+
+    def _to_slot(pid_a, pid_b, wave_number, table_number, sub_round):
+        return _build_slot(
             round_number=round_number,
-            table_number=table,
-            sub_round=sub,
+            wave_number=wave_number,
+            table_number=table_number,
+            sub_round=sub_round,
             round_intent=round_intent,
             players_by_id=players_by_id,
             player_a_id=pid_a,
             player_b_id=pid_b,
             fixture_strategy=strategy,
-        ))
-    return slots
+        )
+
+    return schedule_round(cleaned, num_tables, _to_slot)
 
 
 # ── Phase A: Discovery (circle-method round-robin) ────────────────────────────
@@ -951,43 +952,41 @@ def _assign_tables_league(
     players_by_id: dict,
     strategy: str,
     round_intent: str = _INTENT_COMPETITIVE,
+    num_tables: int = 9999,
 ) -> list[dict]:
     """
-    Assign league pairs to sequential table numbers within a round. Each slot
-    carries the additive fields (round_intent, gap_band, roles) derived by
-    _build_slot. The inter-academy engine doesn't yet model physical table
-    contention or sub-rounds — that arrives in Phase 3 with the multi-wave
-    scheduler split.
+    Schedule league pairs into (wave_number, table_number) via the session
+    scheduler so inter-academy events respect physical table capacity. The
+    default num_tables=9999 preserves the prior single-wave behavior for any
+    caller that doesn't yet pass a capacity (Phase 3 critique §11 transition).
+    Each slot carries the additive fields (round_intent, gap_band, roles)
+    derived by _build_slot.
     """
-    slots: list[dict] = []
-    for i, (pid_a, pid_b) in enumerate(pairs):
-        table = i + 1  # sequential match number within the round
-        if pid_a is None and pid_b is None:
+    cleaned: list[tuple] = []
+    for pa, pb in pairs:
+        if pa is None and pb is None:
             continue
-        if pid_a is None or pid_b is None:
-            active_id = pid_a if pid_a is not None else pid_b
-            slots.append(_build_slot(
-                round_number=round_number,
-                table_number=table,
-                sub_round=None,
-                round_intent=round_intent,
-                players_by_id=players_by_id,
-                player_a_id=active_id,
-                player_b_id=None,
-                fixture_strategy=strategy,
-            ))
-            continue
-        slots.append(_build_slot(
+        if pa is None:
+            cleaned.append((pb, None))
+        else:
+            cleaned.append((pa, pb))
+    if not cleaned:
+        return []
+
+    def _to_slot(pid_a, pid_b, wave_number, table_number, sub_round):
+        return _build_slot(
             round_number=round_number,
-            table_number=table,
-            sub_round=None,
+            wave_number=wave_number,
+            table_number=table_number,
+            sub_round=sub_round,
             round_intent=round_intent,
             players_by_id=players_by_id,
             player_a_id=pid_a,
             player_b_id=pid_b,
             fixture_strategy=strategy,
-        ))
-    return slots
+        )
+
+    return schedule_round(cleaned, num_tables, _to_slot)
 
 
 def _run_circle_round_robin(
@@ -996,11 +995,13 @@ def _run_circle_round_robin(
     played_pairs: set[tuple],
     strategy: str,
     round_offset: int = 0,
+    num_tables: int = 9999,
 ) -> tuple[list[dict], int, int]:
     """
     Full circle-method round-robin on a (possibly BYE-padded) pid list.
     Returns (slots, cross_count, real_count).
     round_offset shifts round numbers so tiers can share a sequential counter.
+    num_tables controls wave scheduling in _assign_tables_league.
     """
     total_rounds = len(pids) - 1
     slots: list[dict] = []
@@ -1015,7 +1016,8 @@ def _run_circle_round_robin(
         all_pairs = real_pairs + bye_pairs
 
         round_slots = _assign_tables_league(
-            all_pairs, round_offset + round_idx + 1, players_by_id, strategy
+            all_pairs, round_offset + round_idx + 1, players_by_id, strategy,
+            num_tables=num_tables,
         )
         for slot in round_slots:
             if slot["player_b_id"] is not None:
@@ -1027,7 +1029,9 @@ def _run_circle_round_robin(
     return slots, cross_count, real_count
 
 
-def _full_round_robin(players_by_academy: dict, played_pairs: set[tuple]) -> dict:
+def _full_round_robin(
+    players_by_academy: dict, played_pairs: set[tuple], num_tables: int = 9999,
+) -> dict:
     """
     Option 1: Every player plays every other player exactly once.
     Circle method with academy interleaving to maximise cross-academy pairings.
@@ -1043,7 +1047,7 @@ def _full_round_robin(players_by_academy: dict, played_pairs: set[tuple]) -> dic
         pids = pids + [None]
 
     slots, cross_count, real_count = _run_circle_round_robin(
-        players_by_id, pids, played_pairs, "FULL_ROUND_ROBIN"
+        players_by_id, pids, played_pairs, "FULL_ROUND_ROBIN", num_tables=num_tables,
     )
     total_rounds = len(pids) - 1
     cross_pct = round(cross_count / real_count * 100, 1) if real_count > 0 else 0.0
@@ -1125,6 +1129,7 @@ def _circle_matching_no_same_academy(
     played_pairs: set[tuple],
     strategy: str,
     round_offset: int,
+    num_tables: int = 9999,
 ) -> tuple[list[dict], int, int, int]:
     """
     Run the circle method over interleaved players, but enforce the
@@ -1139,18 +1144,11 @@ def _circle_matching_no_same_academy(
     pids: list = [p["player_id"] for p in interleaved]
     if len(pids) < 2:
         # Degenerate group — emit BYE per player so they aren't silent-dropped.
-        slots: list[dict] = []
-        for i, p in enumerate(interleaved):
-            slots.append(_build_slot(
-                round_number=round_offset + 1,
-                table_number=i + 1,
-                sub_round=None,
-                round_intent=_INTENT_COMPETITIVE,
-                players_by_id=players_by_id_local,
-                player_a_id=p["player_id"],
-                player_b_id=None,
-                fixture_strategy=strategy,
-            ))
+        bye_pairs = [(p["player_id"], None) for p in interleaved]
+        slots = _assign_tables_league(
+            bye_pairs, round_offset + 1, players_by_id_local, strategy,
+            num_tables=num_tables,
+        )
         return slots, 1 if interleaved else 0, 0, 0
     if len(pids) % 2 == 1:
         pids = pids + [None]
@@ -1163,27 +1161,28 @@ def _circle_matching_no_same_academy(
     for round_idx in range(total_rounds):
         raw_pairs = _circle_pairs_for_ids(pids, round_idx)
         cross_pairs: list[tuple] = []
-        bye_pairs: list[tuple] = []
+        bye_pairs_round: list[tuple] = []
         for a, b in raw_pairs:
             if a is None or b is None:
-                bye_pairs.append((a if a is not None else b, None))
+                bye_pairs_round.append((a if a is not None else b, None))
                 continue
             acad_a = players_by_id_local[a]["academy_id"]
             acad_b = players_by_id_local[b]["academy_id"]
             if acad_a == acad_b:
                 # Critique #5: TIER_MATCHED with ≥2 academies in a tier must
                 # not emit intra-academy pairs. Convert to BYEs.
-                bye_pairs.append((a, None))
-                bye_pairs.append((b, None))
+                bye_pairs_round.append((a, None))
+                bye_pairs_round.append((b, None))
             else:
                 cross_pairs.append((a, b))
 
         cross_pairs = _swap_for_novelty_constrained(
             cross_pairs, played_pairs, players_by_id_local
         )
-        all_pairs = cross_pairs + bye_pairs
+        all_pairs = cross_pairs + bye_pairs_round
         round_slots = _assign_tables_league(
             all_pairs, round_offset + round_idx + 1, players_by_id_local, strategy,
+            num_tables=num_tables,
         )
         for slot in round_slots:
             if slot["player_b_id"] is not None:
@@ -1196,7 +1195,9 @@ def _circle_matching_no_same_academy(
     return slots, total_rounds, cross_count, real_count
 
 
-def _tier_matched(players_by_academy: dict, played_pairs: set[tuple]) -> dict:
+def _tier_matched(
+    players_by_academy: dict, played_pairs: set[tuple], num_tables: int = 9999,
+) -> dict:
     """
     Option 2 (default): players grouped by rating tier, then cross-academy
     matching within each tier. Same-academy pairs are forbidden when the
@@ -1238,6 +1239,7 @@ def _tier_matched(players_by_academy: dict, played_pairs: set[tuple]) -> dict:
 
         tier_slots, tier_rounds, tc, rc = _circle_matching_no_same_academy(
             interleaved, played_pairs, "TIER_MATCHED", rounds_emitted,
+            num_tables=num_tables,
         )
         all_slots.extend(tier_slots)
         cross_count += tc
@@ -1248,7 +1250,9 @@ def _tier_matched(players_by_academy: dict, played_pairs: set[tuple]) -> dict:
     return {"total_rounds": rounds_emitted, "cross_academy_pct": cross_pct, "slots": all_slots}
 
 
-def _cross_academy_only(players_by_academy: dict, played_pairs: set[tuple]) -> dict:
+def _cross_academy_only(
+    players_by_academy: dict, played_pairs: set[tuple], num_tables: int = 9999,
+) -> dict:
     """
     Option 3: Circle method, but intra-academy pairs are replaced with BYEs.
     Every scheduled match is guaranteed to be cross-academy.
@@ -1290,7 +1294,8 @@ def _cross_academy_only(players_by_academy: dict, played_pairs: set[tuple]) -> d
         all_pairs = cross_pairs + bye_pairs
 
         round_slots = _assign_tables_league(
-            all_pairs, round_idx + 1, players_by_id, "CROSS_ACADEMY_ONLY"
+            all_pairs, round_idx + 1, players_by_id, "CROSS_ACADEMY_ONLY",
+            num_tables=num_tables,
         )
         for slot in round_slots:
             if slot["player_b_id"] is not None:
@@ -1302,12 +1307,15 @@ def _cross_academy_only(players_by_academy: dict, played_pairs: set[tuple]) -> d
     return {"total_rounds": total_rounds, "cross_academy_pct": cross_pct, "slots": slots}
 
 
-def _team_format(players_by_academy: dict, _played_pairs: set[tuple]) -> dict:
+def _team_format(
+    players_by_academy: dict, _played_pairs: set[tuple], num_tables: int = 9999,
+) -> dict:
     """
     Option 4: Structured as Academy A vs Academy B, A vs C, B vs C …
     Within each matchup, players are paired positionally by intra-academy rating rank
     (#1 vs #1, #2 vs #2, …). Unmatched positions (different academy sizes) get BYEs.
-    Each academy-pair matchup occupies one round number.
+    Each academy-pair matchup occupies one round number; pairs that exceed
+    num_tables are scheduled into additional waves of the same round.
     """
     sorted_academies: dict[str, list[dict]] = {
         aid: sorted(players, key=lambda p: float(p["current_rating"]), reverse=True)
@@ -1333,39 +1341,25 @@ def _team_format(players_by_academy: dict, _played_pairs: set[tuple]) -> dict:
             team_b = sorted_academies[aid_b]
             max_pos = max(len(team_a), len(team_b))
 
-            round_slots: list[dict] = []
+            # Build flat pairing list for this round (some entries are BYEs).
+            round_pairs: list[tuple] = []
             for pos in range(max_pos):
                 p_a = team_a[pos] if pos < len(team_a) else None
                 p_b = team_b[pos] if pos < len(team_b) else None
-
                 if p_a is None and p_b is None:
                     continue
                 if p_a is None or p_b is None:
                     present = p_a if p_a is not None else p_b
-                    round_slots.append(_build_slot(
-                        round_number=round_number,
-                        table_number=pos + 1,
-                        sub_round=None,
-                        round_intent=_INTENT_COMPETITIVE,
-                        players_by_id=players_by_id,
-                        player_a_id=present["player_id"],
-                        player_b_id=None,
-                        fixture_strategy="TEAM_FORMAT",
-                    ))
+                    round_pairs.append((present["player_id"], None))
                     continue
                 real_count += 1
                 cross_count += 1
-                round_slots.append(_build_slot(
-                    round_number=round_number,
-                    table_number=pos + 1,
-                    sub_round=None,
-                    round_intent=_INTENT_COMPETITIVE,
-                    players_by_id=players_by_id,
-                    player_a_id=p_a["player_id"],
-                    player_b_id=p_b["player_id"],
-                    fixture_strategy="TEAM_FORMAT",
-                ))
+                round_pairs.append((p_a["player_id"], p_b["player_id"]))
 
+            round_slots = _assign_tables_league(
+                round_pairs, round_number, players_by_id, "TEAM_FORMAT",
+                num_tables=num_tables,
+            )
             slots.extend(round_slots)
             round_number += 1
 
@@ -1381,6 +1375,7 @@ def generate_league_fixtures(
     players_by_academy: dict[str, list[dict]],
     played_pairs: set[tuple],
     strategy: str = "TIER_MATCHED",
+    num_tables: int = 9999,
 ) -> dict:
     """
     Generate inter-academy league fixtures using the selected strategy.
@@ -1398,6 +1393,9 @@ def generate_league_fixtures(
     players_by_academy: {academy_id: [player_dict, ...]} each sorted by rating desc.
       Each player_dict must have: player_id, name, current_rating, academy_id, academy_name.
     played_pairs: canonical (a, b) tuples from the immediately preceding league event.
+    num_tables: physical table capacity. When provided, pairs exceeding this
+      capacity are scheduled across multiple waves via session_scheduler
+      (critique §11). Default 9999 preserves the legacy single-wave behavior.
 
     Returns: {"total_rounds": int, "cross_academy_pct": float, "slots": list[dict]}
     """
@@ -1408,4 +1406,4 @@ def generate_league_fixtures(
         "TEAM_FORMAT": _team_format,
     }
     fn = dispatch.get(strategy, _tier_matched)
-    return fn(players_by_academy, played_pairs)
+    return fn(players_by_academy, played_pairs, num_tables=num_tables)

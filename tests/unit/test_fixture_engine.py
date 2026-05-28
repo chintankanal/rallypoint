@@ -1580,6 +1580,86 @@ def test_discovery_deterministic_ordering_independent_of_input_order():
 
 # ── Universal generator-level invariant sweep ─────────────────────────────────
 
+# ── Phase 3 multi-wave numbering ──────────────────────────────────────────────
+
+def test_multi_wave_unique_numbering_three_plus_waves():
+    """
+    Critique §11: when a round produces more pairs than tables * 1 wave, the
+    scheduler must emit distinct wave_numbers (1, 2, 3, ...) so the engine
+    supports N waves, not just A/B.
+    """
+    # 14 players, 2 tables → up to 7 pairs per round → at most 7 waves.
+    players = _make_players([1000.0] * 14)
+    slots = generate_discovery_fixtures(
+        players, round_offset=0, matches_per_player=1, num_tables=2,
+    )
+    by_round = _slots_by_round(slots)
+    assert by_round, "expected at least one round generated"
+    # Round 1 must have 7 pairs and therefore at least 3 distinct waves (>2 → numeric).
+    waves = sorted({s["wave_number"] for s in by_round[1]})
+    assert max(waves) >= 3, f"expected >=3 waves with 7 pairs over 2 tables, got {waves}"
+    # All slots in the same (round, wave) must use distinct table numbers.
+    by_wave: dict[tuple, list[int]] = {}
+    for s in by_round[1]:
+        by_wave.setdefault((s["round_number"], s["wave_number"]), []).append(s["table_number"])
+    for key, tbls in by_wave.items():
+        assert len(tbls) == len(set(tbls)), (
+            f"wave {key} has duplicate table assignments: {tbls}"
+        )
+
+
+def test_sub_round_legacy_label_only_for_two_wave_rounds():
+    """
+    sub_round is the legacy A/B display label. It must be set for 2-wave rounds
+    and None for 1-wave or 3+ wave rounds, so consumers either get the legacy
+    label or fall back to numeric wave_number.
+    """
+    # 8 players, 3 tables → 4 pairs per round → 2 waves.
+    p_2wave = _make_players([1000.0] * 8)
+    slots_2wave = generate_discovery_fixtures(
+        p_2wave, round_offset=0, matches_per_player=1, num_tables=3,
+    )
+    labels_2wave = {s["sub_round"] for s in slots_2wave}
+    assert labels_2wave == {"A", "B"}, (
+        f"expected 2-wave rounds to be labeled A/B, got {labels_2wave}"
+    )
+
+    # 8 players, 4 tables → 4 pairs per round → 1 wave.
+    slots_1wave = generate_discovery_fixtures(
+        p_2wave, round_offset=0, matches_per_player=1, num_tables=4,
+    )
+    labels_1wave = {s["sub_round"] for s in slots_1wave}
+    assert labels_1wave == {None}, (
+        f"expected 1-wave rounds to drop the A/B label, got {labels_1wave}"
+    )
+
+    # 14 players, 2 tables → 7 pairs per round → 4 waves → no A/B label.
+    p_4wave = _make_players([1000.0] * 14)
+    slots_4wave = generate_discovery_fixtures(
+        p_4wave, round_offset=0, matches_per_player=1, num_tables=2,
+    )
+    labels_4wave = {s["sub_round"] for s in slots_4wave}
+    assert labels_4wave == {None}, (
+        f"expected 3+-wave rounds to drop the A/B label, got {labels_4wave}"
+    )
+
+
+def test_table_number_bounded_by_num_tables():
+    """
+    table_number must always be in [1, num_tables]; overflow pairs go to a new
+    wave, not to phantom table numbers. (Replaces the prior behavior in the
+    inter-academy engine that emitted table_number = i + 1 sequentially.)
+    """
+    players = _make_players([1000.0] * 10)
+    slots = generate_discovery_fixtures(
+        players, round_offset=0, matches_per_player=1, num_tables=3,
+    )
+    for s in slots:
+        assert 1 <= s["table_number"] <= 3, (
+            f"table_number {s['table_number']} outside [1, 3] for slot {s}"
+        )
+
+
 @pytest.mark.parametrize("pool,tables", [
     (_flat_pool(8), 4),
     (_flat_pool(9), 4),

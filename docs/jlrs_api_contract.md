@@ -972,6 +972,17 @@ Roles: COACH of the host academy, ADMIN.
 
 Triggers the fixture generation algorithm. The system reads present players (from request body), determines the bootstrap phase, and writes FixtureSlot rows.
 
+> **Fixture-slot field model (Phase 2-3 redesign).** Every fixture slot now carries:
+>
+> - `round_intent` — round-level intent: `COMPETITIVE` or `DEVELOPMENTAL`.
+> - `gap_band` — per-slot derived from the actual rating gap: `COMPETITIVE`, `STRETCH`, `OUT_OF_BAND`, or `BYE`.
+> - `player_a_role` / `player_b_role` — `PEER`, `ANCHORING`, `STRETCHING`, or `BYE` (per [docs/fixture_engine_best_of_both_critique.md](/c:/rallypoint/docs/fixture_engine_best_of_both_critique.md) §2).
+> - `wave_number` — numeric multi-wave scheduling. `sub_round` is kept as a legacy A/B display label for 2-wave rounds.
+>
+> The `match_category` field is **deprecated** but still emitted (legacy compat). Consumers should migrate to `gap_band` + `player_*_role` for the richer per-slot semantics.
+
+The response now also includes a `warnings` array. Each warning is `{code, severity (INFO|WARN|ERROR), message, context}`; operators see them inline before publishing. See [app/services/fixture_preflight.py](/c:/rallypoint/app/services/fixture_preflight.py) for the catalog.
+
 **Request:**
 ```json
 {

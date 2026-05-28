@@ -26,6 +26,12 @@ Use this doc in three passes:
 
 Do not jump straight to new heuristics before fixing legality and invariants.
 
+## Status (2026-05-28)
+
+✅ **Phases 1-7 of the implementation plan landed.** All 22 numbered critique items are addressed in code; the engine moved from prototype-grade greedy heuristics to a constrained-matching solver with rematch policy, config-driven thresholds, an engine-internal rating-regime layer, pre-flight feasibility warnings, and a multi-wave session scheduler. See [docs/fixture_engine_phased_impl_plan.md](/c:/rallypoint/docs/fixture_engine_phased_impl_plan.md) for the per-phase commit history and `git log --grep="^Phase "` for the commits.
+
+Per-item resolutions are marked inline below with **✅ Addressed in Phase N**.
+
 ## Executive Summary
 
 The fixture engine has good strategic intent:
@@ -38,12 +44,12 @@ But the current implementation is still prototype-grade in several important pla
 
 The highest-priority problems are:
 
-1. `generate_transition_fixtures()` can generate illegal rounds.
-2. match categories are semantically unreliable
-3. standard-phase leftovers can create out-of-band pairings
-4. `detect_phase()` is too brittle because it depends on raw `max - min` spread
-5. inter-academy strategy guarantees are not actually enforced
-6. inter-academy generation is not a true session scheduler
+1. `generate_transition_fixtures()` can generate illegal rounds. **✅ Addressed in Phase 2**
+2. match categories are semantically unreliable. **✅ Addressed in Phase 2 (additive round_intent / gap_band / role fields)**
+3. standard-phase leftovers can create out-of-band pairings. **✅ Addressed in Phase 2 (OUT_OF_BAND label + max_exception_gap)**
+4. `detect_phase()` is too brittle because it depends on raw `max - min` spread. **✅ Addressed in Phase 5 (P90-P10 + provisional-majority signal)**
+5. inter-academy strategy guarantees are not actually enforced. **✅ Addressed in Phase 2 (constraint-aware novelty swap, TIER_MATCHED no-same-academy)**
+6. inter-academy generation is not a true session scheduler. **✅ Addressed in Phase 3 (session_scheduler.py + wave_number)**
 
 ## Cross-Service Alignment Notes
 
@@ -66,7 +72,7 @@ Implication:
 
 ## High-Confidence Correctness Bugs
 
-### 1. Transition phase is illegal
+### 1. Transition phase is illegal — ✅ Addressed in Phase 2
 
 Relevant code:
 
@@ -99,7 +105,7 @@ Required invariant:
 - every player appears at most once per round
 - every attending player appears exactly once per round as either match or BYE
 
-### 2. Match category semantics are broken
+### 2. Match category semantics are broken — ✅ Addressed in Phase 2
 
 Relevant code:
 
@@ -145,7 +151,7 @@ Migration note:
   2. add richer fields such as `round_intent`, `gap_band`, and participant roles
   3. migrate downstream consumers only after those fields are fully wired through
 
-### 3. Standard phase can create extreme leftover pairings
+### 3. Standard phase can create extreme leftover pairings — ✅ Addressed in Phase 2 + 4
 
 Relevant code:
 
@@ -190,7 +196,7 @@ Cross-service caution:
 - the current match lifecycle already marks matches with raw rating gap `> 500` as not rating-eligible
 - so any future `OUT_OF_BAND` / `EXCEPTION` policy must either stay within that existing hard cap or be introduced alongside an explicit coordinated change to `match_service.py`
 
-### 4. `CROSS_ACADEMY_ONLY` can violate its own core contract
+### 4. `CROSS_ACADEMY_ONLY` can violate its own core contract — ✅ Addressed in Phase 2
 
 Relevant code:
 
@@ -236,7 +242,7 @@ This gives the engine both behaviors in the right order:
 - correctness first
 - novelty optimization only when the pool actually has room for it
 
-### 5. `TIER_MATCHED` does not enforce its documented strategy
+### 5. `TIER_MATCHED` does not enforce its documented strategy — ✅ Addressed in Phase 2
 
 Relevant code:
 
@@ -251,7 +257,7 @@ Implementation direction:
 - inside each tier, build a legal matching with same-academy edges forbidden
 - if a fallback mode is allowed, surface it explicitly in the output rather than silently breaking the strategy promise
 
-### 6. Singleton tiers can disappear silently
+### 6. Singleton tiers can disappear silently — ✅ Addressed in Phase 2 (`_absorb_singleton_tiers`)
 
 Relevant code:
 
@@ -293,7 +299,7 @@ Required guardrails:
 
 ## Structural Design Problems
 
-### 7. “Whole-Pool Phase Flaw”
+### 7. "Whole-Pool Phase Flaw" — ✅ Addressed in Phase 5
 
 Gemini’s emphasis is worth preserving here:
 
@@ -339,7 +345,7 @@ Suggested gating:
 3. `STANDARD`
    - use only when the pool has enough local structure to support it
 
-### 8. “The Scaling Flaw”
+### 8. "The Scaling Flaw" — ✅ Addressed in Phase 5 (`rating_regime.py` + `fixture_config.py`)
 
 Gemini’s emphasis is also useful here:
 
@@ -651,7 +657,7 @@ Suggested inter-academy supplemental signals:
 
 These signals should not replace the global rating regime. They should act as inter-academy caution overlays.
 
-### 9. Tier width and fairness width are misaligned
+### 9. Tier width and fairness width are misaligned — ✅ Addressed in Phase 5 (per-regime gap caps)
 
 Relevant code:
 
@@ -668,7 +674,7 @@ Implementation direction:
 - do not treat tier boundaries as the final fairness mechanism
 - use finer local neighborhoods for actual pairing
 
-### 10. `stretch_pairs()` has a greedy range-scan flaw
+### 10. `stretch_pairs()` has a greedy range-scan flaw — ✅ Addressed in Phase 2 (monotonic short-circuit) + Phase 4 (solver)
 
 This is one of the useful implementation-level catches from the Gemini critique and should be preserved explicitly.
 
@@ -718,7 +724,7 @@ Implementation direction:
 
 ## Practicality And Scheduling Problems
 
-### 10. “Resource-Time Capacity Mismatch”
+### 10. "Resource-Time Capacity Mismatch" — ✅ Addressed in Phase 3 (`session_scheduler.py` + `num_tables` plumbing)
 
 Gemini’s phrase is useful, but it needs to be framed correctly:
 
@@ -752,7 +758,7 @@ For inter-academy events, add a scheduler layer that:
 - receives table count and session capacity
 - converts pairings into waves and table assignments
 
-### 11. `_assign_tables()` only handles two waves
+### 11. `_assign_tables()` only handles two waves — ✅ Addressed in Phase 3 (numeric `wave_number`, A/B is derived legacy display)
 
 Relevant code:
 
@@ -769,7 +775,7 @@ Implementation direction:
 
 This is the real `_assign_tables()` problem worth fixing first.
 
-### 12. `round_offset` is not applied consistently
+### 12. `round_offset` is not applied consistently — ✅ Addressed in Phase 2
 
 Relevant code:
 
@@ -782,7 +788,7 @@ Implementation direction:
 - make `round_offset` part of every phase generator’s interface
 - ensure returned rounds are consistent across sessions
 
-### 13. `matches_per_player` is not a guaranteed schedule property
+### 13. `matches_per_player` is not a guaranteed schedule property — ✅ Addressed in Phase 3 (`matches_per_player_estimate` exposed)
 
 Relevant code:
 
@@ -803,7 +809,7 @@ Implementation direction:
 
 ## Fairness And Format-Limit Problems
 
-### 14. Gemini’s Four Fairness Frames
+### 14. Gemini's Four Fairness Frames — ✅ Addressed in Phase 6 (preflight warnings expose all four)
 
 Gemini grouped several fairness problems under four strongly worded labels. Those labels are useful, so I am preserving them here with implementation-facing examples and current-code qualification.
 
@@ -938,7 +944,7 @@ Implementation direction:
 - if a future inter- or intra-tier scheduler supports concurrent tier execution, it must model table contention explicitly
 - pre-flight checks should estimate wave count, waiting-time spread, and tier-level backlog before publishing a schedule
 
-### 15. “Sit-out” spikes in `CROSS_ACADEMY_ONLY`
+### 15. "Sit-out" spikes in `CROSS_ACADEMY_ONLY` — ✅ Addressed in Phase 6 (preflight `DOMINANT_ACADEMY_BYE_BURDEN` warning)
 
 Gemini’s wording is fair and worth preserving:
 
@@ -955,7 +961,7 @@ Implementation direction:
 - consider rejecting or downgrading the strategy when the pool is too skewed
 - prefer to skip novelty swapping entirely in heavily saturated or highly skewed pools, because there is usually too little safe swap headroom for it to help
 
-### 15. “Lineup Bottlenecks” in `TEAM_FORMAT`
+### 15. "Lineup Bottlenecks" in `TEAM_FORMAT` — ✅ Addressed in Phase 6 (preflight `TEAM_FORMAT_LINEUP_IMBALANCE`)
 
 Gemini’s emphasis:
 
@@ -971,7 +977,7 @@ Implementation direction:
 - optionally add alternate lineup policies for large roster imbalance
 - keep it separate from correctness fixes
 
-### 16. “Odd-Number Islands”
+### 16. "Odd-Number Islands" — ✅ Addressed in Phase 6 (preflight `ODD_TIER_ISLAND`)
 
 Gemini’s phrase:
 
@@ -991,7 +997,7 @@ Implementation direction:
 - allow adjacent-tier merge only within a gap cap
 - otherwise surface expected BYE burden to the operator
 
-### 17. Rematch control is weaker than the design implies
+### 17. Rematch control is weaker than the design implies — ✅ Addressed in Phase 4 (`rematch_policy.py` harm-score + solver fallback)
 
 Relevant design:
 
@@ -1129,7 +1135,7 @@ Recommended phase/strategy expectation:
 
 These are important because they mislead future agents and maintainers.
 
-### 18. Phase boundaries do not exactly match the design text
+### 18. Phase boundaries do not exactly match the design text — ✅ Addressed in Phase 2
 
 Relevant design:
 
@@ -1145,7 +1151,7 @@ Mismatches:
 - design says discovery trigger is `<= 100`, code uses `< 100`
 - design says standard trigger is `> 250`, code uses `>= 250`
 
-### 19. Small-session fallback behavior does not match the design
+### 19. Small-session fallback behavior does not match the design — ✅ Addressed in Phase 2 (`< 6` players route to round-robin)
 
 Relevant design:
 
@@ -1153,7 +1159,7 @@ Relevant design:
 
 The design says fewer than 6 players should use pure round-robin. The code still routes small sessions through spread-based phase detection.
 
-### 20. Discovery ordering is not normalized
+### 20. Discovery ordering is not normalized — ✅ Addressed in Phase 2 (`_circle_round` sorts by `player_id`)
 
 Relevant design:
 
@@ -1165,7 +1171,7 @@ Relevant code:
 
 The design says deterministic non-rating ordering. The code uses incoming list order without normalizing it.
 
-### 21. Cross-academy monthly Swiss-like logic is documented but not implemented
+### 21. Cross-academy monthly Swiss-like logic is documented but not implemented — ⏸ Deferred
 
 Relevant design:
 
@@ -1173,7 +1179,7 @@ Relevant design:
 
 There is no Swiss-style meet logic in the current engine.
 
-### 22. `TEAM_FORMAT` scale is understated in the design example
+### 22. `TEAM_FORMAT` scale is understated in the design example — ✅ Addressed in Phase 7 (see design-doc fix below)
 
 Relevant design:
 

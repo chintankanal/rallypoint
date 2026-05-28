@@ -569,7 +569,7 @@ Structured as Academy A vs Academy B, then Academy A vs Academy C, then Academy 
 - Clear team results (Academy A: 5 wins, Academy B: 3 wins)
 - Intuitive for coaches and audiences
 - Minimal rounds (no round-robin explosion)
-- Scales well (e.g., 10 academies × 4 players = 40 matches in 45 rounds)
+- Scales well: 10 academies × 4 players → C(10,2) = 45 academy-pair matchups × 4 positional matches = **180 matches across 45 rounds** (one round per academy pair). The earlier "40 matches in 45 rounds" wording was incorrect; corrected per critique §22.
 
 **Cons:**
 - Position matching may not be ideal (Academy A's #2 might be stronger than Academy B's #1)

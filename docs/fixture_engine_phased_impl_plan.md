@@ -1,5 +1,19 @@
 # Fixture Engine — Phased Implementation Plan
 
+## Status (2026-05-28)
+
+| Phase | Status | Notes |
+|---|---|---|
+| Phase 1 — Invariant tests + fixture corpus | ✅ Landed | 20 invariant tests pinning critique items |
+| Phase 2 — Correctness fixes + additive slot model + schema migration | ✅ Landed | Transition legality, additive fields, OUT_OF_BAND labeling, singleton-tier absorption, scan short-circuit, design alignment |
+| Phase 3 — Multi-wave scheduler + capacity field rename | ✅ Landed | `session_scheduler.py`, numeric `wave_number`, `matches_per_player_estimate` |
+| Phase 4 — Pairing solver + rematch policy | ✅ Landed | `pairing_solver.py` + `rematch_policy.py`, networkx dep, migrated leftover + stretch fallback paths |
+| Phase 5 — Config layer + regime + robust phase detection | ✅ Landed | `fixture_config.py` + `rating_regime.py`, P90-P10 + provisional-majority `detect_phase` |
+| Phase 6 — Pre-flight feasibility warnings + frontend surface | ✅ Landed | `fixture_preflight.py`, inline warning rendering in `EventDetailPanel.tsx` |
+| Phase 7 — Docs + critique annotations + design fixes | ✅ Landed | This doc, critique markers, API contract deprecation note, design-doc math fix |
+
+Final test counts: **265 backend tests passing, 25 skipped**, TypeScript builds clean.
+
 ## Purpose
 
 This plan addresses every issue raised in [fixture_engine_best_of_both_critique.md](/c:/rallypoint/docs/fixture_engine_best_of_both_critique.md) for [app/services/fixture_engine.py](/c:/rallypoint/app/services/fixture_engine.py).

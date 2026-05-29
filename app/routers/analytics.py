@@ -46,9 +46,46 @@ def player_velocity(
                     COUNT(*) AS matches_played,
                     COUNT(*) FILTER (WHERE m.winner_id::text = rh.player_id::text) AS wins,
                     COUNT(*) FILTER (WHERE rh.tier_before != rh.tier_after) AS tier_changes,
-                    COUNT(*) FILTER (WHERE m.match_category = 'STRETCH') AS stretch_matches,
-                    COUNT(*) FILTER (WHERE m.match_category = 'STRETCH'
+                    COUNT(*) FILTER (WHERE m.gap_band = 'STRETCH') AS stretch_matches,
+                    COUNT(*) FILTER (WHERE m.gap_band = 'STRETCH'
                                       AND m.winner_id::text = rh.player_id::text) AS stretch_wins,
+                    COUNT(*) FILTER (
+                        WHERE (m.player_a_id = %s AND m.player_a_role = 'PEER')
+                           OR (m.player_b_id = %s AND m.player_b_role = 'PEER')
+                    ) AS peer_matches,
+                    COUNT(*) FILTER (
+                        WHERE ((m.player_a_id = %s AND m.player_a_role = 'PEER')
+                               OR (m.player_b_id = %s AND m.player_b_role = 'PEER'))
+                          AND m.winner_id::text = rh.player_id::text
+                    ) AS peer_wins,
+                    COUNT(*) FILTER (
+                        WHERE (m.player_a_id = %s AND m.player_a_role = 'ANCHORING')
+                           OR (m.player_b_id = %s AND m.player_b_role = 'ANCHORING')
+                    ) AS anchoring_matches,
+                    COUNT(*) FILTER (
+                        WHERE ((m.player_a_id = %s AND m.player_a_role = 'ANCHORING')
+                               OR (m.player_b_id = %s AND m.player_b_role = 'ANCHORING'))
+                          AND m.winner_id::text = rh.player_id::text
+                    ) AS anchoring_wins,
+                    COUNT(*) FILTER (
+                        WHERE (m.player_a_id = %s AND m.player_a_role = 'STRETCHING')
+                           OR (m.player_b_id = %s AND m.player_b_role = 'STRETCHING')
+                    ) AS stretching_matches,
+                    COUNT(*) FILTER (
+                        WHERE ((m.player_a_id = %s AND m.player_a_role = 'STRETCHING')
+                               OR (m.player_b_id = %s AND m.player_b_role = 'STRETCHING'))
+                          AND m.winner_id::text = rh.player_id::text
+                    ) AS stretching_wins,
+                    COUNT(*) FILTER (
+                        WHERE m.gap_band = 'COMPETITIVE') AS competitive_matches,
+                    COUNT(*) FILTER (
+                        WHERE m.gap_band = 'COMPETITIVE'
+                          AND m.winner_id::text = rh.player_id::text) AS competitive_wins,
+                    COUNT(*) FILTER (
+                        WHERE m.gap_band = 'OUT_OF_BAND') AS out_of_band_matches,
+                    COUNT(*) FILTER (
+                        WHERE m.gap_band = 'OUT_OF_BAND'
+                          AND m.winner_id::text = rh.player_id::text) AS out_of_band_wins,
                     (SELECT rh2.rating_before
                      FROM rating_history rh2
                      JOIN match m2 ON m2.match_id = rh2.match_id
@@ -66,7 +103,17 @@ def player_velocity(
                 WHERE rh.player_id = %s AND rh.is_rollback = FALSE
                   AND m.match_date >= %s
                 """,
-                (player_id, since, player_id, since, player_id, since),
+                [
+                    player_id, player_id,
+                    player_id, player_id,
+                    player_id, player_id,
+                    player_id, player_id,
+                    player_id, player_id,
+                    player_id, player_id,
+                    player_id, player_id, since,
+                    player_id, since,
+                    player_id, since,
+                ],
             )
             row = dict(cur.fetchone())
 
@@ -95,6 +142,34 @@ def player_velocity(
         stretch_wins=stretch_wins,
         stretch_win_rate=round(stretch_win_rate, 4) if stretch_win_rate is not None else None,
         tier_changes=tier_changes,
+        gap_band_breakdown={
+            "competitive": {
+                "wins": int(row["competitive_wins"]),
+                "total": int(row["competitive_matches"]),
+            },
+            "stretch": {
+                "wins": int(row["stretch_wins"]),
+                "total": int(row["stretch_matches"]),
+            },
+            "out_of_band": {
+                "wins": int(row["out_of_band_wins"]),
+                "total": int(row["out_of_band_matches"]),
+            },
+        },
+        role_breakdown={
+            "peer": {
+                "wins": int(row["peer_wins"]),
+                "total": int(row["peer_matches"]),
+            },
+            "anchoring": {
+                "wins": int(row["anchoring_wins"]),
+                "total": int(row["anchoring_matches"]),
+            },
+            "stretching": {
+                "wins": int(row["stretching_wins"]),
+                "total": int(row["stretching_matches"]),
+            },
+        },
     )
 
 

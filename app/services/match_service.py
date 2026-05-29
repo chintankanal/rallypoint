@@ -28,6 +28,30 @@ def _canonical_order(player_a_id: str, player_b_id: str, sets_a: int, sets_b: in
             sets_b_actual, sets_a_actual)
 
 
+def _check_gap_band_eligibility(
+    gap_band: str | None,
+    player_a_rating: float,
+    player_b_rating: float,
+) -> tuple[bool, str | None]:
+    """
+    Determine if match is rating-eligible based on fixture gap_band semantics.
+    """
+    gap_cap = 500
+
+    if gap_band == "BYE":
+        return False, "BYE_NO_OPPONENT"
+
+    if gap_band == "OUT_OF_BAND":
+        if abs(player_a_rating - player_b_rating) > gap_cap:
+            return False, "OUT_OF_BAND_EXCEEDS_CAP"
+        return True, None
+
+    if abs(player_a_rating - player_b_rating) > gap_cap:
+        return False, "RATING_GAP_EXCEEDED"
+
+    return True, None
+
+
 def _check_eligibility(
     player_a_rating: float,
     player_b_rating: float,
@@ -35,6 +59,7 @@ def _check_eligibility(
     sets_won_b: int,
     is_retirement: bool,
     match_format: str,
+    gap_band: str | None = None,
 ) -> tuple[bool, str | None]:
     """
     Returns (rating_eligible, not_eligible_reason | None).
@@ -50,11 +75,7 @@ def _check_eligibility(
     if is_retirement and sets_won_a == 0 and sets_won_b == 0:
         return False, "ZERO_SETS_RETIREMENT"
 
-    # Rating gap > 500 using raw ratings
-    if abs(player_a_rating - player_b_rating) > 500:
-        return False, "RATING_GAP_EXCEEDED"
-
-    return True, None
+    return _check_gap_band_eligibility(gap_band, player_a_rating, player_b_rating)
 
 
 def _check_diminishing_signal(cur, player_a_id: str, player_b_id: str, match_date: date) -> bool:
@@ -165,11 +186,17 @@ def submit_match(conn, body, submitted_by_user_id: str, caller_role: str = "") -
         # Determine winner
         winner_id = a_id if sets_a > sets_b else b_id
 
-        # Eligibility (using raw ratings, not adjusted)
+        # Eligibility (using raw ratings and fixture semantics when available)
         rating_a = float(player_a["current_rating"])
         rating_b = float(player_b["current_rating"])
         rating_eligible, not_eligible_reason = _check_eligibility(
-            rating_a, rating_b, sets_a, sets_b, body.is_retirement, match_format
+            rating_a,
+            rating_b,
+            sets_a,
+            sets_b,
+            body.is_retirement,
+            match_format,
+            slot_gap_band,
         )
 
         # Diminishing signal check
@@ -193,11 +220,16 @@ def submit_match(conn, body, submitted_by_user_id: str, caller_role: str = "") -
         # Validate fixture slot if provided
         # INTRA_ACADEMY uses fixture_slot (session-scoped); INTER_ACADEMY uses event_fixture_slot
         slot_match_category = None
+        slot_gap_band = None
+        slot_round_intent = None
+        slot_player_a_role = None
+        slot_player_b_role = None
         is_event_slot = event["scheduling_mode"] == "INTER_ACADEMY"
         if body.fixture_slot_id:
             slot_table = "event_fixture_slot" if is_event_slot else "fixture_slot"
             cur.execute(
-                f"SELECT slot_id::text, player_a_id::text, player_b_id::text, status, match_category "
+                f"SELECT slot_id::text, player_a_id::text, player_b_id::text, status, "
+                f"       match_category, gap_band, round_intent, player_a_role, player_b_role "
                 f"FROM {slot_table} WHERE slot_id = %s",
                 (body.fixture_slot_id,),
             )
@@ -209,6 +241,10 @@ def submit_match(conn, body, submitted_by_user_id: str, caller_role: str = "") -
             if slot["player_a_id"] != a_id or slot["player_b_id"] != b_id:
                 raise ValueError("Fixture slot players do not match the submitted players")
             slot_match_category = slot["match_category"]
+            slot_gap_band = slot["gap_band"]
+            slot_round_intent = slot["round_intent"]
+            slot_player_a_role = slot["player_a_role"]
+            slot_player_b_role = slot["player_b_role"]
 
         match_id = str(uuid.uuid4())
         now_utc = datetime.now(timezone.utc)
@@ -234,7 +270,7 @@ def submit_match(conn, body, submitted_by_user_id: str, caller_role: str = "") -
                 match_date, match_timestamp,
                 submitted_by, confirmation_status, confirmed_by, confirmed_at,
                 confirmation_deadline,
-                match_category
+                match_category, gap_band, round_intent, player_a_role, player_b_role
             ) VALUES (
                 %s, %s, %s, %s,
                 %s, %s,
@@ -248,7 +284,7 @@ def submit_match(conn, body, submitted_by_user_id: str, caller_role: str = "") -
                 %s, %s,
                 %s, %s, %s, %s,
                 %s,
-                %s
+                %s, %s, %s, %s, %s
             )
             """,
             (
@@ -264,7 +300,8 @@ def submit_match(conn, body, submitted_by_user_id: str, caller_role: str = "") -
                 body.match_date, now_utc,
                 submitted_by_user_id, confirmation_status, confirmed_by, confirmed_at,
                 deadline_utc,
-                slot_match_category,
+                slot_match_category, slot_gap_band, slot_round_intent,
+                slot_player_a_role, slot_player_b_role,
             ),
         )
 
@@ -479,7 +516,8 @@ def _fetch_match(cur, match_id: str, scheduling_mode: str) -> dict:
             m.rating_eligible, m.not_eligible_reason,
             m.diminishing_signal_applied,
             m.confirmation_status, m.confirmation_deadline,
-            m.ratings_applied_at, m.match_date, m.match_timestamp, m.created_at
+            m.ratings_applied_at, m.match_date, m.match_timestamp, m.created_at,
+            m.match_category, m.gap_band, m.round_intent, m.player_a_role, m.player_b_role
         FROM match m
         JOIN player pa ON pa.player_id = m.player_a_id
         JOIN player pb ON pb.player_id = m.player_b_id

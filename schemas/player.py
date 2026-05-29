@@ -74,6 +74,7 @@ class PlayerComputedStats(BaseModel):
     confidence_ratio: float
     weeks_inactive: float | None
     inactivity_decay_active: bool
+    role_exposure: dict[str, int] = {}
 
 
 class AcademyTransferRequest(BaseModel):

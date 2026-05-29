@@ -5,6 +5,10 @@ interface MatchDetailProps {
   match: {
     match_id: string
     event_id: string
+    round_intent?: string | null
+    gap_band?: string | null
+    player_a_role?: string | null
+    player_b_role?: string | null
     player_a: { player_id: string; name: string; current_rating: number }
     player_b: { player_id: string; name: string; current_rating: number }
     sets_won_a: number
@@ -118,6 +122,31 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ match }) => {
             <div className="metadata-label">Format</div>
             <div className="metadata-value">{match.match_format}</div>
           </div>
+
+          {match.round_intent && (
+            <div className="metadata-item">
+              <div className="metadata-label">Round Intent</div>
+              <div className="metadata-value">{match.round_intent}</div>
+            </div>
+          )}
+          {match.gap_band && (
+            <div className="metadata-item">
+              <div className="metadata-label">Gap Band</div>
+              <div className="metadata-value">{match.gap_band.replace(/_/g, ' ')}</div>
+            </div>
+          )}
+          {match.player_a_role && (
+            <div className="metadata-item">
+              <div className="metadata-label">Player A role</div>
+              <div className="metadata-value">{match.player_a_role.replace(/_/g, ' ')}</div>
+            </div>
+          )}
+          {match.player_b_role && (
+            <div className="metadata-item">
+              <div className="metadata-label">Player B role</div>
+              <div className="metadata-value">{match.player_b_role.replace(/_/g, ' ')}</div>
+            </div>
+          )}
 
           <div className="metadata-item">
             <div className="metadata-label">Rating Eligible</div>

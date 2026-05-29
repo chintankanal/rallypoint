@@ -146,6 +146,78 @@ def get_event(event_id: str) -> dict | None:
     return dict(row) if row else None
 
 
+def get_fixture_quality_report(event_id: str) -> dict | None:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT event_id FROM event WHERE event_id = %s", (event_id,))
+            if not cur.fetchone():
+                return None
+
+            cur.execute(
+                """
+                SELECT
+                    COUNT(*) AS total_slots,
+                    COUNT(*) FILTER (WHERE gap_band = 'COMPETITIVE') AS competitive,
+                    COUNT(*) FILTER (WHERE gap_band = 'STRETCH') AS stretch,
+                    COUNT(*) FILTER (WHERE gap_band = 'OUT_OF_BAND') AS out_of_band,
+                    COUNT(*) FILTER (WHERE gap_band = 'BYE') AS bye_slots,
+                    COUNT(*) FILTER (WHERE round_intent = 'COMPETITIVE') AS competitive_intent,
+                    COUNT(*) FILTER (WHERE round_intent = 'DEVELOPMENTAL') AS developmental_intent,
+                    COUNT(*) FILTER (WHERE player_a_role = 'PEER' OR player_b_role = 'PEER') AS peer_count,
+                    COUNT(*) FILTER (WHERE player_a_role = 'ANCHORING' OR player_b_role = 'ANCHORING') AS anchoring_count,
+                    COUNT(*) FILTER (WHERE player_a_role = 'STRETCHING' OR player_b_role = 'STRETCHING') AS stretching_count,
+                    COUNT(*) FILTER (
+                        WHERE player_b_id IS NOT NULL
+                          AND pa.primary_academy_id IS NOT NULL
+                          AND pb.primary_academy_id IS NOT NULL
+                          AND pa.primary_academy_id <> pb.primary_academy_id
+                    ) AS cross_academy_raw
+                FROM event_fixture_slot efs
+                LEFT JOIN player pa ON pa.player_id = efs.player_a_id
+                LEFT JOIN player pb ON pb.player_id = efs.player_b_id
+                WHERE efs.event_id = %s
+                """,
+                (event_id,),
+            )
+            row = cur.fetchone()
+
+    if not row:
+        return None
+
+    total = int(row["total_slots"])
+    cross_academy = int(row["cross_academy_raw"])
+    balance_roles = [
+        int(row["peer_count"]),
+        int(row["anchoring_count"]),
+        int(row["stretching_count"]),
+    ]
+    max_role = max(balance_roles) if any(balance_roles) else 0
+    min_role = min(balance_roles) if any(balance_roles) else 0
+    player_balance = round((min_role / max_role) if max_role > 0 else 0.0, 2)
+
+    return {
+        "event_id": event_id,
+        "total_slots": total,
+        "by_gap_band": {
+            "competitive": int(row["competitive"]),
+            "stretch": int(row["stretch"]),
+            "out_of_band": int(row["out_of_band"]),
+            "bye": int(row["bye_slots"]),
+        },
+        "by_round_intent": {
+            "competitive": int(row["competitive_intent"]),
+            "developmental": int(row["developmental_intent"]),
+        },
+        "role_distribution": {
+            "peer": int(row["peer_count"]),
+            "anchoring": int(row["anchoring_count"]),
+            "stretching": int(row["stretching_count"]),
+        },
+        "cross_academy_pct": round((cross_academy / total * 100.0) if total > 0 else 0.0, 1),
+        "player_exposure_balance": player_balance,
+    }
+
+
 def add_academy_to_event(event_id: str, academy_id: str) -> dict | None:
     with get_connection() as conn:
         with conn.cursor() as cur:

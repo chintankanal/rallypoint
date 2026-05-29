@@ -234,6 +234,40 @@ def claim_player(user_id: str, claim_code: str) -> dict:
             return cur.fetchone()
 
 
+def _get_player_role_exposure(cur, player_id: str, period_days: int = 90) -> dict[str, int]:
+    cur.execute(
+        """
+        SELECT
+            COUNT(*) FILTER (WHERE (m.player_a_id = %s AND m.player_a_role = 'PEER')
+                                OR (m.player_b_id = %s AND m.player_b_role = 'PEER')) AS as_peer,
+            COUNT(*) FILTER (WHERE (m.player_a_id = %s AND m.player_a_role = 'ANCHORING')
+                                OR (m.player_b_id = %s AND m.player_b_role = 'ANCHORING')) AS as_anchoring,
+            COUNT(*) FILTER (WHERE (m.player_a_id = %s AND m.player_a_role = 'STRETCHING')
+                                OR (m.player_b_id = %s AND m.player_b_role = 'STRETCHING')) AS as_stretching,
+            COUNT(*) FILTER (WHERE (m.player_a_id = %s AND m.player_a_role = 'BYE')
+                                OR (m.player_b_id = %s AND m.player_b_role = 'BYE')) AS bye_count
+        FROM match m
+        WHERE (m.player_a_id = %s OR m.player_b_id = %s)
+          AND m.confirmation_status IN ('CONFIRMED', 'AUTO_CONFIRMED')
+          AND m.match_date >= CURRENT_DATE - (%s || ' days')::interval
+        """,
+        (
+            player_id, player_id,
+            player_id, player_id,
+            player_id, player_id,
+            player_id, player_id,
+            player_id, player_id, str(period_days),
+        ),
+    )
+    row = cur.fetchone()
+    return {
+        "as_peer": int(row["as_peer"]),
+        "as_anchoring": int(row["as_anchoring"]),
+        "as_stretching": int(row["as_stretching"]),
+        "bye_count": int(row["bye_count"]),
+    }
+
+
 def get_computed_stats(player_id: str) -> dict | None:
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -244,9 +278,9 @@ def get_computed_stats(player_id: str) -> dict | None:
                 (player_id,),
             )
             row = cur.fetchone()
-
-    if not row:
-        return None
+            if not row:
+                return None
+            role_exposure = _get_player_role_exposure(cur, player_id)
 
     from app.utils.rating_math import _load_config
     cfg = _load_config()
@@ -276,6 +310,7 @@ def get_computed_stats(player_id: str) -> dict | None:
         "confidence_ratio": round(cr, 4),
         "weeks_inactive": weeks_inactive,
         "inactivity_decay_active": weeks_inactive is not None and weeks_inactive >= 8,
+        "role_exposure": role_exposure,
     }
 
 

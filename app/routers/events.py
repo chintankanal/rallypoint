@@ -21,6 +21,7 @@ from schemas.event import (
     EventResponse,
     EventStatusUpdate,
     GenerateEventFixturesRequest,
+    FixtureQualityReport,
     RefereeAssignmentResponse,
     UmpireAssignmentResponse,
 )
@@ -55,6 +56,14 @@ def get_event(event_id: str, _: dict = _ADMIN_COACH):
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
     return EventResponse(**row)
+
+
+@router.get("/{event_id}/fixture-quality", response_model=FixtureQualityReport)
+def get_event_fixture_quality(event_id: str, _: dict = _ADMIN_COACH):
+    quality = event_service.get_fixture_quality_report(event_id)
+    if not quality:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+    return FixtureQualityReport(**quality)
 
 
 @router.post("/{event_id}/academies", response_model=EventResponse)

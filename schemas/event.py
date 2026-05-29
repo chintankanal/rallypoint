@@ -189,3 +189,13 @@ class EventFixturesResponse(BaseModel):
     fixture_state: str | None = None
     slots: list[EventFixtureSlotResponse]
     warnings: list[FixtureWarning] = []
+
+
+class FixtureQualityReport(BaseModel):
+    event_id: str
+    total_slots: int
+    by_gap_band: dict[str, int]
+    by_round_intent: dict[str, int]
+    role_distribution: dict[str, int]
+    cross_academy_pct: float
+    player_exposure_balance: float

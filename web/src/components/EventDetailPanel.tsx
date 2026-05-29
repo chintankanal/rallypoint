@@ -38,16 +38,25 @@ function getOpponentLabel(opponent: EventFixturePlayer, firstNameCounts: Record<
   return `${first} ${suffix}.`
 }
 
-function getMatchTypeMeta(category: string, playerRating: number, opponentRating?: number) {
-  if (category === 'COMPETITIVE') {
+function getMatchTypeMeta(slot: EventFixtureSlot, playerRating: number, opponentRating?: number) {
+  const type = slot.round_intent || slot.gap_band || slot.match_category
+  if (type === 'COMPETITIVE') {
     return { label: 'Competitive', shortLabel: 'C', title: 'Competitive', className: 'text-blue-300' }
   }
 
-  if (category === 'ANCHOR') {
+  if (type === 'DEVELOPMENTAL') {
+    return { label: 'Developmental', shortLabel: 'D', title: 'Developmental', className: 'text-gray-300' }
+  }
+
+  if (type === 'OUT_OF_BAND') {
+    return { label: 'Out of band', shortLabel: 'O', title: 'Out of band', className: 'text-orange-300' }
+  }
+
+  if (type === 'ANCHOR') {
     return { label: 'Anchor', shortLabel: 'A', title: 'Anchor', className: 'text-green-300' }
   }
 
-  if (category === 'STRETCH') {
+  if (type === 'STRETCH') {
     if (opponentRating != null) {
       if (playerRating < opponentRating) {
         return {
@@ -70,7 +79,17 @@ function getMatchTypeMeta(category: string, playerRating: number, opponentRating
     return { label: 'Stretch', shortLabel: 'S', title: 'Stretch', className: 'text-purple-300' }
   }
 
-  return { label: category, shortLabel: category[0] ?? category, title: category, className: 'text-gray-400' }
+  return { label: type ?? 'Unknown', shortLabel: (type?.[0] ?? 'U'), title: type ?? 'Unknown', className: 'text-gray-400' }
+}
+
+function getSlotLabel(slot: EventFixtureSlot) {
+  if (slot.round_intent === 'COMPETITIVE') return 'Competitive'
+  if (slot.round_intent === 'DEVELOPMENTAL') return 'Developmental'
+  if (slot.gap_band === 'COMPETITIVE') return 'Competitive'
+  if (slot.gap_band === 'STRETCH') return 'Stretch'
+  if (slot.gap_band === 'OUT_OF_BAND') return 'Out of band'
+  if (slot.match_category) return slot.match_category.charAt(0) + slot.match_category.slice(1).toLowerCase()
+  return 'Unknown'
 }
 
 export function EventDetailPanel({ eventId, canManage }: { eventId: string; canManage: boolean }) {
@@ -549,6 +568,16 @@ function FixtureStats({ fixtures, matchFormat, numTables }: {
     opponents: Set<string>
   }> = {}
 
+  function getRoleCategory(slot: EventFixtureSlot, role: string | null) {
+    if (role === 'PEER') return 'competitive'
+    if (role === 'STRETCHING') return 'stretch'
+    if (role === 'ANCHORING') return 'anchor'
+    if (slot.match_category === 'COMPETITIVE') return 'competitive'
+    if (slot.match_category === 'STRETCH') return 'stretch'
+    if (slot.match_category === 'ANCHOR') return 'anchor'
+    return 'competitive'
+  }
+
   for (const slot of fixtures.slots) {
     const isBye = slot.status === 'BYE' || !slot.player_b
     const isCross = !isBye && slot.player_a.academy_id !== slot.player_b!.academy_id
@@ -563,14 +592,18 @@ function FixtureStats({ fixtures, matchFormat, numTables }: {
     } else {
       const pb = slot.player_b!
       upsert(pb.player_id)
-      for (const [pid, oppId] of [[slot.player_a.player_id, pb.player_id], [pb.player_id, slot.player_a.player_id]] as [string, string][]) {
+      for (const [pid, oppId, role] of [
+        [slot.player_a.player_id, pb.player_id, slot.player_a_role],
+        [pb.player_id, slot.player_a.player_id, slot.player_b_role],
+      ] as [string, string, string | null][]) {
         const s = playerStats[pid]
         s.total++
         s.opponents.add(oppId)
         if (isCross) s.cross++; else s.intra++
-        if (slot.match_category === 'COMPETITIVE') s.competitive++
-        else if (slot.match_category === 'STRETCH') s.stretch++
-        else if (slot.match_category === 'ANCHOR') s.anchor++
+        const category = getRoleCategory(slot, role)
+        if (category === 'competitive') s.competitive++
+        else if (category === 'stretch') s.stretch++
+        else if (category === 'anchor') s.anchor++
       }
     }
   }
@@ -713,7 +746,7 @@ function SlotResultList({ fixtures, colorMap, onEnterResult, canManage }: {
               const aColor = colorMap[slot.player_a.academy_id] ?? ACADEMY_PALETTE[0]
               const bColor = colorMap[slot.player_b.academy_id] ?? ACADEMY_PALETTE[0]
               const isCross = slot.player_a.academy_id !== slot.player_b.academy_id
-              const matchTypeMeta = getMatchTypeMeta(slot.match_category, slot.player_a.current_rating, slot.player_b.current_rating)
+              const matchTypeMeta = getMatchTypeMeta(slot, slot.player_a.current_rating, slot.player_b.current_rating)
               return (
                 <div key={slot.slot_id}
                   className="flex items-center gap-2 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2">
@@ -894,16 +927,16 @@ function FixtureMatrix({
     const pa = slot.player_a.player_id
     const pb = slot.player_b?.player_id
     if (!schedule[pa]) schedule[pa] = {}
-    schedule[pa][slot.round_number] = { opponent: slot.player_b, is_bye: !pb, category: slot.match_category }
+    schedule[pa][slot.round_number] = { opponent: slot.player_b, is_bye: !pb, category: getSlotLabel(slot) }
     if (pb) {
       if (!schedule[pb]) schedule[pb] = {}
-      schedule[pb][slot.round_number] = { opponent: slot.player_a, is_bye: false, category: slot.match_category }
+      schedule[pb][slot.round_number] = { opponent: slot.player_a, is_bye: false, category: getSlotLabel(slot) }
     }
   }
 
   const byAcademy: Record<string, EventFixturePlayer[]> = {}
-  for (const p of Object.values(playerById)) {
-    (byAcademy[p.academy_id] ??= []).push(p)
+  for (const player of Object.values(playerById)) {
+    ;(byAcademy[player.academy_id] ??= []).push(player)
   }
   for (const players of Object.values(byAcademy)) {
     players.sort((a, b) => b.current_rating - a.current_rating)
@@ -947,7 +980,7 @@ function FixtureMatrix({
             const cell = playerSchedule[r]
             const isBye = cell?.is_bye ?? false
             const isHighlighted = r === highlightRound
-            const typeMeta = cell?.opponent ? getMatchTypeMeta(cell.category, p.current_rating, cell.opponent.current_rating) : null
+            const typeMeta = cell?.opponent ? { label: cell.category, className: 'text-gray-300', title: cell.category } : null
             const opponentColor = cell?.opponent ? (colorMap[cell.opponent.academy_id]?.text ?? 'text-gray-300') : 'text-gray-300'
 
             return (
@@ -959,7 +992,7 @@ function FixtureMatrix({
                     <div className={`text-xs font-bold truncate ${opponentColor}`} title={cell.opponent.name}>
                       {getOpponentLabel(cell.opponent, firstNameCounts)}
                     </div>
-                    <div className={`${typeMeta?.className ?? 'text-gray-600'}`} title={typeMeta?.title}>{typeMeta?.shortLabel ?? '—'}</div>
+                    <div className={`${typeMeta?.className ?? 'text-gray-600'}`} title={typeMeta?.title}>{typeMeta?.label ?? '—'}</div>
                   </div>
                 ) : (
                   <span className="text-gray-600">—</span>

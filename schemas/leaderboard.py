@@ -63,6 +63,8 @@ class VelocityReport(BaseModel):
     stretch_wins: int
     stretch_win_rate: float | None
     tier_changes: int
+    gap_band_breakdown: dict[str, dict[str, int]] = {}
+    role_breakdown: dict[str, dict[str, int]] = {}
 
 
 class TierCount(BaseModel):

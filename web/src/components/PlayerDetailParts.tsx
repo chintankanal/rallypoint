@@ -20,15 +20,28 @@ export function formatScore(entry: RatingHistoryEntry): string {
 }
 
 export function matchTypeBadge(r: RatingHistoryEntry) {
-  if (!r.match_category) return <span className="text-gray-600">—</span>
+  const type = r.round_intent || r.gap_band || r.match_category
+  if (!type) return <span className="text-gray-600">—</span>
 
-  if (r.match_category === 'COMPETITIVE') {
+  if (type === 'COMPETITIVE') {
     return (
       <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-blue-900/50 text-blue-300">Competitive</span>
     )
   }
 
-  if (r.match_category === 'STRETCH') {
+  if (type === 'DEVELOPMENTAL') {
+    return (
+      <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-gray-700 text-gray-300">Developmental</span>
+    )
+  }
+
+  if (type === 'OUT_OF_BAND') {
+    return (
+      <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-orange-900/50 text-orange-200">Out of band</span>
+    )
+  }
+
+  if (type === 'STRETCH') {
     const oppRating = r.opponent_rating_before
     if (oppRating != null && r.rating_before < oppRating) {
       return (
@@ -46,7 +59,7 @@ export function matchTypeBadge(r: RatingHistoryEntry) {
   }
 
   return (
-    <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-gray-700 text-gray-300">{r.match_category.charAt(0) + r.match_category.slice(1).toLowerCase()}</span>
+    <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-gray-700 text-gray-300">{type.charAt(0) + type.slice(1).toLowerCase()}</span>
   )
 }
 

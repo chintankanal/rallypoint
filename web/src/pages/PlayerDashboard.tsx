@@ -258,7 +258,7 @@ function PlayerFixtures() {
                           {isMyA ? slot.player_a.name : slot.player_b?.name} vs {opponent?.name ?? 'Bye'}
                         </div>
                         <div className="text-xs text-gray-400">
-                          Round {slot.round_number}, Table {slot.table_number} · {slot.match_category}
+                          Round {slot.round_number}, Table {slot.table_number} · {slot.round_intent || slot.gap_band || slot.match_category}
                         </div>
                       </div>
                       <div className="text-right space-y-1 text-xs text-gray-400">
@@ -312,7 +312,7 @@ function FixtureResultModal({
   const [setsA, setSetsA] = useState('')
   const [setsB, setSetsB] = useState('')
   const [isRetirement, setIsRetirement] = useState(false)
-  const [matchDate, setMatchDate] = useState(event.start_date)
+  const [matchDate] = useState(event.start_date)
   const [error, setError] = useState<string | null>(null)
 
   const matchFormat = event.default_match_format ?? 'BEST_OF_3'

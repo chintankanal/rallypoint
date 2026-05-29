@@ -106,11 +106,19 @@ function EventsTab({ academyId }: { academyId: string }) {
   const [error, setError] = useState<string | null>(null)
 
   const q = useQuery({ queryKey: ['events'], queryFn: () => eventsApi.list() })
-  const myEvents = q.data?.items.filter(ev => 
+  const myEvents = q.data?.items.filter(ev => {
     // host academy OR participating academy membership
-    (ev.host_academy_id && ev.host_academy_id === academyId) ||
-    (Array.isArray((ev as any).participating_academies) && (ev as any).participating_academies.some((a: any) => a.academy_id === academyId))
-  ) ?? []
+    if (ev.host_academy_id === academyId) return true
+    // participating_academies: array of { academy_id }
+    if (Array.isArray((ev as any).participating_academies) && (ev as any).participating_academies.some((a: any) => a.academy_id === academyId)) return true
+    // If this is an INTRA_ACADEMY event with an empty participating list, treat it as belonging to a single (host) academy
+    if (ev.scheduling_mode === 'INTRA_ACADEMY' && Array.isArray((ev as any).participating_academies) && (ev as any).participating_academies.length === 0) return true
+    // participating_academy_ids: array of ids
+    if (Array.isArray((ev as any).participating_academy_ids) && (ev as any).participating_academy_ids.includes(academyId)) return true
+    // alternative camelCase shape
+    if (Array.isArray((ev as any).participatingAcademies) && (ev as any).participatingAcademies.some((a: any) => a.academy_id === academyId)) return true
+    return false
+  }) ?? []
   const intraEvents = myEvents.filter(ev => ev.scheduling_mode === 'INTRA_ACADEMY')
   const leagueEvents = myEvents.filter(ev => ev.scheduling_mode === 'INTER_ACADEMY' && ev.event_type === 'LEAGUE')
 
@@ -140,8 +148,8 @@ function EventsTab({ academyId }: { academyId: string }) {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <div>
-          <h3 className="text-lg font-semibold text-white">My Events</h3>
-          <p className="text-xs text-gray-500 mt-0.5">Intra-academy training events for daily sessions</p>
+          <h3 className="text-lg font-semibold text-white">Training Sessions</h3>
+          <p className="text-xs text-gray-500 mt-0.5">Intra-academy practice sessions and friendly matches for your players.</p>
         </div>
         <button onClick={() => setShowForm(!showForm)}
           className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg">
@@ -198,8 +206,8 @@ function EventsTab({ academyId }: { academyId: string }) {
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <div>
-              <h4 className="text-base font-semibold text-white">Training events</h4>
-              <p className="text-xs text-gray-500">Intra-academy friendly events hosted by your academy.</p>
+              <h4 className="text-base font-semibold text-white">League Meets & Tournaments</h4>
+              <p className="text-xs text-gray-500">Cross-academy leagues and tournaments involving multiple clubs.</p>
             </div>
             <span className="text-xs text-gray-400">{intraEvents.length} events</span>
           </div>
@@ -219,7 +227,7 @@ function EventsTab({ academyId }: { academyId: string }) {
             </div>
           ))}
           {!intraEvents.length && (
-            <p className="text-gray-500 text-sm">No intra-academy events yet. Create one to start running training sessions.</p>
+            <p className="text-gray-500 text-sm">No events yet. Create one to start running daily training sessions.</p>
           )}
         </div>
 
@@ -393,7 +401,55 @@ function SessionsTab({ academyId }: { academyId: string }) {
     COMPETITIVE: 'text-blue-400',
     STRETCH: 'text-purple-400',
     ANCHOR: 'text-green-400',
+    DEVELOPMENTAL: 'text-gray-300',
+    OUT_OF_BAND: 'text-orange-300',
     BYE: 'text-gray-500',
+  }
+
+  const getSlotRoleCode = (slot: { player_a_role?: string | null; player_b_role?: string | null }) => {
+    if (slot.player_a_role === 'BYE' || slot.player_b_role === 'BYE') return 'BYE'
+    if (slot.player_a_role === 'PEER' && slot.player_b_role === 'PEER') return 'COMPETITIVE'
+    if (
+      (slot.player_a_role === 'STRETCHING' && slot.player_b_role === 'ANCHORING') ||
+      (slot.player_a_role === 'ANCHORING' && slot.player_b_role === 'STRETCHING')
+    ) return 'STRETCH'
+    if (slot.player_a_role === 'STRETCHING' || slot.player_b_role === 'STRETCHING') return 'STRETCH'
+    if (slot.player_a_role === 'ANCHORING' || slot.player_b_role === 'ANCHORING') return 'ANCHOR'
+    if (slot.player_a_role === 'PEER' || slot.player_b_role === 'PEER') return 'COMPETITIVE'
+    return 'UNKNOWN'
+  }
+
+  const getSlotTypeCode = (slot: { player_a_role?: string | null; player_b_role?: string | null; round_intent?: string | null; gap_band?: string | null; match_category?: string | null }) => {
+    const roleCode = getSlotRoleCode(slot)
+    if (roleCode !== 'UNKNOWN') return roleCode
+    if (slot.gap_band === 'COMPETITIVE') return 'COMPETITIVE'
+    if (slot.gap_band === 'STRETCH') return 'STRETCH'
+    if (slot.gap_band === 'OUT_OF_BAND') return 'OUT_OF_BAND'
+    if (slot.round_intent === 'COMPETITIVE') return 'COMPETITIVE'
+    if (slot.round_intent === 'DEVELOPMENTAL') return 'DEVELOPMENTAL'
+    if (slot.match_category) return slot.match_category
+    return 'UNKNOWN'
+  }
+
+  const getSlotLabel = (slot: { player_a_role?: string | null; player_b_role?: string | null; round_intent?: string | null; gap_band?: string | null; match_category?: string | null }) => {
+    if (slot.player_a_role || slot.player_b_role) {
+      if (slot.player_a_role === 'BYE' || slot.player_b_role === 'BYE') return 'Bye'
+      if (slot.player_a_role === 'PEER' && slot.player_b_role === 'PEER') return 'Competitive'
+      if (
+        (slot.player_a_role === 'STRETCHING' && slot.player_b_role === 'ANCHORING') ||
+        (slot.player_a_role === 'ANCHORING' && slot.player_b_role === 'STRETCHING')
+      ) return 'Stretch / Anchor'
+      if (slot.player_a_role === 'STRETCHING' || slot.player_b_role === 'STRETCHING') return 'Stretch'
+      if (slot.player_a_role === 'ANCHORING' || slot.player_b_role === 'ANCHORING') return 'Anchor'
+      if (slot.player_a_role === 'PEER' || slot.player_b_role === 'PEER') return 'Competitive'
+    }
+    if (slot.gap_band === 'COMPETITIVE') return 'Competitive'
+    if (slot.gap_band === 'STRETCH') return 'Stretch'
+    if (slot.gap_band === 'OUT_OF_BAND') return 'Out of band'
+    if (slot.round_intent === 'COMPETITIVE') return 'Competitive'
+    if (slot.round_intent === 'DEVELOPMENTAL') return 'Developmental'
+    if (slot.match_category) return slot.match_category
+    return 'Unknown'
   }
 
   const SESSION_STATUS_COLOR: Record<string, string> = {
@@ -620,9 +676,10 @@ function SessionsTab({ academyId }: { academyId: string }) {
                         <div key={slot.slot_id}
                           className={`bg-gray-900 border border-gray-800 rounded-lg px-4 py-2.5 flex items-center justify-between gap-3 ${slot.status === 'BYE' ? 'opacity-50' : ''}`}>
                           <div className="flex items-center gap-2 min-w-0 flex-1">
-                            <span className={`text-xs font-semibold shrink-0 ${MATCH_CAT_COLOR[slot.match_category] ?? 'text-gray-400'}`}>
-                              {slot.match_category}
+                            <span className={`text-xs font-semibold shrink-0 ${MATCH_CAT_COLOR[getSlotTypeCode(slot)] ?? 'text-gray-400'}`}>
+                              {getSlotLabel(slot)}
                             </span>
+                            <span className="text-xs text-gray-500">Table {slot.table_number}</span>
                             <span className="text-white text-sm truncate">{slot.player_a.name}</span>
                             {slot.player_b
                               ? <><span className="text-gray-500 text-xs shrink-0">vs</span><span className="text-white text-sm truncate">{slot.player_b.name}</span></>

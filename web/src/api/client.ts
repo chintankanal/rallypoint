@@ -253,6 +253,10 @@ export interface RatingHistoryEntry {
   event_type: string | null
   session_id: string | null
   session_date: string | null
+  round_intent?: string | null
+  gap_band?: string | null
+  player_a_role?: string | null
+  player_b_role?: string | null
   match_category: string | null
   sets_won_a: number | null
   sets_won_b: number | null
@@ -485,6 +489,10 @@ export interface SetScore {
 export interface MatchResponse {
   match_id: string
   event_id: string
+  round_intent?: string | null
+  gap_band?: string | null
+  player_a_role?: string | null
+  player_b_role?: string | null
   player_a: { player_id: string; name: string; current_rating: number }
   player_b: { player_id: string; name: string; current_rating: number }
   sets_won_a: number

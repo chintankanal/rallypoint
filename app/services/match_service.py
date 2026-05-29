@@ -186,6 +186,35 @@ def submit_match(conn, body, submitted_by_user_id: str, caller_role: str = "") -
         # Determine winner
         winner_id = a_id if sets_a > sets_b else b_id
 
+        # Validate fixture slot if provided and capture semantics
+        # INTRA_ACADEMY uses fixture_slot (session-scoped); INTER_ACADEMY uses event_fixture_slot
+        slot_match_category = None
+        slot_gap_band = None
+        slot_round_intent = None
+        slot_player_a_role = None
+        slot_player_b_role = None
+        is_event_slot = event["scheduling_mode"] == "INTER_ACADEMY"
+        if body.fixture_slot_id:
+            slot_table = "event_fixture_slot" if is_event_slot else "fixture_slot"
+            cur.execute(
+                f"SELECT slot_id::text, player_a_id::text, player_b_id::text, status, "
+                f"       match_category, gap_band, round_intent, player_a_role, player_b_role "
+                f"FROM {slot_table} WHERE slot_id = %s",
+                (body.fixture_slot_id,),
+            )
+            slot = cur.fetchone()
+            if not slot:
+                raise ValueError("Fixture slot not found")
+            if slot["status"] != "SCHEDULED":
+                raise ValueError(f"Fixture slot is already '{slot['status']}'")
+            if slot["player_a_id"] != a_id or slot["player_b_id"] != b_id:
+                raise ValueError("Fixture slot players do not match the submitted players")
+            slot_match_category = slot["match_category"]
+            slot_gap_band = slot["gap_band"]
+            slot_round_intent = slot["round_intent"]
+            slot_player_a_role = slot["player_a_role"]
+            slot_player_b_role = slot["player_b_role"]
+
         # Eligibility (using raw ratings and fixture semantics when available)
         rating_a = float(player_a["current_rating"])
         rating_b = float(player_b["current_rating"])
@@ -216,35 +245,6 @@ def submit_match(conn, body, submitted_by_user_id: str, caller_role: str = "") -
             if body.player_b_id == b_id
             else player_a["primary_academy_id"]
         )
-
-        # Validate fixture slot if provided
-        # INTRA_ACADEMY uses fixture_slot (session-scoped); INTER_ACADEMY uses event_fixture_slot
-        slot_match_category = None
-        slot_gap_band = None
-        slot_round_intent = None
-        slot_player_a_role = None
-        slot_player_b_role = None
-        is_event_slot = event["scheduling_mode"] == "INTER_ACADEMY"
-        if body.fixture_slot_id:
-            slot_table = "event_fixture_slot" if is_event_slot else "fixture_slot"
-            cur.execute(
-                f"SELECT slot_id::text, player_a_id::text, player_b_id::text, status, "
-                f"       match_category, gap_band, round_intent, player_a_role, player_b_role "
-                f"FROM {slot_table} WHERE slot_id = %s",
-                (body.fixture_slot_id,),
-            )
-            slot = cur.fetchone()
-            if not slot:
-                raise ValueError("Fixture slot not found")
-            if slot["status"] != "SCHEDULED":
-                raise ValueError(f"Fixture slot is already '{slot['status']}'")
-            if slot["player_a_id"] != a_id or slot["player_b_id"] != b_id:
-                raise ValueError("Fixture slot players do not match the submitted players")
-            slot_match_category = slot["match_category"]
-            slot_gap_band = slot["gap_band"]
-            slot_round_intent = slot["round_intent"]
-            slot_player_a_role = slot["player_a_role"]
-            slot_player_b_role = slot["player_b_role"]
 
         match_id = str(uuid.uuid4())
         now_utc = datetime.now(timezone.utc)

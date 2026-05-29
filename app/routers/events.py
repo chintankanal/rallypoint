@@ -418,7 +418,7 @@ def get_event_fixtures(event_id: str, _: dict = _ANY):
                 LEFT JOIN player pb ON pb.player_id = efs.player_b_id
                 LEFT JOIN academy ab ON ab.academy_id = pb.primary_academy_id
                 WHERE efs.event_id = %s
-                ORDER BY efs.round_number, efs.wave_number, efs.table_number
+                ORDER BY efs.round_number, efs.wave_number, CASE WHEN efs.player_b_id IS NULL THEN 1 ELSE 0 END, efs.table_number
                 """,
                 (event_id,),
             )

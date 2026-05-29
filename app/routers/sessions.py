@@ -304,7 +304,7 @@ def get_session_fixtures(session_id: str, _: dict = _ANY):
                 LEFT JOIN player pb ON pb.player_id = fs.player_b_id
                 LEFT JOIN match m ON m.match_id = fs.match_id
                 WHERE fs.session_id = %s
-                ORDER BY fs.round_number, fs.wave_number, fs.table_number
+                ORDER BY fs.round_number, fs.wave_number, CASE WHEN fs.player_b_id IS NULL THEN 1 ELSE 0 END, fs.table_number
                 """,
                 (session_id,),
             )

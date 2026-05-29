@@ -846,6 +846,50 @@ def test_league_fixtures_tier_matched_default_strategy():
             )
 
 
+def test_league_fixtures_tier_matched_skips_pure_bye_rounds():
+    academy_data = {
+        "JLTTA": [
+            ("Rohan Dasgupta", 1400.0),
+            ("Sanya Malhotra", 1300.0),
+            ("Kabir Singh", 1400.0),
+            ("Arjun Sharma", 1200.0),
+            ("Dashaan Kanal", 1206.51),
+            ("Mayur Kolapte", 1208.88),
+            ("Ameya Shah", 1017.93),
+            ("Rohan Batra", 950.0),
+            ("Aarav Sharma", 992.34),
+            ("Ananya Iyer", 1000.0),
+        ],
+        "YMCA": [
+            ("Anika Menon", 1300.0),
+            ("Advait Joshi", 1350.0),
+            ("Vihaan Gupta", 1200.0),
+            ("Shreya Iyer", 1200.0),
+            ("Ishaan Patel", 1174.33),
+            ("Myra Kapur", 1000.0),
+            ("Aryan Verma", 1000.0),
+            ("Diya Reddy", 1000.0),
+        ],
+    }
+    players_by_academy = _make_inter_academy_players(academy_data)
+
+    result = generate_league_fixtures(
+        players_by_academy,
+        set(),
+        strategy="TIER_MATCHED",
+        num_tables=4,
+    )
+
+    by_round: dict[int, list[dict]] = {}
+    for slot in result["slots"]:
+        by_round.setdefault(slot["round_number"], []).append(slot)
+
+    for round_number, slots in by_round.items():
+        assert any(slot["player_b_id"] is not None for slot in slots), (
+            f"Round {round_number} contains only BYEs"
+        )
+
+
 def test_league_fixtures_tier_matched_multi_tier():
     """
     TIER_MATCHED groups players by tier, then cross-academy round-robin within each tier.
@@ -878,6 +922,30 @@ def test_league_fixtures_tier_matched_multi_tier():
             cross_academy_count += 1
     
     assert cross_academy_count > 0, "TIER_MATCHED generated no cross-academy matches"
+
+
+def test_league_fixtures_tier_matched_packs_rounds_across_tiers():
+    """
+    TIER_MATCHED should allow different tiers to share the same global
+    round_number when physical table capacity permits.
+    """
+    academy_data = {
+        "j": [("j1", 1470.0), ("j2", 1460.0), ("j3", 1450.0)],
+        "y": [("y1", 1440.0)],
+        "a": [("a1", 1010.0)],
+        "b": [("b1", 1000.0)],
+    }
+    players_by_academy = _make_inter_academy_players(academy_data)
+
+    result = generate_league_fixtures(
+        players_by_academy, set(), strategy="TIER_MATCHED", num_tables=4
+    )
+
+    round_numbers = sorted({slot["round_number"] for slot in result["slots"]})
+    assert round_numbers == list(range(1, result["total_rounds"] + 1))
+    assert result["total_rounds"] == 3, (
+        f"Expected packed rounds across tiers to fit into 3 rounds, got {result['total_rounds']}"
+    )
 
 
 def test_league_fixtures_cross_academy_only_no_intra_academy():

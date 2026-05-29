@@ -1060,6 +1060,7 @@ def _assign_tables_league(
     return schedule_round(cleaned, num_tables, _to_slot)
 
 
+
 def _run_circle_round_robin(
     players_by_id: dict,
     pids: list,
@@ -1125,30 +1126,21 @@ def _full_round_robin(
     return {"total_rounds": total_rounds, "cross_academy_pct": cross_pct, "slots": slots}
 
 
-def _absorb_singleton_tiers(
+def _rebalance_imbalanced_tiers(
     tier_by_academy: dict[str, dict[str, list[dict]]],
     tier_order: list[str],
 ) -> dict[str, dict[str, list[dict]]]:
     """
-    Critique #6: a tier containing exactly one player must not be silent-dropped.
-    Merge each such player into the adjacent tier whose closest player is the
-    smallest gap away. If both neighbors exist, pick the closer one; if only
-    one exists, use it. The merged-in player's resulting slots will carry
-    gap_band derived from the actual gap (potentially STRETCH or OUT_OF_BAND).
-
-    Returns a new tier→academy→players mapping with singletons absorbed.
+    Absorb imbalanced tiers (single-academy or single-player) into neighbors to 
+    minimize BYEs. A tier is imbalanced for cross-academy play if it lacks 
+    opponents from at least one other academy, or contains only one player.
     """
-    # Snapshot existing tier sizes (players across all academies in that tier).
-    sizes: dict[str, int] = {
-        t: sum(len(ps) for ps in by_ac.values())
-        for t, by_ac in tier_by_academy.items()
-    }
     result: dict[str, dict[str, list[dict]]] = {
         t: {aid: list(ps) for aid, ps in by_ac.items()}
         for t, by_ac in tier_by_academy.items()
     }
 
-    def _closest_neighbor_player_rating(target_tier: str) -> float | None:
+    def _tier_avg_rating(target_tier: str) -> float | None:
         if target_tier not in result or not result[target_tier]:
             return None
         ratings = [
@@ -1157,14 +1149,32 @@ def _absorb_singleton_tiers(
         ]
         return sum(ratings) / len(ratings) if ratings else None
 
+    # Track the number of active academies in each tier for neighbor filtering
+    sizes = {t: len([ps for ps in by_ac.values() if ps]) for t, by_ac in result.items()}
+
     for tier in list(result.keys()):
-        if sizes.get(tier, 0) != 1:
-            continue
-        # Locate the singleton player and their academy.
         by_ac = result[tier]
-        academy_id, players = next(iter(by_ac.items()))
-        singleton = players[0]
-        singleton_rating = float(singleton["current_rating"])
+        total_players = sum(len(ps) for ps in by_ac.values())
+        active_academies = [aid for aid, ps in by_ac.items() if ps]
+        
+        # Threshold: if only one academy is present, no cross-academy matches 
+        # are possible. We merge these players into a neighbor tier.
+        if total_players > 1 and len(active_academies) > 1:
+            continue
+
+        players_to_move: list[tuple[str, dict]] = []
+        tier_ratings = []
+        for aid, ps in by_ac.items():
+            for p in ps:
+                players_to_move.append((aid, p))
+                tier_ratings.append(float(p["current_rating"]))
+        
+        if not players_to_move:
+            continue
+        avg_rating = sum(tier_ratings) / len(tier_ratings)
+        singleton_rating = avg_rating
+        academy_id = players_to_move[0][0] if players_to_move else None
+        singleton = players_to_move[0][1] if players_to_move else None
 
         # Find neighbor tiers in the canonical order.
         idx = tier_order.index(tier) if tier in tier_order else -1
@@ -1182,17 +1192,62 @@ def _absorb_singleton_tiers(
 
         # Choose the neighbor whose mean rating is closest to the singleton.
         def _distance(t: str) -> float:
-            mean = _closest_neighbor_player_rating(t) or singleton_rating
+            mean = _tier_avg_rating(t) or singleton_rating
             return abs(mean - singleton_rating)
 
         target = min(neighbors, key=_distance)
-        result[target].setdefault(academy_id, []).append(singleton)
-        # Remove the singleton's now-empty tier.
-        del result[tier]
+        result[target].setdefault(academy_id, []).extend([p for _, p in players_to_move])
+        # Remove the tier if empty
+        if all(not ps for ps in result[tier].values()):
+            del result[tier]
         sizes[target] = sizes.get(target, 0) + 1
         sizes[tier] = 0
 
     return result
+
+
+
+def _circle_matching_rounds_no_same_academy(
+    interleaved: list[dict],
+    played_pairs: set[tuple],
+) -> list[list[tuple]]:
+    """
+    Generate round-by-round raw pairs for cross-academy circle matching.
+    Same-academy pairings are converted to explicit BYEs, but the rounds are
+    preserved as a sequence so the caller can choose how to pack them.
+    """
+    players_by_id_local = {p["player_id"]: p for p in interleaved}
+    pids: list = [p["player_id"] for p in interleaved]
+    if len(pids) < 2:
+        return [[(p["player_id"], None) for p in interleaved]]
+    if len(pids) % 2 == 1:
+        pids = pids + [None]
+
+    total_rounds = len(pids) - 1
+    rounds: list[list[tuple]] = []
+
+    for round_idx in range(total_rounds):
+        raw_pairs = _circle_pairs_for_ids(pids, round_idx)
+        cross_pairs: list[tuple] = []
+        bye_pairs_round: list[tuple] = []
+        for a, b in raw_pairs:
+            if a is None or b is None:
+                bye_pairs_round.append((a if a is not None else b, None))
+                continue
+            acad_a = players_by_id_local[a]["academy_id"]
+            acad_b = players_by_id_local[b]["academy_id"]
+            if acad_a == acad_b:
+                bye_pairs_round.append((a, None))
+                bye_pairs_round.append((b, None))
+            else:
+                cross_pairs.append((a, b))
+
+        cross_pairs = _swap_for_novelty_constrained(
+            cross_pairs, played_pairs, players_by_id_local
+        )
+        rounds.append(cross_pairs + bye_pairs_round)
+
+    return rounds
 
 
 def _circle_matching_no_same_academy(
@@ -1212,45 +1267,13 @@ def _circle_matching_no_same_academy(
     remain cross-academy and at least one rematch is avoided.
     """
     players_by_id_local = {p["player_id"]: p for p in interleaved}
-    pids: list = [p["player_id"] for p in interleaved]
-    if len(pids) < 2:
-        # Degenerate group — emit BYE per player so they aren't silent-dropped.
-        bye_pairs = [(p["player_id"], None) for p in interleaved]
-        slots = _assign_tables_league(
-            bye_pairs, round_offset + 1, players_by_id_local, strategy,
-            num_tables=num_tables,
-        )
-        return slots, 1 if interleaved else 0, 0, 0
-    if len(pids) % 2 == 1:
-        pids = pids + [None]
+    rounds = _circle_matching_rounds_no_same_academy(interleaved, played_pairs)
 
-    total_rounds = len(pids) - 1
     slots: list[dict] = []
     cross_count = 0
     real_count = 0
 
-    for round_idx in range(total_rounds):
-        raw_pairs = _circle_pairs_for_ids(pids, round_idx)
-        cross_pairs: list[tuple] = []
-        bye_pairs_round: list[tuple] = []
-        for a, b in raw_pairs:
-            if a is None or b is None:
-                bye_pairs_round.append((a if a is not None else b, None))
-                continue
-            acad_a = players_by_id_local[a]["academy_id"]
-            acad_b = players_by_id_local[b]["academy_id"]
-            if acad_a == acad_b:
-                # Critique #5: TIER_MATCHED with ≥2 academies in a tier must
-                # not emit intra-academy pairs. Convert to BYEs.
-                bye_pairs_round.append((a, None))
-                bye_pairs_round.append((b, None))
-            else:
-                cross_pairs.append((a, b))
-
-        cross_pairs = _swap_for_novelty_constrained(
-            cross_pairs, played_pairs, players_by_id_local
-        )
-        all_pairs = cross_pairs + bye_pairs_round
+    for round_idx, all_pairs in enumerate(rounds):
         round_slots = _assign_tables_league(
             all_pairs, round_offset + round_idx + 1, players_by_id_local, strategy,
             num_tables=num_tables,
@@ -1263,7 +1286,7 @@ def _circle_matching_no_same_academy(
                     cross_count += 1
         slots.extend(round_slots)
 
-    return slots, total_rounds, cross_count, real_count
+    return slots, len(rounds), cross_count, real_count
 
 
 def _tier_matched(
@@ -1275,7 +1298,8 @@ def _tier_matched(
     tier contains ≥2 academies (critique §5). Singleton-tier players are
     absorbed into the closest adjacent tier (critique §6) rather than dropped.
 
-    Rounds are numbered sequentially across tiers.
+    Rounds are packed across tiers so multiple tier-local round indices
+    can share the same global round_number when table capacity allows.
     """
     from app.utils.rating_math import get_tier, _load_config
 
@@ -1290,14 +1314,16 @@ def _tier_matched(
             tier = get_tier(float(p["current_rating"]), cfg)
             tier_by_academy.setdefault(tier, {}).setdefault(academy_id, []).append(p)
 
-    # Absorb singleton tiers into their nearest adjacent tier so the affected
-    # players aren't silently dropped.
-    tier_by_academy = _absorb_singleton_tiers(tier_by_academy, tier_order)
+    # Absorb imbalanced tiers (single-academy or single-player) to minimize BYEs.
+    tier_by_academy = _rebalance_imbalanced_tiers(tier_by_academy, tier_order)
 
     all_slots: list[dict] = []
     cross_count = 0
     real_count = 0
-    rounds_emitted = 0
+
+    all_players = [p for players in players_by_academy.values() for p in players]
+    players_by_id_all = {p["player_id"]: p for p in all_players}
+    tier_rounds_list: list[list[list[tuple]]] = []
 
     for tier in tier_order:
         by_academy = tier_by_academy.get(tier)
@@ -1308,14 +1334,43 @@ def _tier_matched(
         if not interleaved:
             continue
 
-        tier_slots, tier_rounds, tc, rc = _circle_matching_no_same_academy(
-            interleaved, played_pairs, "TIER_MATCHED", rounds_emitted,
+        tier_rounds = _circle_matching_rounds_no_same_academy(
+            interleaved, played_pairs
+        )
+        if tier_rounds:
+            tier_rounds_list.append(tier_rounds)
+
+    current_round = 1
+    max_rounds = max((len(rounds) for rounds in tier_rounds_list), default=0)
+    for round_idx in range(max_rounds):
+        combined_pairs: list[tuple] = []
+        for tier_rounds in tier_rounds_list:
+            if round_idx < len(tier_rounds):
+                combined_pairs.extend(tier_rounds[round_idx])
+        if not combined_pairs:
+            continue
+        # Skip rounds that contain only BYEs. These are ghost rounds with no
+        # actual match play and should not consume a global round number.
+        if all(pair[1] is None for pair in combined_pairs):
+            continue
+
+        round_slots = _assign_tables_league(
+            combined_pairs,
+            current_round,
+            players_by_id_all,
+            "TIER_MATCHED",
             num_tables=num_tables,
         )
-        all_slots.extend(tier_slots)
-        cross_count += tc
-        real_count += rc
-        rounds_emitted += tier_rounds
+        for slot in round_slots:
+            if slot["player_b_id"] is not None:
+                real_count += 1
+                if players_by_id_all[slot["player_a_id"]]["academy_id"] != \
+                        players_by_id_all[slot["player_b_id"]]["academy_id"]:
+                    cross_count += 1
+        all_slots.extend(round_slots)
+        current_round += 1
+
+    rounds_emitted = current_round - 1
 
     cross_pct = round(cross_count / real_count * 100, 1) if real_count > 0 else 0.0
     return {"total_rounds": rounds_emitted, "cross_academy_pct": cross_pct, "slots": all_slots}

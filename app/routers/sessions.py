@@ -161,12 +161,14 @@ def generate_session_fixtures(
 
             cur.execute(
                 """
-                SELECT COUNT(*) AS cnt FROM session
-                WHERE event_id = %s AND session_date < %s
+                SELECT COALESCE(MAX(fs.round_number), 0) AS offset
+                FROM fixture_slot fs
+                JOIN session s ON s.session_id = fs.session_id
+                WHERE s.event_id = %s AND s.session_date < %s
                 """,
                 (session["event_id"], session["session_date"]),
             )
-            round_offset = cur.fetchone()["cnt"]
+            round_offset = cur.fetchone()["offset"]
 
             result = generate_fixtures(
                 players=players,

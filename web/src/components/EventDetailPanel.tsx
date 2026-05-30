@@ -21,6 +21,18 @@
     { bg: 'bg-indigo-800', text: 'text-indigo-100' },
   ]
 
+  export const ACADEMY_PALETTE_EXTENDED = [
+    ...ACADEMY_PALETTE,
+    { bg: 'bg-blue-700', text: 'text-blue-50' },
+    { bg: 'bg-purple-700', text: 'text-purple-50' },
+    { bg: 'bg-green-700', text: 'text-green-50' },
+    { bg: 'bg-amber-600', text: 'text-amber-50' },
+    { bg: 'bg-red-700', text: 'text-red-50' },
+    { bg: 'bg-cyan-700', text: 'text-cyan-50' },
+    { bg: 'bg-pink-700', text: 'text-pink-50' },
+    { bg: 'bg-indigo-700', text: 'text-indigo-50' },
+  ]
+
   const MAX_SETS_MAP: Record<string, number> = { BEST_OF_3: 2, BEST_OF_5: 3, BEST_OF_7: 4 }
 
   const MATCH_DURATION_MIN: Record<string, number> = { BEST_OF_3: 18, BEST_OF_5: 30, BEST_OF_7: 45 }
@@ -217,9 +229,58 @@
       finally { setApplyingRatings(false) }
     }
 
-    // Build colorMap from all academies in the directory
-    const allAcademyIds = [...new Set(allPlayers.map(p => p.academy_id))]
-    const colorMap = Object.fromEntries(allAcademyIds.map((id, i) => [id, ACADEMY_PALETTE[i % ACADEMY_PALETTE.length]]))
+    // 1. Identify active academies involved in the current event roster or fixtures
+    const eventAcademyIds = new Set<string>()
+    const addAcademyId = (id?: string | null) => {
+      if (id) eventAcademyIds.add(id)
+    }
+
+    if (roster?.items) {
+      roster.items.forEach(p => addAcademyId(p.academy_id))
+    }
+    if (fixtures?.slots) {
+      fixtures.slots.forEach(s => {
+        addAcademyId(s.player_a?.academy_id)
+        addAcademyId(s.player_b?.academy_id)
+      })
+    }
+
+    const prioritizedIds = Array.from(eventAcademyIds).sort((a, b) => a.localeCompare(b))
+
+    // 2. Keep the master list strictly alphabetical so UI elements/chips don't shift positions layout-wise
+    const allAcademyIds = [...new Set((allPlayers || []).map(p => p.academy_id))].sort((a, b) => a.localeCompare(b))
+
+    // Fallback wrapper if roster/fixtures load before the full global player directory does
+    let missingIdsAdded = false
+    prioritizedIds.forEach(id => {
+      if (!allAcademyIds.includes(id)) {
+        allAcademyIds.push(id)
+        missingIdsAdded = true
+      }
+    })
+
+    // Re-sort if any fallback IDs were appended to preserve alphabetical layout stability
+    if (missingIdsAdded) {
+      allAcademyIds.sort((a, b) => a.localeCompare(b))
+    }
+
+    // 3. Build a collision-free colorMap
+    const colorMap: Record<string, typeof ACADEMY_PALETTE[number]> = {}
+    const activePalette = ACADEMY_PALETTE_EXTENDED
+    const clonePaletteEntry = (entry: typeof ACADEMY_PALETTE[number]) => ({ bg: entry.bg, text: entry.text })
+
+    // First pass: Assign guaranteed unique colors sequentially to active participating academies
+    prioritizedIds.forEach((id, i) => {
+      colorMap[id] = clonePaletteEntry(activePalette[i] ?? ACADEMY_PALETTE[0])
+    })
+
+    // Second pass: Assign stable fallback colors to the remaining inactive directory academies
+    allAcademyIds.forEach((id) => {
+      if (!(id in colorMap)) {
+        const globalIndex = allAcademyIds.indexOf(id)
+        colorMap[id] = clonePaletteEntry(ACADEMY_PALETTE[globalIndex % ACADEMY_PALETTE.length] ?? ACADEMY_PALETTE[0])
+      }
+    })
 
     // Group directory by academy
     const dirByAcademy: Record<string, PlayerDirectoryItem[]> = {}
@@ -1217,37 +1278,44 @@
     }
 
     const rounds = Array.from({ length: fixtures.total_rounds }, (_, i) => i + 1)
-    const academyIds = Object.keys(byAcademy)
+    const activeAcademyIds = Object.keys(byAcademy).sort((a, b) => {
+      const nameA = byAcademy[a][0]?.academy_name ?? a
+      const nameB = byAcademy[b][0]?.academy_name ?? b
+      return nameA.localeCompare(nameB)
+    })
     const firstNameCounts = Object.values(playerById).reduce<Record<string, number>>((acc, player) => {
       const first = getFirstName(player.name)
       acc[first] = (acc[first] ?? 0) + 1
       return acc
     }, {})
 
-    const rows = academyIds.flatMap(academyId => {
+    const rows = activeAcademyIds.flatMap(academyId => {
       if (filterAcademyId && filterAcademyId !== academyId) return []
 
       const players = byAcademy[academyId] ?? []
-      const color = colorMap[academyId] ?? ACADEMY_PALETTE[0]
 
       const headerRow = (
-        <tr key={`${academyId}-header`} className="border-b border-gray-800 last:border-0">
-          <td colSpan={rounds.length + 2} className={`text-xs font-bold px-3 py-1.5 ${color.bg} ${color.text}`}>
-            {players[0]?.academy_name}
+        <tr key={`${academyId}-header`} className="border-b border-gray-800 last:border-0 bg-gray-950/40">
+          <td colSpan={rounds.length + 2} className="text-xs uppercase tracking-wider font-bold text-gray-400 px-3 py-1.5">
+            <div className="flex items-center gap-2">
+              <span className={`w-1.5 h-3 rounded-sm ${(colorMap[academyId] ?? ACADEMY_PALETTE[0]).bg}`} />
+              {players[0]?.academy_name}
+            </div>
           </td>
         </tr>
       )
 
       const playerRows = players.map(p => {
         const playerSchedule = schedule[p.player_id] ?? {}
+        const playerColor = colorMap[academyId] ?? ACADEMY_PALETTE[0]
         return (
-          <tr key={p.player_id}>
-            <td className="text-left px-3 py-1.5 border-b border-gray-800 sticky left-0 bg-gray-900/40 min-w-[130px] z-10">
-              <div className={`font-medium truncate ${color.text}`}>{p.name}</div>
+          <tr key={p.player_id} className="hover:bg-gray-800/20 transition-colors">
+            <td className="text-left px-3 py-1.5 border-b border-gray-800 sticky left-0 bg-gray-900/40 min-w-[150px] z-10">
+              <div className={`font-medium truncate ${playerColor.text}`}>{p.name}</div>
               <div className="text-[10px] text-gray-500">{p.academy_name}</div>
             </td>
-            <td className="text-right px-2 py-1.5 border-b border-gray-800 font-mono text-gray-400 min-w-[50px]">{Math.round(p.current_rating)}</td>
-              {rounds.map(r => {
+            <td className="text-right px-2 py-1.5 border-b border-gray-800 font-mono text-[10px] text-gray-400">{Math.round(p.current_rating)}</td>
+            {rounds.map(r => {
               const cell = playerSchedule[r]
               const isBye = cell?.is_bye ?? false
               const isHighlighted = r === highlightRound
@@ -1255,17 +1323,22 @@
               const opponentText = cell?.opponent ? (colorMap[cell.opponent.academy_id]?.text ?? 'text-gray-300') : 'text-gray-300'
 
               return (
-                <td key={r} className={`text-center px-1.5 py-1.5 border-b border-gray-800 min-w-[45px] ${isHighlighted ? 'bg-yellow-900/40' : ''}`}>
+                <td
+                  key={r}
+                  className={`relative text-center px-1.5 py-1.5 border-b border-gray-800 ${isHighlighted ? 'bg-yellow-900/40' : ''}`}
+                  title={cell?.opponent ? `${cell.opponent.name} (${Math.round(cell.opponent.current_rating)}) — ${cell.category}` : isBye ? 'BYE' : 'No opponent' }
+                >
                   {isBye ? (
                     <span className="text-[10px] text-gray-600 font-medium">BYE</span>
                   ) : cell?.opponent ? (
-                    <div className="text-[10px] leading-tight">
-                      <div className={`text-xs font-bold truncate ${opponentText} rounded px-1`} title={cell.opponent.name}>
+                    <div className="relative min-h-[32px]">
+                      <div className={`text-xs font-semibold truncate ${opponentText}`}> 
                         {getOpponentLabel(cell.opponent, firstNameCounts)}
                       </div>
-                      <div className={`text-[10px] rounded px-1 ${opponentBg} ${opponentText} mt-0.5`} title={`Rating: ${Math.round(cell.opponent.current_rating)}`}>
+                      <div className="text-[9px] text-gray-500 mt-0.5">
                         {Math.round(cell.opponent.current_rating)}
                       </div>
+                      <span className={`absolute bottom-0 left-1 right-1 h-[2px] rounded-sm ${opponentBg}`} />
                     </div>
                   ) : (
                     <span className="text-gray-600">—</span>
@@ -1287,7 +1360,7 @@
             className={`px-2 py-1 text-xs rounded transition-colors ${!filterAcademyId ? 'bg-white text-gray-900 font-medium' : 'bg-gray-800 text-gray-400 hover:text-white'}`}>
             All
           </button>
-          {academyIds.map(id => {
+          {activeAcademyIds.map(id => {
             const color = colorMap[id] ?? ACADEMY_PALETTE[0]
             return (
               <button key={id} onClick={() => setFilterAcademyId(filterAcademyId === id ? null : id)}
@@ -1299,7 +1372,7 @@
         </div>
         <div className="flex flex-wrap items-center gap-2 text-[11px]">
           <span className="text-gray-400 uppercase tracking-wide">Academy legend:</span>
-          {academyIds.map(id => {
+          {activeAcademyIds.map(id => {
             const color = colorMap[id] ?? ACADEMY_PALETTE[0]
             return (
               <span key={id} className="inline-flex items-center gap-2 rounded-full bg-gray-900/70 px-2 py-1">
@@ -1311,14 +1384,21 @@
         </div>
 
         <div className="overflow-x-auto rounded-lg border border-gray-800">
-          <table className="text-xs border-collapse w-full">
+          <table className="table-fixed text-xs border-collapse w-full">
+            <colgroup>
+              <col style={{ width: '150px' }} />
+              <col style={{ width: '60px' }} />
+              {rounds.map(r => (
+                <col key={r} style={{ width: '70px' }} />
+              ))}
+            </colgroup>
             <thead>
               <tr className="bg-gray-900/80">
-                <th className="text-left px-3 py-2 text-gray-500 border-b border-gray-800 sticky left-0 bg-gray-900 min-w-[130px] z-10">Player</th>
-                <th className="text-right px-2 py-2 text-gray-500 border-b border-gray-800 min-w-[50px]">Rtg</th>
+                <th className="text-left px-3 py-2 text-gray-500 border-b border-gray-800 sticky left-0 bg-gray-900 min-w-[150px] z-10">Player</th>
+                <th className="text-right px-2 py-2 text-gray-500 border-b border-gray-800">Rtg</th>
                 {rounds.map(r => (
                   <th key={r} onClick={() => setHighlightRound(highlightRound === r ? null : r)}
-                    className="text-center px-1.5 py-2 text-gray-600 border-b border-gray-800 min-w-[45px] cursor-pointer hover:bg-gray-800/50"
+                    className="text-center px-1.5 py-2 text-gray-600 border-b border-gray-800 cursor-pointer hover:bg-gray-800/50"
                     title={`Round ${r}`}>
                     R{r}
                   </th>

@@ -283,6 +283,7 @@ function SessionsTab({ academyId }: { academyId: string }) {
   const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set())
   const [fixtureResult, setFixtureResult] = useState<{ bootstrap_phase: string; matches_per_player: number; fixture_slots_created: number } | null>(null)
   const [resultSlot, setResultSlot] = useState<FixtureSlot | null>(null)
+  const [activeCategoryFilter, setActiveCategoryFilter] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const eventsQ = useQuery({ queryKey: ['events'], queryFn: () => eventsApi.list() })
@@ -397,13 +398,20 @@ function SessionsTab({ academyId }: { academyId: string }) {
   const roster = rosterQ.data?.items ?? []
   const sessions = sessionsQ.data ?? []
 
-  const MATCH_CAT_COLOR: Record<string, string> = {
-    COMPETITIVE: 'text-blue-400',
-    STRETCH: 'text-purple-400',
-    ANCHOR: 'text-green-400',
-    DEVELOPMENTAL: 'text-gray-300',
-    OUT_OF_BAND: 'text-orange-300',
-    BYE: 'text-gray-500',
+  const MATCH_CAT_BADGE: Record<string, string> = {
+    COMPETITIVE: 'bg-blue-500/10 text-blue-300 border-blue-500/20',
+    STRETCH: 'bg-purple-500/10 text-purple-300 border-purple-500/20',
+    ANCHOR: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
+    DEVELOPMENTAL: 'bg-slate-500/10 text-slate-300 border-slate-500/20',
+    OUT_OF_BAND: 'bg-orange-500/10 text-orange-300 border-orange-500/20',
+    BYE: 'bg-gray-700/10 text-gray-300 border-gray-700/30',
+    UNKNOWN: 'bg-gray-700/10 text-gray-300 border-gray-700/30',
+  }
+
+  const BOOTSTRAP_PHASE_BADGE: Record<string, string> = {
+    DISCOVERY: 'bg-blue-500/10 text-blue-300 border-blue-500/20',
+    TRANSITION: 'bg-purple-500/10 text-purple-300 border-purple-500/20',
+    STANDARD: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
   }
 
   const getSlotRoleCode = (slot: { player_a_role?: string | null; player_b_role?: string | null }) => {
@@ -460,6 +468,54 @@ function SessionsTab({ academyId }: { academyId: string }) {
   }
 
   const hasFixtures = !!fixtureResult || (openedSession?.generated_at != null)
+  const bootstrapPhase = fixtureResult?.bootstrap_phase ?? openedSession?.bootstrap_phase ?? 'STANDARD'
+
+  const fixtureAnalytics = fixturesQ.data ? (() => {
+    const counts: Record<string, number> = {
+      COMPETITIVE: 0,
+      STRETCH: 0,
+      ANCHOR: 0,
+      DEVELOPMENTAL: 0,
+      OUT_OF_BAND: 0,
+      BYE: 0,
+      UNKNOWN: 0,
+    }
+    let totalDelta = 0
+    let deltasCount = 0
+    let filledCount = 0
+
+    fixturesQ.data.slots.forEach(slot => {
+      const type = getSlotTypeCode(slot)
+      counts[type] = (counts[type] ?? 0) + 1
+      if (slot.player_b && slot.player_a) {
+        filledCount += 1
+        totalDelta += Math.abs(Math.round(slot.player_a.current_rating) - Math.round(slot.player_b.current_rating))
+        deltasCount += 1
+      }
+    })
+
+    const totalSlots = fixturesQ.data.slots.length
+    const asPercent = (value: number) => totalSlots ? Math.round((value / totalSlots) * 100) : 0
+    const byeBalanced = counts.BYE === 0 || counts.BYE <= 1
+
+    return {
+      totalSlots,
+      counts,
+      percentages: {
+        competitive: asPercent(counts.COMPETITIVE),
+        stretch: asPercent(counts.STRETCH),
+        anchor: asPercent(counts.ANCHOR),
+        developmental: asPercent(counts.DEVELOPMENTAL),
+        outOfBand: asPercent(counts.OUT_OF_BAND),
+        bye: asPercent(counts.BYE),
+      },
+      density: totalSlots ? Math.round((filledCount / totalSlots) * 100) : 0,
+      tightnessScore: deltasCount ? Number((totalDelta / deltasCount).toFixed(1)) : 0,
+      byeBalanced,
+      outOfBandCount: counts.OUT_OF_BAND,
+      byeCount: counts.BYE,
+    }
+  })() : null
 
   return (
     <div className="space-y-5">
@@ -654,68 +710,188 @@ function SessionsTab({ academyId }: { academyId: string }) {
           )}
 
           {hasFixtures && (
-            <div className="space-y-4">
-              {fixtureResult && (
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-wrap gap-6">
-                  <div><div className="text-xs text-gray-500 mb-1">Phase</div><div className="font-semibold text-white">{fixtureResult.bootstrap_phase}</div></div>
-                  <div><div className="text-xs text-gray-500 mb-1">Matches per player</div><div className="font-semibold text-white">{fixtureResult.matches_per_player}</div></div>
-                  <div><div className="text-xs text-gray-500 mb-1">Total slots</div><div className="font-semibold text-white">{fixtureResult.fixture_slots_created}</div></div>
+            <div className="space-y-5">
+              {fixtureAnalytics && (
+                <div className="rounded-2xl bg-gradient-to-br from-slate-800/80 via-slate-900/80 to-slate-800/80 p-[1px]">
+                  <div className="rounded-2xl bg-gray-900/80 border border-gray-800 backdrop-blur-sm p-5 grid gap-4 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1.2fr)] items-start">
+                    <div className="space-y-4">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className="text-xs uppercase tracking-[0.24em] text-gray-400">Session diagnostics</span>
+                        <span className={`inline-flex items-center rounded-full border px-3 py-1 text-sm font-semibold ${BOOTSTRAP_PHASE_BADGE[bootstrapPhase] ?? 'bg-slate-700/10 text-slate-200 border-slate-700/20'}`}>
+                          {bootstrapPhase.replace(/_/g, ' ')}
+                        </span>
+                      </div>
+                      <div className="text-gray-300 text-sm max-w-xl leading-6">
+                        {bootstrapPhase === 'STANDARD' ? (
+                          <>Standard Phase: Active because players have established ratings. Matches prioritize <span className="font-semibold text-emerald-400">competitive integrity</span> by pairing players within <span className="font-semibold text-blue-400">strict rating bands</span>.</>
+                        ) : bootstrapPhase === 'TRANSITION' ? (
+                          <>Transition Phase: Active because there is a mix of established and provisional/new players. Matches blend rating integrity with accelerated discovery.</>
+                        ) : bootstrapPhase === 'DISCOVERY' ? (
+                          <>Discovery Phase: Active because players are unrated or provisional. Matches focus heavily on establishing initial rating accuracy quickly.</>
+                        ) : (
+                          <>This session was generated with a {bootstrapPhase.toLowerCase()} bootstrap phase. Review slot density and matchup balance across rounds before entering results.</>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-2xl border border-gray-800 bg-slate-950/60 p-3">
+                        <div className="text-xs text-gray-500 uppercase tracking-[0.24em]">Matchup balance</div>
+                        <div className="mt-2 text-2xl font-semibold text-white">{fixtureAnalytics ? `${fixtureAnalytics.percentages.competitive + fixtureAnalytics.percentages.stretch + fixtureAnalytics.percentages.anchor}%` : '--'}</div>
+                        <div className="text-xs text-gray-400 mt-1">Competitive / Stretch / Anchor</div>
+                      </div>
+                      <div className="rounded-2xl border border-gray-800 bg-slate-950/60 p-3">
+                        <div className="text-xs text-gray-500 uppercase tracking-[0.24em]">Pairing density</div>
+                        <div className="mt-2 text-2xl font-semibold text-white">{fixtureAnalytics ? `${fixtureAnalytics.density}%` : '--'}</div>
+                        <div className="text-xs text-gray-400 mt-1">{fixtureAnalytics ? `${fixtureAnalytics.totalSlots - fixtureAnalytics.byeCount} filled · ${fixtureAnalytics.byeCount} bye${fixtureAnalytics.byeCount !== 1 ? 's' : ''}` : '—'}</div>
+                      </div>
+                    </div>
+
+                    {fixtureAnalytics && (
+                      <div className="col-span-full space-y-3">
+                        <div className="text-xs uppercase tracking-[0.24em] text-gray-400">Matchup category mix</div>
+                        <div className="flex w-full h-3 overflow-hidden rounded-full bg-gray-800 border border-gray-700">
+                          {[
+                            { key: 'competitive', color: 'bg-blue-500', percentage: fixtureAnalytics.percentages.competitive },
+                            { key: 'stretch', color: 'bg-purple-500', percentage: fixtureAnalytics.percentages.stretch },
+                            { key: 'anchor', color: 'bg-emerald-500', percentage: fixtureAnalytics.percentages.anchor },
+                            { key: 'developmental', color: 'bg-slate-500', percentage: fixtureAnalytics.percentages.developmental },
+                            { key: 'outOfBand', color: 'bg-orange-500', percentage: fixtureAnalytics.percentages.outOfBand },
+                            { key: 'bye', color: 'bg-gray-600', percentage: fixtureAnalytics.percentages.bye },
+                          ].map(category => (
+                            <div key={category.key}
+                              className={`${category.color} h-full transition-all duration-200 ${activeCategoryFilter && activeCategoryFilter !== category.key ? 'opacity-30' : 'opacity-100'}`}
+                              style={{ width: activeCategoryFilter ? (activeCategoryFilter === category.key ? `${category.percentage}%` : '0%') : `${category.percentage}%` }}
+                            />
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-[10px] uppercase tracking-[0.25em] text-gray-500">
+                          {[
+                            { key: 'competitive', label: 'Comp', color: 'bg-blue-500', value: fixtureAnalytics.percentages.competitive },
+                            { key: 'stretch', label: 'Stretch', color: 'bg-purple-500', value: fixtureAnalytics.percentages.stretch },
+                            { key: 'anchor', label: 'Anchor', color: 'bg-emerald-500', value: fixtureAnalytics.percentages.anchor },
+                            { key: 'developmental', label: 'Developmental', color: 'bg-slate-500', value: fixtureAnalytics.percentages.developmental },
+                            { key: 'outOfBand', label: 'Out-of-band', color: 'bg-orange-500', value: fixtureAnalytics.percentages.outOfBand },
+                            { key: 'bye', label: 'Bye', color: 'bg-gray-600', value: fixtureAnalytics.percentages.bye },
+                          ].map(category => (
+                            <button key={category.key} type="button"
+                              onClick={() => setActiveCategoryFilter(prev => prev === category.key ? null : category.key)}
+                              className={`flex items-center gap-2 text-left ${activeCategoryFilter === category.key ? 'text-white font-semibold' : 'text-gray-400 hover:text-white'} focus:outline-none transition-colors`}>
+                              <span className={`inline-block h-2 w-2 rounded-full ${category.color}`} />
+                              {category.label} ({category.value}%)
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {fixtureAnalytics && (() => {
+                      const rematchRate = fixturesQ.data ? (() => {
+                        const pairingCounts: Record<string, number> = {}
+                        fixturesQ.data.slots.forEach(slot => {
+                          if (slot.player_a && slot.player_b) {
+                            const key = [slot.player_a.player_id, slot.player_b.player_id].sort().join('|')
+                            pairingCounts[key] = (pairingCounts[key] ?? 0) + 1
+                          }
+                        })
+                        const rematchCount = Object.values(pairingCounts).filter(count => count > 1).length
+                        const filledSlots = fixturesQ.data.slots.filter(s => s.player_a && s.player_b).length
+                        return filledSlots > 0 ? Math.round((rematchCount / filledSlots) * 100) : 0
+                      })() : 0
+                      return (
+                        <div className="col-span-full grid gap-2">
+                          <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 px-3 py-2 text-sm text-blue-200">
+                            <span className="font-semibold">Rematch Rate:</span> {rematchRate}% — {rematchRate === 0 ? 'No player pairings are repeated within this session.' : `${rematchRate}% of matchups appear multiple times across rounds.`}
+                          </div>
+                          {fixtureAnalytics.outOfBandCount > 0 && (
+                            <div className="rounded-2xl border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-sm text-orange-100">
+                              ⚠️ High Gap Variance: Resource constraints forced {fixtureAnalytics.outOfBandCount} mismatch slot{fixtureAnalytics.outOfBandCount !== 1 ? 's' : ''}.
+                            </div>
+                          )}
+                          {fixtureAnalytics.byeBalanced && (
+                            <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 px-3 py-2 text-sm text-blue-200">
+                              Tightness: {fixtureAnalytics.tightnessScore} avg. rating gap
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()}
+                  </div>
                 </div>
               )}
+
               {fixturesQ.isLoading && <Spinner />}
+
               {fixturesQ.data && (() => {
                 const byRound = fixturesQ.data.slots.reduce<Record<number, typeof fixturesQ.data.slots>>((acc, slot) => {
                   ;(acc[slot.round_number] ??= []).push(slot)
                   return acc
                 }, {})
                 return Object.entries(byRound).map(([rn, slots]) => (
-                  <div key={rn}>
-                    <div className="text-xs text-gray-500 mb-2 font-semibold uppercase tracking-wide">Round {rn}</div>
-                    <div className="space-y-1">
-                      {slots.map(slot => (
-                        <div key={slot.slot_id}
-                          className={`bg-gray-900 border border-gray-800 rounded-lg px-4 py-2.5 flex items-center justify-between gap-3 ${slot.status === 'BYE' ? 'opacity-50' : ''}`}>
-                          <div className="flex items-center gap-2 min-w-0 flex-1">
-                            <span className={`text-xs font-semibold shrink-0 ${MATCH_CAT_COLOR[getSlotTypeCode(slot)] ?? 'text-gray-400'}`}>
-                              {getSlotLabel(slot)}
-                            </span>
-                            <span className="text-xs text-gray-500">Table {slot.table_number}</span>
-                            <span className="text-white text-sm truncate">{slot.player_a.name}</span>
-                            {slot.player_b
-                              ? <><span className="text-gray-500 text-xs shrink-0">vs</span><span className="text-white text-sm truncate">{slot.player_b.name}</span></>
-                              : <span className="text-gray-500 text-xs italic">BYE</span>
-                            }
-                          </div>
-                          <div className="flex items-center gap-3 shrink-0">
-                            <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500">
-                              <span className="font-mono">{Math.round(slot.player_a.current_rating)}</span>
-                              {slot.player_b && <span className="font-mono">{Math.round(slot.player_b.current_rating)}</span>}
-                            </div>
-                            {slot.player_b && slot.status === 'SCHEDULED' && (
-                              <button
-                                onClick={() => setResultSlot(slot)}
-                                className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded-lg transition-colors">
-                                Enter Result
-                              </button>
-                            )}
-                            {slot.status === 'PLAYED' && slot.match_result && (
-                              <div className="flex items-center gap-1.5 text-xs shrink-0">
-                                <span className={`font-mono font-bold ${slot.match_result.winner_id === slot.player_a.player_id ? 'text-green-400' : 'text-gray-400'}`}>
-                                  {slot.match_result.sets_won_a}
-                                </span>
-                                <span className="text-gray-600">–</span>
-                                <span className={`font-mono font-bold ${slot.match_result.winner_id === slot.player_b?.player_id ? 'text-green-400' : 'text-gray-400'}`}>
-                                  {slot.match_result.sets_won_b}
-                                </span>
-                                {slot.match_result.is_retirement && <span className="text-gray-500 text-xs">(R)</span>}
+                  <div key={rn} className="space-y-3">
+                    <div className="rounded-2xl border border-gray-800 bg-gray-950/70 px-4 py-3">
+                      <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Round {rn}</div>
+                    </div>
+
+                    <div className="space-y-3">
+                      {slots.map(slot => {
+                        const categoryCode = getSlotTypeCode(slot)
+                        const badgeClasses = MATCH_CAT_BADGE[categoryCode] ?? MATCH_CAT_BADGE.UNKNOWN
+                        const winnerA = slot.status === 'PLAYED' && slot.match_result?.winner_id === slot.player_a.player_id
+                        const winnerB = slot.status === 'PLAYED' && slot.match_result?.winner_id === slot.player_b?.player_id
+                        return (
+                          <div key={slot.slot_id} className={`rounded-3xl border border-gray-800 bg-gray-900/80 p-4 shadow-sm transition ${slot.status === 'BYE' ? 'opacity-70' : 'hover:border-slate-600'}`}>
+                            <div className="grid gap-4 md:grid-cols-[1.8fr_0.85fr_0.75fr] items-center">
+                              <div className="space-y-3 min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${badgeClasses}`}>
+                                    {getSlotLabel(slot)}
+                                  </span>
+                                  <span className="text-xs text-gray-500">Table {slot.table_number}</span>
+                                </div>
+
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                  <div className="min-w-0">
+                                    <div className="text-sm font-semibold text-white truncate">{slot.player_a.name}</div>
+                                    <div className="text-xs text-gray-400 font-mono">{Math.round(slot.player_a.current_rating)}</div>
+                                  </div>
+                                  {slot.player_b ? (
+                                    <div className="min-w-0">
+                                      <div className="text-sm font-semibold text-white truncate">{slot.player_b.name}</div>
+                                      <div className="text-xs text-gray-400 font-mono">{Math.round(slot.player_b.current_rating)}</div>
+                                    </div>
+                                  ) : (
+                                    <div className="text-sm font-semibold text-gray-400 italic">Bye</div>
+                                  )}
+                                </div>
                               </div>
-                            )}
-                            {slot.status === 'PLAYED' && !slot.match_result && (
-                              <span className="text-xs text-green-400 font-medium">✓</span>
-                            )}
+
+                              <div className="rounded-3xl border border-gray-800 bg-gray-950/90 px-3 py-2 text-sm font-mono text-gray-200">
+                                {slot.status === 'PLAYED' && slot.match_result ? (
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span className={winnerA ? 'text-emerald-300 font-semibold' : 'text-gray-500'}>{slot.match_result.sets_won_a}</span>
+                                    <span className="text-gray-600">–</span>
+                                    <span className={winnerB ? 'text-emerald-300 font-semibold' : 'text-gray-500'}>{slot.match_result.sets_won_b}</span>
+                                  </div>
+                                ) : (
+                                  <div className="text-xs uppercase tracking-[0.24em] text-slate-500">{slot.status.replace(/_/g, ' ')}</div>
+                                )}
+                              </div>
+
+                              <div className="flex flex-col items-start justify-between gap-3 sm:items-end">
+                                <span className="inline-flex rounded-full border border-slate-700 bg-slate-950/80 px-3 py-1 text-xs text-gray-300">Table {slot.table_number}</span>
+                                {slot.player_b && slot.status === 'SCHEDULED' && (
+                                  <button
+                                    onClick={() => setResultSlot(slot)}
+                                    className="rounded-full bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-500">
+                                    Enter Result
+                                  </button>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </div>
                 ))

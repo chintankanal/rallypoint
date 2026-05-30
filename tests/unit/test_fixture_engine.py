@@ -973,8 +973,13 @@ def test_league_fixtures_cross_academy_only_no_intra_academy():
 
 def test_league_fixtures_cross_academy_only_has_bye_slots():
     """
-    CROSS_ACADEMY_ONLY generates BYE slots where intra-academy pairs would have occurred.
-    With 2 academies of 2 players each, circle method produces 3 rounds with some BYEs.
+    CROSS_ACADEMY_ONLY generates BYE slots where intra-academy pairs would have occurred,
+    but ghost rounds (rounds with no real matches) are pruned to avoid clutter.
+    
+    With 2 academies of 2 players each (4 total), the circle method produces 3 logical
+    rounds, but Round 3 contains only intra-academy pairs (a1-a2, b1-b2) which become
+    all BYEs. This ghost round is skipped by the pruning logic. Rounds 1-2 contain
+    real cross-academy matches and may have scattered BYEs.
     """
     academy_data = {
         "a": [("a1", 1200.0), ("a2", 1100.0)],
@@ -984,9 +989,10 @@ def test_league_fixtures_cross_academy_only_has_bye_slots():
     
     result = generate_league_fixtures(players_by_academy, set(), strategy="CROSS_ACADEMY_ONLY")
     
-    # At least some BYE slots should exist
-    bye_count = sum(1 for slot in result["slots"] if slot["player_b_id"] is None)
-    assert bye_count > 0, "CROSS_ACADEMY_ONLY should generate BYE slots for intra-academy pairs"
+    # With gap cap enforced and ghost rounds pruned, we should have 2 rounds with all matches
+    assert result["total_rounds"] == 2, f"Expected 2 rounds (ghost round pruned), got {result['total_rounds']}"
+    assert all(slot["player_b_id"] is not None for slot in result["slots"]), \
+        "All slots should be real matches (no BYEs) when ratings are within bounds"
 
 
 def test_league_fixtures_team_format_academy_pairs():

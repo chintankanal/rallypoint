@@ -1384,6 +1384,10 @@ def _cross_academy_only(
     Every scheduled match is guaranteed to be cross-academy.
     Players sit out (BYE) rounds where the circle would have paired them with
     a same-academy teammate.
+    
+    Fixes applied:
+    - Prune ghost rounds (zero real matches)
+    - Enforce gap cap: pairs exceeding _MAX_EXCEPTION_GAP become BYEs
     """
     all_players = _interleave_academies(players_by_academy)
     players_by_id = {p["player_id"]: p for p in all_players}
@@ -1399,6 +1403,7 @@ def _cross_academy_only(
     slots: list[dict] = []
     cross_count = 0
     real_count = 0
+    rounds_emitted = 0
 
     for round_idx in range(total_rounds):
         raw_pairs = _circle_pairs_for_ids(pids, round_idx)
@@ -1408,7 +1413,14 @@ def _cross_academy_only(
         cross_pairs = []
         for a, b in real_pairs:
             if players_by_id[a]["academy_id"] != players_by_id[b]["academy_id"]:
-                cross_pairs.append((a, b))
+                gap = _gap(players_by_id, a, b)
+                # Enforce gap cap: pairs exceeding _MAX_EXCEPTION_GAP become BYEs
+                if gap <= _MAX_EXCEPTION_GAP:
+                    cross_pairs.append((a, b))
+                else:
+                    # Gap too wide: convert both to BYEs
+                    bye_pairs.append((a, None))
+                    bye_pairs.append((b, None))
             else:
                 # Same-academy pair → both players get a BYE this round
                 bye_pairs.append((a, None))
@@ -1417,10 +1429,15 @@ def _cross_academy_only(
         cross_pairs = _swap_for_novelty_constrained(
             cross_pairs, played_pairs, players_by_id
         )
+        
+        # Prune ghost rounds: skip if no real matches
+        if not cross_pairs:
+            continue
+        
         all_pairs = cross_pairs + bye_pairs
 
         round_slots = _assign_tables_league(
-            all_pairs, round_idx + 1, players_by_id, "CROSS_ACADEMY_ONLY",
+            all_pairs, rounds_emitted + 1, players_by_id, "CROSS_ACADEMY_ONLY",
             num_tables=num_tables,
         )
         for slot in round_slots:
@@ -1428,9 +1445,10 @@ def _cross_academy_only(
                 real_count += 1
                 cross_count += 1  # all real matches are cross-academy by construction
         slots.extend(round_slots)
+        rounds_emitted += 1
 
     cross_pct = 100.0 if real_count > 0 else 0.0
-    return {"total_rounds": total_rounds, "cross_academy_pct": cross_pct, "slots": slots}
+    return {"total_rounds": rounds_emitted, "cross_academy_pct": cross_pct, "slots": slots}
 
 
 def _team_format(

@@ -57,7 +57,7 @@
   }
 
   function getMatchTypeMeta(slot: EventFixtureSlot, playerRating: number, opponentRating?: number) {
-    const type = normalizeGapBand(slot.round_intent || slot.gap_band || slot.match_category)
+    const type = normalizeGapBand(slot.gap_band || slot.match_category || slot.round_intent)
     if (type === 'COMPETITIVE') {
       return { label: 'Competitive', shortLabel: 'C', title: 'Competitive', className: 'text-blue-300' }
     }
@@ -1008,9 +1008,12 @@
                   return (
                     <div key={slot.slot_id}
                       className="flex items-center gap-2 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2">
-                      <span className="text-xs text-gray-600 w-14 shrink-0">T{slot.table_number}</span>
-                      <span className={`text-xs font-semibold shrink-0 ${matchTypeMeta.className}`} title={matchTypeMeta.title}>
-                        {matchTypeMeta.label}
+                      <span className="text-xs text-gray-600 w-10 font-mono shrink-0">T{slot.table_number}</span>
+                      <span
+                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md border border-gray-800 bg-gray-800/40 shrink-0 ${matchTypeMeta.className}`}
+                        title={matchTypeMeta.title}
+                      >
+                        {matchTypeMeta.shortLabel}
                       </span>
                       <div className="flex items-center gap-1.5 flex-1 min-w-0">
                         <span className={`text-sm font-medium truncate ${aColor.text}`}>{slot.player_a.name}</span>

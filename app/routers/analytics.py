@@ -110,7 +110,7 @@ def player_velocity(
                     player_id, player_id,
                     player_id, player_id,
                     player_id, player_id,
-                    player_id, player_id, since,
+                    player_id, since,
                     player_id, since,
                     player_id, since,
                 ],

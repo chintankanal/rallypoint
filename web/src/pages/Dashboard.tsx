@@ -799,7 +799,7 @@ function SessionsTab({ academyId }: { academyId: string }) {
                   }),
                   cellOf: (slot: any, self: any, opp: any) => {
                     const meta = classifyCell(slot as any, self as any, opp as any)
-                    return { label: meta.label, stripClass: meta.stripClass, category: meta.category }
+                    return { label: meta.label, stripClass: meta.stripClass, category: meta.category, tooltip: meta.tooltip }
                   },
                   sectionSort: (a, b) => (TIER_META[b.id]?.rank ?? 0) - (TIER_META[a.id]?.rank ?? 0),
                   // totalRounds omitted for sessions; buildMatrixModel derives rounds from schedule

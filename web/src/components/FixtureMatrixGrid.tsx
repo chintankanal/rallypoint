@@ -47,7 +47,8 @@ export default function FixtureMatrixGrid({
           const cell: MatrixCell | undefined = model.schedule[p.player_id]?.[r]
           const isBye = cell?.isBye ?? false
           const isHighlighted = r === highlightRound
-          const shouldDim = dimCategory != null && (isBye || (cell?.category ?? 'competitive') !== dimCategory)
+          const cellCategory = isBye ? 'bye' : (cell?.category ?? 'competitive')
+          const shouldDim = dimCategory != null && cellCategory !== dimCategory
           return (
             <td key={r} className={`relative text-center px-1.5 py-1.5 border-b border-gray-800 ${isHighlighted ? 'bg-yellow-900/40' : ''}`}
               title={cell?.tooltip ?? (isBye ? 'BYE' : 'No opponent')}>

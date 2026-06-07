@@ -58,11 +58,11 @@ export const TIER_META: Record<string, { label: string; rank: number; accent: Ac
 }
 
 export const GAP_BAND_LEGEND: LegendItem[] = [
-  { label: 'Competitive', bg: 'bg-blue-600' },
-  { label: 'Stretch', bg: 'bg-purple-600' },
-  { label: 'Anchor', bg: 'bg-amber-600' },
-  { label: 'Developmental', bg: 'bg-gray-600' },
-  { label: 'Out of band', bg: 'bg-orange-500' },
+  { label: 'Competitive', bg: 'bg-blue-500' },
+  { label: 'Stretch', bg: 'bg-fuchsia-500' },
+  { label: 'Anchor', bg: 'bg-amber-500' },
+  { label: 'Developmental', bg: 'bg-slate-400' },
+  { label: 'Out of band', bg: 'bg-red-500' },
 ]
 
 function normalizeGapBand(value?: string | null) {
@@ -91,43 +91,43 @@ export function classifyCell<P extends MatrixPlayer>(slot: ClassifiableSlot<P>, 
   if (type === 'COMPETITIVE') {
     label = 'Competitive'
     category = 'competitive'
-    stripClass = 'bg-blue-600'
+    stripClass = 'bg-blue-500'
   } else if (type === 'DEVELOPMENTAL') {
     label = 'Developmental'
     category = 'developmental'
-    stripClass = 'bg-gray-600'
+    stripClass = 'bg-slate-400'
   } else if (type === 'OUT_OF_BAND' || type.replace(/_/g, '') === 'OUTOFBAND') {
     label = 'Out of band'
     category = 'outOfBand'
-    stripClass = 'bg-orange-500'
+    stripClass = 'bg-red-500'
   } else if (type === 'ANCHOR') {
     label = 'Anchor'
     category = 'anchor'
-    stripClass = 'bg-amber-600'
+    stripClass = 'bg-amber-500'
   } else if (type === 'STRETCH') {
     if (opp) {
       if (self.current_rating < opp.current_rating) {
         label = 'Stretch'
         category = 'stretch'
-        stripClass = 'bg-purple-600'
+        stripClass = 'bg-fuchsia-500'
       } else if (self.current_rating > opp.current_rating) {
         label = 'Anchor'
         category = 'anchor'
-        stripClass = 'bg-amber-600'
+        stripClass = 'bg-amber-500'
       } else {
         label = 'Stretch'
         category = 'stretch'
-        stripClass = 'bg-purple-600'
+        stripClass = 'bg-fuchsia-500'
       }
     } else {
       label = 'Stretch'
       category = 'stretch'
-      stripClass = 'bg-purple-600'
+      stripClass = 'bg-fuchsia-500'
     }
   } else {
     label = type ?? 'Unknown'
     category = 'competitive'
-    stripClass = 'bg-gray-600'
+    stripClass = 'bg-slate-400'
   }
 
   const tooltip = opp ? `${opp.name} (${Math.round(opp.current_rating)}) — ${label}` : 'BYE'

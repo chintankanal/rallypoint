@@ -721,10 +721,10 @@ function SessionsTab({ academyId }: { academyId: string }) {
                         <div className="flex w-full h-3 overflow-hidden rounded-full bg-gray-800 border border-gray-700">
                           {[
                             { key: 'competitive', color: 'bg-blue-500', percentage: fixtureAnalytics.percentages.competitive },
-                            { key: 'stretch', color: 'bg-purple-500', percentage: fixtureAnalytics.percentages.stretch },
-                            { key: 'anchor', color: 'bg-emerald-500', percentage: fixtureAnalytics.percentages.anchor },
-                            { key: 'developmental', color: 'bg-slate-500', percentage: fixtureAnalytics.percentages.developmental },
-                            { key: 'outOfBand', color: 'bg-orange-500', percentage: fixtureAnalytics.percentages.outOfBand },
+                            { key: 'stretch', color: 'bg-fuchsia-500', percentage: fixtureAnalytics.percentages.stretch },
+                            { key: 'anchor', color: 'bg-amber-500', percentage: fixtureAnalytics.percentages.anchor },
+                            { key: 'developmental', color: 'bg-slate-400', percentage: fixtureAnalytics.percentages.developmental },
+                            { key: 'outOfBand', color: 'bg-red-500', percentage: fixtureAnalytics.percentages.outOfBand },
                             { key: 'bye', color: 'bg-gray-600', percentage: fixtureAnalytics.percentages.bye },
                           ].map(category => (
                             <div key={category.key}
@@ -736,10 +736,10 @@ function SessionsTab({ academyId }: { academyId: string }) {
                         <div className="grid grid-cols-3 gap-2 text-[10px] uppercase tracking-[0.25em] text-gray-500">
                           {[
                             { key: 'competitive', label: 'Comp', color: 'bg-blue-500', value: fixtureAnalytics.percentages.competitive },
-                            { key: 'stretch', label: 'Stretch', color: 'bg-purple-500', value: fixtureAnalytics.percentages.stretch },
-                            { key: 'anchor', label: 'Anchor', color: 'bg-emerald-500', value: fixtureAnalytics.percentages.anchor },
-                            { key: 'developmental', label: 'Developmental', color: 'bg-slate-500', value: fixtureAnalytics.percentages.developmental },
-                            { key: 'outOfBand', label: 'Out-of-band', color: 'bg-orange-500', value: fixtureAnalytics.percentages.outOfBand },
+                            { key: 'stretch', label: 'Stretch', color: 'bg-fuchsia-500', value: fixtureAnalytics.percentages.stretch },
+                            { key: 'anchor', label: 'Anchor', color: 'bg-amber-500', value: fixtureAnalytics.percentages.anchor },
+                            { key: 'developmental', label: 'Developmental', color: 'bg-slate-400', value: fixtureAnalytics.percentages.developmental },
+                            { key: 'outOfBand', label: 'Out-of-band', color: 'bg-red-500', value: fixtureAnalytics.percentages.outOfBand },
                             { key: 'bye', label: 'Bye', color: 'bg-gray-600', value: fixtureAnalytics.percentages.bye },
                           ].map(category => (
                             <button key={category.key} type="button"

@@ -11,6 +11,42 @@ export type FixtureCategory =
   | 'bye'
   | 'unknown'
 
+export interface SummaryStat {
+  min: number
+  avg: number
+  max: number
+}
+
+export interface RoleExposureSummary {
+  underChallengedCount: number
+  overloadedCount: number
+  mentorLoadCount: number
+  stretchingSummary: SummaryStat
+  anchoringSummary: SummaryStat
+  peerSummary: SummaryStat
+  signedChallengeSummary: SummaryStat
+}
+
+export interface FixturePlayerAnalytics {
+  playerId: string
+  name: string
+  rating: number
+  tier?: string
+  matches: number
+  uniqueOpponents: number
+  byes: number
+  sos: number
+  maxPlayStreak: number
+  tablesUsed: number
+  peer: number
+  stretching: number
+  anchoring: number
+  underChallenged: boolean
+  overloaded: boolean
+  mentorLoad: boolean
+  signedChallenge: number
+}
+
 export interface FixtureAnalytics {
   totalSlots: number
   counts: Record<FixtureCategory, number>
@@ -24,6 +60,17 @@ export interface FixtureAnalytics {
   diagnostics?: SessionDiagnostics
   bootstrapPhase: string
   regime: string | null
+  fairnessIndex: number
+  sosSpread: number
+  avgMaxPlayStreak: number
+  criticalTraps: number
+  warningTraps: number
+  avgTablesPerPlayer: number
+  matchesSummary: SummaryStat
+  uniqueOpponentsSummary: SummaryStat
+  byesSummary: SummaryStat
+  roleExposureSummary: RoleExposureSummary
+  perPlayer: FixturePlayerAnalytics[]
 }
 
 const CATEGORY_MAP: Record<string, FixtureCategory> = {
@@ -52,6 +99,29 @@ function clampPercentage(value: number) {
   return Math.round(Math.min(100, Math.max(0, value)))
 }
 
+function summaryStat(values: number[]): SummaryStat {
+  if (!values.length) return { min: 0, avg: 0, max: 0 }
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const avg = values.reduce((sum, value) => sum + value, 0) / values.length
+  return { min, max, avg: Math.round(avg * 10) / 10 }
+}
+
+function normalizeRole(role?: string | null) {
+  const value = (role ?? '').trim().toUpperCase()
+  if (value === 'PEER') return 'PEER'
+  if (value.includes('STRETCH')) return 'STRETCHING'
+  if (value.includes('ANCHOR')) return 'ANCHORING'
+  return 'PEER'
+}
+
+function getNextChronoPhase(phase: { round_number: number; wave_number: number }, maxWave: number) {
+  if (phase.wave_number < maxWave) {
+    return { round_number: phase.round_number, wave_number: phase.wave_number + 1 }
+  }
+  return { round_number: phase.round_number + 1, wave_number: 1 }
+}
+
 export function analyzeFixtureSlots(slots: FixtureSlot[], diagnostics?: SessionDiagnostics): FixtureAnalytics {
   const counts: Record<FixtureCategory, number> = {
     competitive: 0,
@@ -68,16 +138,184 @@ export function analyzeFixtureSlots(slots: FixtureSlot[], diagnostics?: SessionD
   let deltasCount = 0
   const pairingCounts: Record<string, number> = {}
 
+  const maxWavePerRound: Record<number, number> = {}
+  const playerStats: Record<string, {
+    playerId: string
+    name: string
+    rating: number
+    tier?: string
+    matches: number
+    opponents: Set<string>
+    byes: number
+    opponentRatings: number[]
+    tableNumbers: Set<number>
+    phases: { round_number: number; wave_number: number }[]
+    peer: number
+    stretching: number
+    anchoring: number
+    signedChallengeSum: number
+    signedChallengeCount: number
+  }> = {}
+
+  const ensurePlayer = (player: FixtureSlot['player_a']) => {
+    if (!playerStats[player.player_id]) {
+      playerStats[player.player_id] = {
+        playerId: player.player_id,
+        name: player.name,
+        rating: player.current_rating,
+        tier: player.tier,
+        matches: 0,
+        opponents: new Set(),
+        byes: 0,
+        opponentRatings: [],
+        tableNumbers: new Set(),
+        phases: [],
+        peer: 0,
+        stretching: 0,
+        anchoring: 0,
+        signedChallengeSum: 0,
+        signedChallengeCount: 0,
+      }
+    }
+    return playerStats[player.player_id]
+  }
+
   for (const slot of slots) {
     const category = getSlotCategory(slot)
     counts[category] = (counts[category] ?? 0) + 1
 
+    maxWavePerRound[slot.round_number] = Math.max(maxWavePerRound[slot.round_number] ?? 0, slot.wave_number)
+
+    const a = slot.player_a
+    const aStats = ensurePlayer(a)
+
+    const isBye = slot.status === 'BYE' || !slot.player_b
+    if (isBye) {
+      aStats.byes += 1
+      continue
+    }
+
+    const b = slot.player_b!
+    const bStats = ensurePlayer(b)
+
     if (slot.player_b && slot.player_a) {
       filledCount += 1
-      pairingCounts[getPairingKey(slot)!] = (pairingCounts[getPairingKey(slot)!] ?? 0) + 1
-      totalDelta += Math.abs(Math.round(slot.player_a.current_rating) - Math.round(slot.player_b.current_rating))
+      const pairingKey = getPairingKey(slot)
+      if (pairingKey) pairingCounts[pairingKey] = (pairingCounts[pairingKey] ?? 0) + 1
+      totalDelta += Math.abs(Math.round(a.current_rating) - Math.round(b.current_rating))
       deltasCount += 1
     }
+
+    const phase = { round_number: slot.round_number, wave_number: slot.wave_number }
+    aStats.phases.push(phase)
+    bStats.phases.push(phase)
+
+    const recordMatch = (selfStats: typeof aStats, opponent: FixtureSlot['player_a'], roleValue?: string) => {
+      selfStats.matches += 1
+      selfStats.opponents.add(opponent.player_id)
+      selfStats.opponentRatings.push(opponent.current_rating)
+      selfStats.tableNumbers.add(slot.table_number)
+      const role = normalizeRole(roleValue)
+      if (role === 'PEER') selfStats.peer += 1
+      else if (role === 'STRETCHING') selfStats.stretching += 1
+      else if (role === 'ANCHORING') selfStats.anchoring += 1
+      selfStats.signedChallengeSum += opponent.current_rating - selfStats.rating
+      selfStats.signedChallengeCount += 1
+    }
+
+    recordMatch(aStats, b, slot.player_a_role)
+    recordMatch(bStats, a, slot.player_b_role)
+  }
+
+  const playerIds = Object.keys(playerStats)
+  const perPlayer = playerIds.map(pid => {
+    const stats = playerStats[pid]
+    const sos = stats.opponentRatings.length
+      ? stats.opponentRatings.reduce((sum, value) => sum + value, 0) / stats.opponentRatings.length
+      : 0
+    const signedChallenge = stats.signedChallengeCount
+      ? stats.signedChallengeSum / stats.signedChallengeCount
+      : 0
+    const phases = stats.phases.slice().sort((a, b) =>
+      a.round_number === b.round_number
+        ? a.wave_number - b.wave_number
+        : a.round_number - b.round_number,
+    )
+    let currentStreak = 0
+    let maxPlayStreak = 0
+    let prevPhase: { round_number: number; wave_number: number } | null = null
+    for (const phase of phases) {
+      if (!prevPhase) {
+        currentStreak = 1
+      } else {
+        const nextPhase = getNextChronoPhase(prevPhase, maxWavePerRound[prevPhase.round_number] ?? phase.wave_number)
+        if (phase.round_number === nextPhase.round_number && phase.wave_number === nextPhase.wave_number) {
+          currentStreak += 1
+        } else {
+          currentStreak = 1
+        }
+      }
+      maxPlayStreak = Math.max(maxPlayStreak, currentStreak)
+      prevPhase = phase
+    }
+
+    const underChallenged = stats.matches >= 3 && stats.stretching === 0
+    const overloaded = stats.matches >= 3 && stats.stretching / stats.matches > 0.6
+    const mentorLoad = stats.matches >= 3 && stats.anchoring / stats.matches > 0.6
+
+    return {
+      playerId: stats.playerId,
+      name: stats.name,
+      rating: stats.rating,
+      tier: stats.tier,
+      matches: stats.matches,
+      uniqueOpponents: stats.opponents.size,
+      byes: stats.byes,
+      sos: Math.round(sos * 10) / 10,
+      maxPlayStreak,
+      tablesUsed: stats.tableNumbers.size,
+      peer: stats.peer,
+      stretching: stats.stretching,
+      anchoring: stats.anchoring,
+      underChallenged,
+      overloaded,
+      mentorLoad,
+      signedChallenge: Math.round(signedChallenge * 10) / 10,
+    }
+  })
+
+  const fairPlayerData = [...perPlayer].sort((a, b) => b.rating - a.rating)
+  const matchesSummary = summaryStat(perPlayer.map(p => p.matches))
+  const uniqueOpponentsSummary = summaryStat(perPlayer.map(p => p.uniqueOpponents))
+  const byesSummary = summaryStat(perPlayer.map(p => p.byes))
+  const avgTablesPerPlayer = perPlayer.length
+    ? Math.round(perPlayer.reduce((sum, player) => sum + player.tablesUsed, 0) / perPlayer.length * 10) / 10
+    : 0
+  const avgMaxPlayStreak = perPlayer.length
+    ? perPlayer.reduce((sum, player) => sum + player.maxPlayStreak, 0) / perPlayer.length
+    : 0
+  const restBalanceScore = Math.max(0, 100 - Math.round((avgMaxPlayStreak - 1) * 20))
+
+  const maxPlayerRating = Math.max(...perPlayer.map(p => p.rating), 1000)
+  const dynamicCeiling = maxPlayerRating * 0.25
+  const ratingRelativeOffsets = perPlayer
+    .filter(player => player.matches >= 2)
+    .map(player => Math.abs(player.rating - player.sos))
+  const sosSpread = ratingRelativeOffsets.length ? Math.max(...ratingRelativeOffsets) : 0
+  const sosBalanceScore = Math.max(0, 100 - Math.round((sosSpread / dynamicCeiling) * 100))
+  const fairnessIndex = Math.round((restBalanceScore + sosBalanceScore) / 2)
+
+  const criticalTraps = perPlayer.filter(player => player.maxPlayStreak >= 3).length
+  const warningTraps = perPlayer.filter(player => player.maxPlayStreak === 2).length
+
+  const roleExposureSummary: RoleExposureSummary = {
+    underChallengedCount: perPlayer.filter(player => player.underChallenged).length,
+    overloadedCount: perPlayer.filter(player => player.overloaded).length,
+    mentorLoadCount: perPlayer.filter(player => player.mentorLoad).length,
+    stretchingSummary: summaryStat(perPlayer.map(player => player.stretching)),
+    anchoringSummary: summaryStat(perPlayer.map(player => player.anchoring)),
+    peerSummary: summaryStat(perPlayer.map(player => player.peer)),
+    signedChallengeSummary: summaryStat(perPlayer.map(player => player.signedChallenge)),
   }
 
   const totalSlots = slots.length
@@ -110,5 +348,16 @@ export function analyzeFixtureSlots(slots: FixtureSlot[], diagnostics?: SessionD
     diagnostics,
     bootstrapPhase: diagnostics?.bootstrap_phase ?? 'STANDARD',
     regime: diagnostics?.regime ?? null,
+    fairnessIndex,
+    sosSpread: Math.round(sosSpread * 10) / 10,
+    avgMaxPlayStreak: Math.round(avgMaxPlayStreak * 10) / 10,
+    criticalTraps,
+    warningTraps,
+    avgTablesPerPlayer,
+    matchesSummary,
+    uniqueOpponentsSummary,
+    byesSummary,
+    roleExposureSummary,
+    perPlayer: fairPlayerData,
   }
 }

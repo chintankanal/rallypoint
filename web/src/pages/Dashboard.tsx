@@ -420,6 +420,21 @@ function SessionsTab({ academyId }: { academyId: string }) {
   const fixtureAnalytics = fixturesQ.data ? analyzeFixtureSlots(fixturesQ.data.slots, fixturesQ.data.diagnostics) : null
   const bootstrapPhase = fixtureAnalytics?.bootstrapPhase ?? fixtureResult?.bootstrap_phase ?? openedSession?.bootstrap_phase ?? 'STANDARD'
 
+  const fairnessBadge = (index: number) => {
+    if (index >= 75) return { label: 'Balanced', className: 'bg-green-900 text-green-200' }
+    if (index >= 50) return { label: 'Moderate', className: 'bg-yellow-900 text-yellow-200' }
+    return { label: 'Unbalanced', className: 'bg-red-900 text-red-200' }
+  }
+
+  const topByePlayers = fixtureAnalytics
+    ? fixtureAnalytics.perPlayer
+        .filter(player => player.byes > 0)
+        .sort((a, b) => b.byes - a.byes || b.matches - a.matches)
+        .slice(0, 3)
+    : []
+
+  const formatSignedChallenge = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(1)}`
+
   return (
     <div className="space-y-5">
       {error && <ErrorMsg message={error} />}
@@ -639,9 +654,16 @@ function SessionsTab({ academyId }: { academyId: string }) {
 
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="rounded-2xl border border-gray-800 bg-slate-950/60 p-3">
-                        <div className="text-xs text-gray-500 uppercase tracking-[0.24em]">Matchup balance</div>
-                        <div className="mt-2 text-2xl font-semibold text-white">{fixtureAnalytics ? `${fixtureAnalytics.percentages.competitive + fixtureAnalytics.percentages.stretch + fixtureAnalytics.percentages.anchor}%` : '--'}</div>
-                        <div className="text-xs text-gray-400 mt-1">Competitive / Stretch / Anchor</div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-xs text-gray-500 uppercase tracking-[0.24em]">Schedule Fairness</span>
+                          {fixtureAnalytics && (
+                            <span className={`inline-flex items-center rounded-full px-2 py-1 text-[10px] font-semibold ${fairnessBadge(fixtureAnalytics.fairnessIndex).className}`}>
+                              {fairnessBadge(fixtureAnalytics.fairnessIndex).label}
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-2 text-2xl font-semibold text-white">{fixtureAnalytics ? `${fixtureAnalytics.fairnessIndex}%` : '--'}</div>
+                        <div className="text-xs text-gray-400 mt-1">Higher is more balanced</div>
                       </div>
                       <div className="rounded-2xl border border-gray-800 bg-slate-950/60 p-3">
                         <div className="text-xs text-gray-500 uppercase tracking-[0.24em]">Pairing density</div>
@@ -698,14 +720,18 @@ function SessionsTab({ academyId }: { academyId: string }) {
                             <div className="text-xs uppercase tracking-[0.24em] text-gray-500">Regime</div>
                             <div className="mt-2 text-lg font-semibold text-white">{fixtureAnalytics.regime ?? 'Default'}</div>
                             <div className="text-xs text-gray-400 mt-1">
-                              {fixtureAnalytics.diagnostics
-                                ? `Raw spread ${fixtureAnalytics.diagnostics.raw_spread ?? '—'}, core spread ${fixtureAnalytics.diagnostics.core_spread ?? '—'}`
+                              {fixtureAnalytics?.diagnostics
+                                ? `Raw spread ${fixtureAnalytics.diagnostics.raw_spread != null ? Math.round(fixtureAnalytics.diagnostics.raw_spread) : '—'}, core spread ${fixtureAnalytics.diagnostics.core_spread != null ? Math.round(fixtureAnalytics.diagnostics.core_spread) : '—'}`
                                 : 'No regime diagnostics available'}
                             </div>
                           </div>
                           <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 text-sm text-slate-200">
                             <div className="text-xs uppercase tracking-[0.24em] text-gray-500">Provisional / gap thresholds</div>
-                            <div className="mt-2 text-lg font-semibold text-white">{fixtureAnalytics.diagnostics?.provisional_count ?? '--'} provisional</div>
+                            <div className="mt-2 text-lg font-semibold text-white">
+                            {fixtureAnalytics.diagnostics
+                              ? `${fixtureAnalytics.diagnostics.provisional_count} of ${fixtureAnalytics.diagnostics.present_player_count} players provisional`
+                              : '--'}
+                          </div>
                             <div className="text-xs text-gray-400 mt-1">
                               {fixtureAnalytics.diagnostics
                                 ? `Competitive gap ≤ ${fixtureAnalytics.diagnostics.competitive_max_gap ?? '—'}, Stretch gap ≤ ${fixtureAnalytics.diagnostics.stretch_max_gap ?? '—'}`
@@ -726,6 +752,170 @@ function SessionsTab({ academyId }: { academyId: string }) {
                         )}
                       </div>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {fixtureAnalytics && (
+                <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+                  <div className="rounded-2xl bg-gray-900/80 border border-gray-800 p-5 space-y-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <div className="text-xs uppercase tracking-[0.24em] text-gray-400">Player Fairness</div>
+                        <div className="mt-2 text-2xl font-semibold text-white">{fixtureAnalytics.fairnessIndex}%</div>
+                      </div>
+                      <span className={`inline-flex items-center rounded-full px-3 py-1 text-[10px] font-semibold ${fairnessBadge(fixtureAnalytics.fairnessIndex).className}`}>
+                        {fairnessBadge(fixtureAnalytics.fairnessIndex).label}
+                      </span>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-3 text-sm text-gray-400">
+                      <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3">
+                        <div className="text-[10px] uppercase tracking-[0.24em] text-gray-500">Matches</div>
+                        <div className="mt-3 space-y-1">
+                          <div>min <span className="text-white">{fixtureAnalytics.matchesSummary.min}</span></div>
+                          <div>avg <span className="text-blue-300">{fixtureAnalytics.matchesSummary.avg}</span></div>
+                          <div>max <span className="text-white">{fixtureAnalytics.matchesSummary.max}</span></div>
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3">
+                        <div className="text-[10px] uppercase tracking-[0.24em] text-gray-500">Unique opponents</div>
+                        <div className="mt-3 space-y-1">
+                          <div>min <span className="text-white">{fixtureAnalytics.uniqueOpponentsSummary.min}</span></div>
+                          <div>avg <span className="text-blue-300">{fixtureAnalytics.uniqueOpponentsSummary.avg}</span></div>
+                          <div>max <span className="text-white">{fixtureAnalytics.uniqueOpponentsSummary.max}</span></div>
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3">
+                        <div className="text-[10px] uppercase tracking-[0.24em] text-gray-500">Byes</div>
+                        <div className="mt-3 space-y-1">
+                          <div>min <span className="text-white">{fixtureAnalytics.byesSummary.min}</span></div>
+                          <div>avg <span className="text-blue-300">{fixtureAnalytics.byesSummary.avg}</span></div>
+                          <div>max <span className="text-white">{fixtureAnalytics.byesSummary.max}</span></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2 text-sm text-gray-400">
+                      <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3">
+                        <div className="text-[10px] uppercase tracking-[0.24em] text-gray-500">Table rotation</div>
+                        <div className="mt-2 text-lg font-semibold text-white">{fixtureAnalytics.avgTablesPerPlayer.toFixed(1)}</div>
+                        <div className="text-xs text-gray-400 mt-1">avg. tables per player</div>
+                      </div>
+                      <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3">
+                        <div className="text-[10px] uppercase tracking-[0.24em] text-gray-500">Back-to-back games</div>
+                        <div className="mt-2 text-lg font-semibold text-white">{fixtureAnalytics.avgMaxPlayStreak.toFixed(1)}</div>
+                        <div className="text-xs text-gray-400 mt-1">avg. consecutive rounds</div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 text-sm text-gray-300">
+                      {fixtureAnalytics.criticalTraps > 0 && (
+                        <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-red-200">
+                          ⚠️ Critical traps: {fixtureAnalytics.criticalTraps} player{fixtureAnalytics.criticalTraps !== 1 ? 's' : ''}
+                        </div>
+                      )}
+                      {fixtureAnalytics.warningTraps > 0 && (
+                        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-amber-200">
+                          ⚠️ Warning traps: {fixtureAnalytics.warningTraps} player{fixtureAnalytics.warningTraps !== 1 ? 's' : ''}
+                        </div>
+                      )}
+                    </div>
+
+                    {topByePlayers.length > 0 && (
+                      <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3 text-sm text-gray-300">
+                        <div className="text-[10px] uppercase tracking-[0.24em] text-gray-500 mb-2">Top benched players</div>
+                        <div className="space-y-2">
+                          {topByePlayers.map(player => (
+                            <div key={player.playerId} className="flex items-center justify-between gap-3">
+                              <span>{player.name}</span>
+                              <span className="text-xs text-gray-400">{player.byes} bye{player.byes !== 1 ? 's' : ''}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="rounded-2xl bg-gray-900/80 border border-gray-800 p-5 space-y-4">
+                    <div>
+                      <div className="text-xs uppercase tracking-[0.24em] text-gray-400">Development Focus</div>
+                      <div className="mt-2 text-lg font-semibold text-white">Role exposure & challenge profile</div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-3 text-sm text-gray-400">
+                      <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3">
+                        <div className="text-[10px] uppercase tracking-[0.24em] text-gray-500">Under-challenged</div>
+                        <div className="mt-2 text-lg font-semibold text-white">{fixtureAnalytics.roleExposureSummary.underChallengedCount}</div>
+                      </div>
+                      <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3">
+                        <div className="text-[10px] uppercase tracking-[0.24em] text-gray-500">Overloaded</div>
+                        <div className="mt-2 text-lg font-semibold text-white">{fixtureAnalytics.roleExposureSummary.overloadedCount}</div>
+                      </div>
+                      <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3">
+                        <div className="text-[10px] uppercase tracking-[0.24em] text-gray-500">Mentor load</div>
+                        <div className="mt-2 text-lg font-semibold text-white">{fixtureAnalytics.roleExposureSummary.mentorLoadCount}</div>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2 text-sm text-gray-400">
+                      <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3">
+                        <div className="text-[10px] uppercase tracking-[0.24em] text-gray-500">Stretch opportunities</div>
+                        <div className="mt-2 space-y-1 text-white">
+                          <div>min {fixtureAnalytics.roleExposureSummary.stretchingSummary.min}</div>
+                          <div>avg {fixtureAnalytics.roleExposureSummary.stretchingSummary.avg}</div>
+                          <div>max {fixtureAnalytics.roleExposureSummary.stretchingSummary.max}</div>
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3">
+                        <div className="text-[10px] uppercase tracking-[0.24em] text-gray-500">Signed challenge</div>
+                        <div className="mt-2 space-y-1 text-white">
+                          <div>min {formatSignedChallenge(fixtureAnalytics.roleExposureSummary.signedChallengeSummary.min)}</div>
+                          <div>avg {formatSignedChallenge(fixtureAnalytics.roleExposureSummary.signedChallengeSummary.avg)}</div>
+                          <div>max {formatSignedChallenge(fixtureAnalytics.roleExposureSummary.signedChallengeSummary.max)}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-gray-800 bg-gray-950/90 p-3 max-h-72 overflow-y-auto">
+                      <div className="flex items-center justify-between text-xs uppercase tracking-[0.24em] text-gray-500 mb-3">
+                        <span>Player role exposure</span>
+                        <span>{fixtureAnalytics.perPlayer.length} players</span>
+                      </div>
+                      <div className="space-y-3">
+                        {fixtureAnalytics.perPlayer.map(player => {
+                          const flags = []
+                          if (player.underChallenged) flags.push('Under-challenged')
+                          if (player.overloaded) flags.push('Overloaded')
+                          if (player.mentorLoad) flags.push('Mentor load')
+                          return (
+                            <div key={player.playerId} className="rounded-2xl border border-gray-800 bg-slate-900/90 p-3">
+                              <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="text-sm font-semibold text-white truncate">{player.name}</div>
+                                  <div className="text-xs text-gray-400 font-mono">{Math.round(player.rating)}</div>
+                                </div>
+                                <div className="text-right text-xs text-gray-400">
+                                  {formatSignedChallenge(player.signedChallenge)}
+                                </div>
+                              </div>
+                              <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.24em] text-gray-400">
+                                <span className="rounded-full bg-blue-500/10 text-blue-300 px-2 py-1">Peer {player.peer}</span>
+                                <span className="rounded-full bg-fuchsia-500/10 text-fuchsia-300 px-2 py-1">Stretch {player.stretching}</span>
+                                <span className="rounded-full bg-amber-500/10 text-amber-300 px-2 py-1">Anchor {player.anchoring}</span>
+                              </div>
+                              {flags.length > 0 && (
+                                <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-gray-300">
+                                  {flags.map(flag => (
+                                    <span key={flag} className="rounded-full bg-white/5 px-2 py-1 text-xs text-gray-200">{flag}</span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

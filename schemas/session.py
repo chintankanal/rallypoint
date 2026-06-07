@@ -100,6 +100,24 @@ class FixtureWarning(BaseModel):
     context: dict = {}
 
 
+class SessionQualityDimension(BaseModel):
+    key: str
+    label: str
+    achieved: str
+    ratio: float
+    verdict: str  # optimal | good | limited
+    applicable: bool
+    limited_by: str | None = None
+    guidance: str | None = None
+
+
+class SessionQuality(BaseModel):
+    dimensions: list[SessionQualityDimension]
+    overall_score: int
+    overall_label: str
+    narrative: str
+
+
 class SessionFixturesResponse(BaseModel):
     session_id: str
     bootstrap_phase: str
@@ -108,6 +126,7 @@ class SessionFixturesResponse(BaseModel):
     slots: list[FixtureSlotResponse]
     warnings: list[FixtureWarning] = []
     diagnostics: SessionDiagnostics | None = None
+    quality: SessionQuality | None = None
 
 
 class SessionStatusUpdate(BaseModel):

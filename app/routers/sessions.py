@@ -263,10 +263,58 @@ def generate_session_fixtures(
     ]
 
     from app.services.fixture_preflight import preflight_session
+    from app.services.session_quality import compute_session_quality
+
     warnings = preflight_session(
         players,
         num_tables=session["num_tables"],
         matches_per_player_estimate=result["matches_per_player"],
+    )
+
+    # Normalize slots for quality computation
+    diagnostics = {
+        "regime": result["regime"],
+        "competitive_max_gap": result["competitive_max_gap"],
+        "stretch_max_gap": result["stretch_max_gap"],
+        "raw_spread": result["spread"],
+        "core_spread": result["core_spread"],
+        "provisional_count": result["provisional_count"],
+        "present_player_count": result["present_player_count"],
+    }
+
+    normalized_slots = []
+    for sr in slot_rows:
+        player_a_data = players_by_id.get(sr["player_a_id"])
+        player_b_data = players_by_id.get(sr["player_b_id"]) if sr["player_b_id"] else None
+        normalized_slots.append({
+            "round_number": sr["round_number"],
+            "wave_number": sr["wave_number"],
+            "gap_band": sr["gap_band"],
+            "round_intent": sr["round_intent"],
+            "player_a_role": sr["player_a_role"],
+            "player_b_role": sr["player_b_role"],
+            "status": sr["status"],
+            "player_a": {
+                "player_id": sr["player_a_id"],
+                "current_rating": player_a_data["current_rating"] if player_a_data else 0,
+                "tier": player_a_data.get("tier") if player_a_data else None,
+            },
+            "player_b": (
+                {
+                    "player_id": sr["player_b_id"],
+                    "current_rating": player_b_data["current_rating"] if player_b_data else 0,
+                    "tier": player_b_data.get("tier") if player_b_data else None,
+                }
+                if player_b_data
+                else None
+            ),
+        })
+
+    quality = compute_session_quality(
+        normalized_slots,
+        diagnostics,
+        phase=result["phase"],
+        num_tables=session["num_tables"],
     )
 
     return SessionFixturesResponse(
@@ -286,6 +334,7 @@ def generate_session_fixtures(
             competitive_max_gap=result["competitive_max_gap"],
             stretch_max_gap=result["stretch_max_gap"],
         ),
+        quality=quality,
     )
 
 
@@ -383,6 +432,54 @@ def get_session_fixtures(session_id: str, _: dict = _ANY):
             stretch_max_gap=None,
         )
 
+    # Normalize slots for quality computation
+    from app.services.session_quality import compute_session_quality
+
+    normalized_slots = []
+    for s in slots:
+        player_a_data = s.get("player_a", {})
+        player_b_data = s.get("player_b") if s.get("player_b") else None
+        normalized_slots.append({
+            "round_number": s.get("round_number"),
+            "wave_number": s.get("wave_number"),
+            "gap_band": s.get("gap_band"),
+            "round_intent": s.get("round_intent"),
+            "player_a_role": s.get("player_a_role"),
+            "player_b_role": s.get("player_b_role"),
+            "status": s.get("status"),
+            "player_a": {
+                "player_id": player_a_data.get("player_id"),
+                "current_rating": float(player_a_data.get("current_rating", 0)),
+                "tier": get_tier(float(player_a_data.get("current_rating", 0)), cfg) if player_a_data.get("current_rating") else None,
+            },
+            "player_b": (
+                {
+                    "player_id": player_b_data.get("player_id"),
+                    "current_rating": float(player_b_data.get("current_rating", 0)),
+                    "tier": get_tier(float(player_b_data.get("current_rating", 0)), cfg) if player_b_data.get("current_rating") else None,
+                }
+                if player_b_data
+                else None
+            ),
+        })
+
+    quality = None
+    if diagnostics and diagnostics.regime:
+        quality = compute_session_quality(
+            normalized_slots,
+            {
+                "regime": diagnostics.regime,
+                "competitive_max_gap": diagnostics.competitive_max_gap,
+                "stretch_max_gap": diagnostics.stretch_max_gap,
+                "raw_spread": diagnostics.raw_spread,
+                "core_spread": diagnostics.core_spread,
+                "provisional_count": diagnostics.provisional_count,
+                "present_player_count": diagnostics.present_player_count,
+            },
+            phase=session.get("bootstrap_phase", "STANDARD"),
+            num_tables=session.get("num_tables"),
+        )
+
     return SessionFixturesResponse(
         session_id=str(session["session_id"]),
         bootstrap_phase=session["bootstrap_phase"],
@@ -390,6 +487,7 @@ def get_session_fixtures(session_id: str, _: dict = _ANY):
         fixture_slots_created=len(response_slots),
         slots=response_slots,
         diagnostics=diagnostics,
+        quality=quality,
     )
 
 

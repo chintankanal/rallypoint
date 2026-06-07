@@ -593,11 +593,26 @@ export interface SessionQualityDimension {
   guidance?: string
 }
 
+export interface SessionQualityConstraints {
+  player_count: number
+  parity_forces_bye: boolean
+  raw_spread: number | null
+  core_spread: number | null
+  tier_distribution: { [key: string]: number }
+  provisional_count: number | null
+  rounds: number
+  num_tables: number | null
+  regime: string | null
+  competitive_max_gap: number | null
+  stretch_max_gap: number | null
+}
+
 export interface SessionQuality {
   dimensions: SessionQualityDimension[]
   overall_score: number
   overall_label: 'Strong' | 'Good' | 'Fair' | 'Constrained'
   narrative: string
+  constraints: SessionQualityConstraints
 }
 
 export interface FixturesResponse {

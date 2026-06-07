@@ -11,69 +11,6 @@ export type FixtureCategory =
   | 'bye'
   | 'unknown'
 
-export interface SummaryStat {
-  min: number
-  avg: number
-  max: number
-}
-
-export interface RoleExposureSummary {
-  noStretchExposureCount: number
-  stretchingSummary: SummaryStat
-  anchoringSummary: SummaryStat
-  peerSummary: SummaryStat
-}
-
-export interface FixturePlayerAnalytics {
-  playerId: string
-  name: string
-  rating: number
-  tier?: string
-  matches: number
-  uniqueOpponents: number
-  byes: number
-  sos: number
-  maxPlayStreak: number
-  peer: number
-  stretching: number
-  anchoring: number
-  atPoolCeiling: boolean
-}
-
-export type Verdict = 'optimal' | 'good' | 'limited'
-
-export interface QualityDimension {
-  key: string
-  label: string
-  achieved: string
-  ratio: number
-  verdict: Verdict
-  limitedBy?: string
-  guidance?: string
-  applicable: boolean
-}
-
-
-export interface Constraints {
-  playerCount: number
-  parityForcesBye: boolean
-  rawSpread: number | null
-  coreSpread: number | null
-  tierDistribution: Record<string, number>
-  provisionalCount: number | null
-  rounds: number
-  numTables?: number
-  regime: string | null
-  competitiveMaxGap: number | null
-  stretchMaxGap: number | null
-}
-
-export interface QualityReport {
-  dimensions: QualityDimension[]
-  overallScore: number
-  overallLabel: 'Strong' | 'Good' | 'Fair' | 'Constrained'
-}
-
 export interface FixtureAnalytics {
   totalSlots: number
   counts: Record<FixtureCategory, number>
@@ -90,14 +27,6 @@ export interface FixtureAnalytics {
   sosSpread: number
   criticalTraps: number
   warningTraps: number
-  matchesSummary: SummaryStat
-  uniqueOpponentsSummary: SummaryStat
-  byesSummary: SummaryStat
-  roleExposureSummary: RoleExposureSummary
-  perPlayer: FixturePlayerAnalytics[]
-  constraints: Constraints
-  quality: QualityReport
-  narrative: string
 }
 
 const CATEGORY_MAP: Record<string, FixtureCategory> = {
@@ -120,14 +49,6 @@ function clampPercentage(value: number) {
   return Math.round(Math.min(100, Math.max(0, value)))
 }
 
-function summaryStat(values: number[]): SummaryStat {
-  if (!values.length) return { min: 0, avg: 0, max: 0 }
-  const min = Math.min(...values)
-  const max = Math.max(...values)
-  const avg = values.reduce((sum, value) => sum + value, 0) / values.length
-  return { min, max, avg: Math.round(avg * 10) / 10 }
-}
-
 function normalizeRole(role?: string | null) {
   const value = (role ?? '').trim().toUpperCase()
   if (value === 'PEER') return 'PEER'
@@ -146,7 +67,6 @@ function getNextChronoPhase(phase: { round_number: number; wave_number: number }
 export function analyzeFixtureSlots(
   slots: FixtureSlot[],
   diagnostics?: SessionDiagnostics,
-  sessionContext?: { numTables?: number; sessionMinutes?: number }
 ): FixtureAnalytics {
   const counts: Record<FixtureCategory, number> = {
     competitive: 0,
@@ -286,10 +206,6 @@ export function analyzeFixtureSlots(
     }
   })
 
-  const matchesSummary = summaryStat(perPlayer.map(p => p.matches))
-  const uniqueOpponentsSummary = summaryStat(perPlayer.map(p => p.uniqueOpponents))
-  const byesSummary = summaryStat(perPlayer.map(p => p.byes))
-
   // Compute atPoolCeiling for each player: true if no other player is rated high enough to be a stretch
   const maxPlayerRating = Math.max(...perPlayer.map(p => p.rating), 1000)
   const stretchThreshold = diagnostics?.competitive_max_gap ?? 150 // use existing competitive gap as proxy
@@ -302,7 +218,7 @@ export function analyzeFixtureSlots(
     ),
   }))
 
-  // Intra-fairness: SoS balance + opponent variety + games equity (NO rest, NO table-rotation)
+  // Intra-fairness: SoS balance + opponent variety + games equity
   const filterableStats = perPlayerWithCeiling.filter(p => p.matches >= 2)
   const ratingRelativeOffsets = filterableStats.map(player =>
     Math.abs(player.rating - player.sos)
@@ -320,24 +236,17 @@ export function analyzeFixtureSlots(
     : 0
   const opponentVarietyScore = Math.round(avgOpponentVariety * 100)
 
-  // Games equity: how evenly distributed matches are
-  const matchDelta = matchesSummary.max - matchesSummary.min
-  const gamesEquityScore = Math.max(0, 100 - Math.round((matchDelta / Math.max(matchesSummary.avg, 1)) * 50))
+  // Compute match statistics for games equity
+  const matchStats = perPlayer.map(p => p.matches)
+  const matchDelta = Math.max(...matchStats, 0) - Math.min(...matchStats, 0)
+  const avgMatches = matchStats.length ? matchStats.reduce((sum, val) => sum + val, 0) / matchStats.length : 0
+  const gamesEquityScore = Math.max(0, 100 - Math.round((matchDelta / Math.max(avgMatches, 1)) * 50))
 
   // Fairness is weighted average: SoS (50%) + variety (30%) + games equity (20%)
   const fairnessIndex = Math.round(sosBalanceScore * 0.5 + opponentVarietyScore * 0.3 + gamesEquityScore * 0.2)
 
   const criticalTraps = perPlayerWithCeiling.filter(player => player.maxPlayStreak >= 3).length
   const warningTraps = perPlayerWithCeiling.filter(player => player.maxPlayStreak === 2).length
-
-  const roleExposureSummary: RoleExposureSummary = {
-    noStretchExposureCount: perPlayerWithCeiling.filter(
-      player => player.stretching === 0 && !player.atPoolCeiling
-    ).length,
-    stretchingSummary: summaryStat(perPlayerWithCeiling.map(player => player.stretching)),
-    anchoringSummary: summaryStat(perPlayerWithCeiling.map(player => player.anchoring)),
-    peerSummary: summaryStat(perPlayerWithCeiling.map(player => player.peer)),
-  }
 
   const totalSlots = slots.length
   const asPercent = (value: number) => (totalSlots ? clampPercentage((value / totalSlots) * 100) : 0)
@@ -353,54 +262,6 @@ export function analyzeFixtureSlots(
   const density = totalSlots ? Math.round((filledCount / totalSlots) * 100) : 0
   const tightnessScore = deltasCount ? Number((totalDelta / deltasCount).toFixed(1)) : 0
   const byeBalanced = counts.bye === 0 || counts.bye <= 1
-
-  // ──── Constraints ────
-  const playerCount = playerIds.length
-  const tierDistribution: Record<string, number> = {}
-  for (const player of perPlayerWithCeiling) {
-    const tier = player.tier || 'Unrated'
-    tierDistribution[tier] = (tierDistribution[tier] ?? 0) + 1
-  }
-  const rounds = Math.max(...slots.map(s => s.round_number), 0)
-  const parityForcesBye = playerCount % 2 === 1
-
-  const constraints: Constraints = {
-    playerCount,
-    parityForcesBye,
-    rawSpread: diagnostics?.raw_spread ?? null,
-    coreSpread: diagnostics?.core_spread ?? null,
-    tierDistribution,
-    provisionalCount: diagnostics?.provisional_count ?? null,
-    rounds,
-    numTables: sessionContext?.numTables,
-    regime: diagnostics?.regime ?? null,
-    competitiveMaxGap: diagnostics?.competitive_max_gap ?? null,
-    stretchMaxGap: diagnostics?.stretch_max_gap ?? null,
-  }
-
-  // NOTE: Server now computes authoritative `quality`. Keep lightweight client-side
-  // analytics (counts, percentages, constraints) but avoid duplicating the
-  // full scoring model here. Provide a minimal fallback `quality` so the UI
-  // can render when a server-side quality is not present.
-  const phase = (diagnostics?.bootstrap_phase ?? 'STANDARD') as 'DISCOVERY' | 'TRANSITION' | 'STANDARD'
-  const minimalOverallScore = Math.round(Math.max(0, Math.min(100, fairnessIndex)))
-  const overallLabel: 'Strong' | 'Good' | 'Fair' | 'Constrained' =
-    minimalOverallScore >= 90 ? 'Strong' : minimalOverallScore >= 75 ? 'Good' : minimalOverallScore >= 50 ? 'Fair' : 'Constrained'
-
-  const dimensions: QualityDimension[] = []
-  const quality: QualityReport = {
-    dimensions,
-    overallScore: minimalOverallScore,
-    overallLabel,
-  }
-
-  const phaseIntro = phase === 'DISCOVERY'
-    ? 'This is a discovery session — the goal is broad opponent exposure to settle ratings, not tight competitive balance.'
-    : phase === 'TRANSITION'
-      ? 'This session balances rating discovery with competitive integrity.'
-      : 'This session emphasizes competitive integrity and stretch-band delivery.'
-
-  const narrative = `${phaseIntro} Fixture quality is **${overallLabel}**.`
 
   return {
     totalSlots,
@@ -418,14 +279,6 @@ export function analyzeFixtureSlots(
     sosSpread: Math.round(sosSpread * 10) / 10,
     criticalTraps,
     warningTraps,
-    matchesSummary,
-    uniqueOpponentsSummary,
-    byesSummary,
-    roleExposureSummary,
-    perPlayer: [...perPlayerWithCeiling].sort((a, b) => b.rating - a.rating),
-    constraints,
-    quality,
-    narrative,
   }
 }
 

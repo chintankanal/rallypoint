@@ -420,14 +420,13 @@ function SessionsTab({ academyId }: { academyId: string }) {
   const hasFixtures = !!fixtureResult || (openedSession?.generated_at != null)
   const fixtureAnalytics = fixturesQ.data ? analyzeFixtureSlots(
     fixturesQ.data.slots,
-    fixturesQ.data.diagnostics,
-    { numTables: openedSession?.num_tables, sessionMinutes: openedSession?.session_minutes }
+    fixturesQ.data.diagnostics
   ) : null
   const bootstrapPhase = fixtureAnalytics?.bootstrapPhase ?? fixtureResult?.bootstrap_phase ?? openedSession?.bootstrap_phase ?? 'STANDARD'
-  // Prefer server-provided `quality` when available; fall back to client analysis
+  // Use server-provided quality exclusively when available
   const serverQuality = fixturesQ.data?.quality
-  const displayQuality = serverQuality ?? fixtureAnalytics?.quality
-  const displayNarrative = serverQuality?.narrative ?? fixtureAnalytics?.narrative
+  const displayQuality = serverQuality
+  const displayNarrative = serverQuality?.narrative
 
   return (
     <div className="space-y-5">
@@ -623,7 +622,7 @@ function SessionsTab({ academyId }: { academyId: string }) {
 
           {hasFixtures && (
             <div className="space-y-5">
-              {fixtureAnalytics && (
+              {fixtureAnalytics && serverQuality && (
                 <div className="rounded-2xl bg-gradient-to-br from-slate-800/80 via-slate-900/80 to-slate-800/80 p-[1px]">
                   <div className="rounded-2xl bg-gray-900/80 border border-gray-800 backdrop-blur-sm p-5 space-y-4">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -652,8 +651,8 @@ function SessionsTab({ academyId }: { academyId: string }) {
 
                       <div className="flex flex-col items-start gap-3 sm:items-end">
                         <div className="text-xs uppercase tracking-[0.24em] text-gray-400">Fixture Quality</div>
-                        <div className="text-3xl font-semibold text-white">{serverQuality ? serverQuality.overall_label : fixtureAnalytics?.quality.overallLabel}</div>
-                        <span className="text-xs text-gray-400">{serverQuality ? `${serverQuality.overall_score}%` : `${fixtureAnalytics?.quality.overallScore}%`}</span>
+                        <div className="text-3xl font-semibold text-white">{serverQuality?.overall_label ?? 'Unknown'}</div>
+                        <span className="text-xs text-gray-400">{serverQuality ? `${serverQuality.overall_score}%` : '-'}</span>
                         <button
                           type="button"
                           onClick={() => setDiagnosticsExpanded(prev => !prev)}
@@ -676,52 +675,56 @@ function SessionsTab({ academyId }: { academyId: string }) {
 
                         {/* Two-column: Constraints vs Quality */}
                         <div className="grid gap-4 lg:grid-cols-2">
-                          {/* Left: Constraints */}
+                          {/* Left: Constraints (server-sourced) */}
                           <div className="space-y-3">
                             <div className="text-xs uppercase tracking-[0.24em] text-gray-400 font-semibold">What constrained this session?</div>
                             <div className="space-y-2">
-                              <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3 text-sm">
-                                <div className="text-xs text-gray-500">Player count & parity</div>
-                                <div className="mt-1 text-white font-semibold">
-                                  {fixtureAnalytics.constraints.playerCount} players{fixtureAnalytics.constraints.parityForcesBye ? ' (odd → forced byes)' : ' (even)'}
-                                </div>
-                              </div>
-                              {fixtureAnalytics.constraints.rawSpread != null && (
-                                <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3 text-sm">
-                                  <div className="text-xs text-gray-500">Rating spread</div>
-                                  <div className="mt-1 text-white font-semibold">Raw {Math.round(fixtureAnalytics.constraints.rawSpread)} · Core {Math.round(fixtureAnalytics.constraints.coreSpread ?? 0)}</div>
-                                </div>
-                              )}
-                              {Object.keys(fixtureAnalytics.constraints.tierDistribution).length > 0 && (
-                                <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3 text-sm">
-                                  <div className="text-xs text-gray-500">Tier distribution</div>
-                                  <div className="mt-1 text-white text-xs font-mono">
-                                    {Object.entries(fixtureAnalytics.constraints.tierDistribution)
-                                      .map(([tier, count]) => `${count} ${tier}`)
-                                      .join(' · ')}
+                              {serverQuality?.constraints && (
+                                <>
+                                  <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3 text-sm">
+                                    <div className="text-xs text-gray-500">Player count & parity</div>
+                                    <div className="mt-1 text-white font-semibold">
+                                      {serverQuality.constraints.player_count} players{serverQuality.constraints.parity_forces_bye ? ' (odd → forced byes)' : ' (even)'}
+                                    </div>
                                   </div>
-                                </div>
-                              )}
-                              {fixtureAnalytics.constraints.provisionalCount != null && (
-                                <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3 text-sm">
-                                  <div className="text-xs text-gray-500">Provisional players</div>
-                                  <div className="mt-1 text-white font-semibold">
-                                    {fixtureAnalytics.constraints.provisionalCount} of {fixtureAnalytics.constraints.playerCount}
+                                  {serverQuality.constraints.raw_spread != null && (
+                                    <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3 text-sm">
+                                      <div className="text-xs text-gray-500">Rating spread</div>
+                                      <div className="mt-1 text-white font-semibold">Raw {Math.round(serverQuality.constraints.raw_spread)} · Core {Math.round(serverQuality.constraints.core_spread ?? 0)}</div>
+                                    </div>
+                                  )}
+                                  {Object.keys(serverQuality.constraints.tier_distribution).length > 0 && (
+                                    <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3 text-sm">
+                                      <div className="text-xs text-gray-500">Tier distribution</div>
+                                      <div className="mt-1 text-white text-xs font-mono">
+                                        {Object.entries(serverQuality.constraints.tier_distribution)
+                                          .map(([tier, count]) => `${count} ${tier}`)
+                                          .join(' · ')}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {serverQuality.constraints.provisional_count != null && (
+                                    <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3 text-sm">
+                                      <div className="text-xs text-gray-500">Provisional players</div>
+                                      <div className="mt-1 text-white font-semibold">
+                                        {serverQuality.constraints.provisional_count} of {serverQuality.constraints.player_count}
+                                      </div>
+                                    </div>
+                                  )}
+                                  <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3 text-sm">
+                                    <div className="text-xs text-gray-500">Session structure</div>
+                                    <div className="mt-1 text-white font-semibold text-xs">
+                                      {serverQuality.constraints.rounds} round{serverQuality.constraints.rounds !== 1 ? 's' : ''}{serverQuality.constraints.num_tables ? ` · ${serverQuality.constraints.num_tables} table${serverQuality.constraints.num_tables !== 1 ? 's' : ''}` : ''}
+                                    </div>
                                   </div>
-                                </div>
+                                  <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3 text-sm">
+                                    <div className="text-xs text-gray-500">Gap targets</div>
+                                    <div className="mt-1 text-white text-xs font-mono">
+                                      Competitive ≤ {serverQuality.constraints.competitive_max_gap ?? '—'} · Stretch ≤ {serverQuality.constraints.stretch_max_gap ?? '—'}
+                                    </div>
+                                  </div>
+                                </>
                               )}
-                              <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3 text-sm">
-                                <div className="text-xs text-gray-500">Session structure</div>
-                                <div className="mt-1 text-white font-semibold text-xs">
-                                  {fixtureAnalytics.constraints.rounds} round{fixtureAnalytics.constraints.rounds !== 1 ? 's' : ''}{fixtureAnalytics.constraints.numTables ? ` · ${fixtureAnalytics.constraints.numTables} table${fixtureAnalytics.constraints.numTables !== 1 ? 's' : ''}` : ''}
-                                </div>
-                              </div>
-                              <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3 text-sm">
-                                <div className="text-xs text-gray-500">Gap targets</div>
-                                <div className="mt-1 text-white text-xs font-mono">
-                                  Competitive ≤ {fixtureAnalytics.constraints.competitiveMaxGap ?? '—'} · Stretch ≤ {fixtureAnalytics.constraints.stretchMaxGap ?? '—'}
-                                </div>
-                              </div>
                             </div>
                           </div>
 
@@ -761,11 +764,11 @@ function SessionsTab({ academyId }: { academyId: string }) {
                                       </span>
                                     </div>
                                     <div className="mt-2 text-white font-semibold">{dim.achieved}</div>
-                                    {((dim as any).limitedBy ?? (dim as any).limited_by) && (
+                                    {dim.limited_by && (
                                       <div className="mt-1 text-xs text-gray-400">
-                                        <div>Limited by: {((dim as any).limitedBy ?? (dim as any).limited_by)}</div>
-                                        {((dim as any).guidance) && (
-                                          <div className="mt-1 text-gray-500 text-[11px]">{(dim as any).guidance}</div>
+                                        <div>Limited by: {dim.limited_by}</div>
+                                        {dim.guidance && (
+                                          <div className="mt-1 text-gray-500 text-[11px]">{dim.guidance}</div>
                                         )}
                                       </div>
                                     )}
@@ -816,6 +819,12 @@ function SessionsTab({ academyId }: { academyId: string }) {
                       </div>
                     )}
                   </div>
+                </div>
+              )}
+
+              {hasFixtures && !serverQuality && (
+                <div className="rounded-2xl border border-gray-800 bg-gray-900/50 p-4 text-sm text-gray-400">
+                  Session diagnostics not available for this session. Generate fixtures with the current backend to see quality metrics.
                 </div>
               )}
 

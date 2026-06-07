@@ -66,7 +66,6 @@ export default function FixtureMatrixGrid({
             </td>
           )
         })}
-        <td className="border-b border-gray-800" />
       </tr>
     )
   }
@@ -98,15 +97,14 @@ export default function FixtureMatrixGrid({
         ))}
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-gray-800">
-        <table className="table-fixed text-xs border-collapse w-full">
+      <div className="overflow-x-auto rounded-lg border border-gray-800 w-fit max-w-full">
+        <table className="table-fixed text-xs border-collapse">
           <colgroup>
             <col style={{ width: '150px' }} />
             <col style={{ width: '60px' }} />
             {rounds.map((r: number) => (
               <col key={r} style={{ width: '70px' }} />
             ))}
-            <col />
           </colgroup>
           <thead>
             <tr className="bg-gray-900/80">
@@ -119,7 +117,6 @@ export default function FixtureMatrixGrid({
                   R{i + 1}
                 </th>
               ))}
-              <th aria-hidden="true" className="border-b border-gray-800 bg-gray-900/80" />
             </tr>
           </thead>
           <tbody>
@@ -128,7 +125,7 @@ export default function FixtureMatrixGrid({
                 const section = row.section
                 return (
                   <tr key={`header-${section.id}`} className="border-b border-gray-800 last:border-0 bg-gray-950/40">
-                    <td colSpan={rounds.length + 3} className="text-xs uppercase tracking-wider font-bold text-gray-400 px-3 py-1.5">
+                    <td colSpan={rounds.length + 2} className="text-xs uppercase tracking-wider font-bold text-gray-400 px-3 py-1.5">
                       <div className="flex items-center gap-2">
                         <span className={`w-1.5 h-3 rounded-sm ${section.accent.bg}`} />
                         {section.label}

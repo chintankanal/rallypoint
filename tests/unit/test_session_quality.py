@@ -196,6 +196,71 @@ class TestSessionQualityBimodal:
         assert "undefined" not in result.narrative
 
 
+class TestSessionQualityParity:
+    """Parity test using the validated 10-player STANDARD pool."""
+
+    def test_10_player_standard_pool_parity(self):
+        """10-player pool where top two are at-pool-ceiling; competitive optimal."""
+        ratings = [1400, 1300, 1258, 1200, 1172, 1111, 1068, 1000, 992, 850]
+        players = [{"player_id": f"p{i}", "current_rating": ratings[i], "tier": "T"} for i in range(len(ratings))]
+
+        # Round 1 pair adjacent
+        slots = []
+        pairs = [(0,1),(2,3),(4,5),(6,7),(8,9)]
+        for a,b in pairs:
+            slots.append({
+                "round_number": 1,
+                "wave_number": 1,
+                "gap_band": "COMPETITIVE",
+                "round_intent": "PEER",
+            # Give many non-ceiling players a STRETCH role so stretch-reach counts
+            "player_a_role": "STRETCH" if a >= 2 and a <= 7 else "PEER",
+            "player_b_role": "PEER" if b <= 7 else "PEER",
+                "status": "SCHEDULED",
+                "player_a": {"player_id": players[a]["player_id"], "current_rating": players[a]["current_rating"], "tier": "T"},
+                "player_b": {"player_id": players[b]["player_id"], "current_rating": players[b]["current_rating"], "tier": "T"},
+            })
+
+        # Round 2 pair shifted for variety
+        pairs2 = [(0,2),(1,3),(4,6),(5,7),(8,9)]
+        for a,b in pairs2:
+            slots.append({
+                "round_number": 2,
+                "wave_number": 1,
+                "gap_band": "COMPETITIVE",
+                "round_intent": "PEER",
+            "player_a_role": "PEER",
+            "player_b_role": "STRETCH" if b >= 2 and b <= 7 else "PEER",
+                "status": "SCHEDULED",
+                "player_a": {"player_id": players[a]["player_id"], "current_rating": players[a]["current_rating"], "tier": "T"},
+                "player_b": {"player_id": players[b]["player_id"], "current_rating": players[b]["current_rating"], "tier": "T"},
+            })
+
+        diagnostics = {
+            "regime": "TIER_BALANCED",
+            "competitive_max_gap": 100,
+            "stretch_max_gap": 250,
+            "raw_spread": max(ratings) - min(ratings),
+            "core_spread": ratings[1] - ratings[-2],
+            "provisional_count": 0,
+            "present_player_count": len(ratings),
+        }
+
+        result = compute_session_quality(slots, diagnostics, phase="STANDARD")
+        assert result is not None
+
+        # Check at_pool_ceiling count: exactly 2 (1400, 1300)
+        # Parse stretch-reach achieved string for "2 at pool ceiling"
+        stretch = next(d for d in result.dimensions if d.key == "stretch-reach")
+        assert "2 at pool ceiling" in stretch.achieved
+        # eligible should be 8
+        assert "of 8 eligible" in stretch.achieved or "of 8" in stretch.achieved
+
+        competitive = next(d for d in result.dimensions if d.key == "competitive-balance")
+        assert competitive.verdict == "optimal"
+        assert result.overall_label == "Strong"
+
+
 class TestSessionQualityApplicability:
     """Test that n/a dimensions are correctly excluded from scoring."""
 

@@ -582,6 +582,24 @@ export interface SessionDiagnostics {
   stretch_max_gap: number | null
 }
 
+export interface SessionQualityDimension {
+  key: string
+  label: string
+  achieved: string
+  ratio: number
+  verdict: 'optimal' | 'good' | 'limited'
+  applicable: boolean
+  limited_by?: string
+  guidance?: string
+}
+
+export interface SessionQuality {
+  dimensions: SessionQualityDimension[]
+  overall_score: number
+  overall_label: 'Strong' | 'Good' | 'Fair' | 'Constrained'
+  narrative: string
+}
+
 export interface FixturesResponse {
   session_id: string
   bootstrap_phase: string
@@ -590,6 +608,7 @@ export interface FixturesResponse {
   slots: FixtureSlot[]
   warnings?: FixtureWarning[]
   diagnostics?: SessionDiagnostics
+  quality?: SessionQuality
 }
 
 export const sessionsApi = {

@@ -53,29 +53,6 @@ export interface QualityDimension {
   applicable: boolean
 }
 
-const PHASE_WEIGHTS: Record<'DISCOVERY' | 'TRANSITION' | 'STANDARD', Record<QualityDimension['key'], number>> = {
-  DISCOVERY: {
-    'opponent-variety': 0.5,
-    'game-equity': 0.2,
-    'rest-distribution': 0.2,
-    'competitive-balance': 0.1,
-    'stretch-reach': 0.0,
-  },
-  TRANSITION: {
-    'opponent-variety': 0.3,
-    'competitive-balance': 0.25,
-    'stretch-reach': 0.2,
-    'game-equity': 0.15,
-    'rest-distribution': 0.1,
-  },
-  STANDARD: {
-    'competitive-balance': 0.3,
-    'stretch-reach': 0.2,
-    'opponent-variety': 0.2,
-    'game-equity': 0.15,
-    'rest-distribution': 0.15,
-  },
-}
 
 export interface Constraints {
   playerCount: number
@@ -401,199 +378,29 @@ export function analyzeFixtureSlots(
     stretchMaxGap: diagnostics?.stretch_max_gap ?? null,
   }
 
-  // ──── Quality dimensions (ratios benchmarked against achievable) ────
-  const eligibleForStretch = perPlayerWithCeiling.filter(p => !p.atPoolCeiling).length
-  const achievedStretchCount = perPlayerWithCeiling.filter(p => p.stretching > 0).length
+  // NOTE: Server now computes authoritative `quality`. Keep lightweight client-side
+  // analytics (counts, percentages, constraints) but avoid duplicating the
+  // full scoring model here. Provide a minimal fallback `quality` so the UI
+  // can render when a server-side quality is not present.
   const phase = (diagnostics?.bootstrap_phase ?? 'STANDARD') as 'DISCOVERY' | 'TRANSITION' | 'STANDARD'
-  const phaseWeights = PHASE_WEIGHTS[phase] ?? PHASE_WEIGHTS.STANDARD
-
-  const stretchReachRatio = eligibleForStretch > 0 ? achievedStretchCount / eligibleForStretch : 1.0
-  const stretchReachVerdict: Verdict = stretchReachRatio >= 0.9 ? 'optimal' : stretchReachRatio >= 0.7 ? 'good' : 'limited'
-  const stretchReachApplicable = eligibleForStretch > 0
-  const stretchReachLimitedBy = stretchReachRatio < 0.9 ? 'few higher-rated opponents in pool' : undefined
-  const stretchReachGuidance = stretchReachVerdict === 'limited'
-    ? "Expected for this group's rating spread — no action needed. To add play-up matches, invite higher-rated players."
-    : undefined
-
-  const stretchMaxGap = diagnostics?.stretch_max_gap ?? 250
-  const filledSlots = Math.max(0, totalSlots - counts.bye)
-
-  const isolatedIds = new Set(
-    perPlayerWithCeiling
-      .filter((p, i) =>
-        !perPlayerWithCeiling.some(
-          (o, j) =>
-            i !== j &&
-            Math.abs(o.rating - p.rating) <= stretchMaxGap
-        )
-      )
-      .map(p => p.playerId)
-  )
-  const minAchievableOutOfBand = slots.filter(
-    s =>
-      s.player_b &&
-      s.player_a &&
-      (isolatedIds.has(s.player_a.player_id) || isolatedIds.has(s.player_b.player_id))
-  ).length
-  const excessOutOfBand = Math.max(0, counts.outOfBand - minAchievableOutOfBand)
-  const competitiveRatio = filledSlots > 0
-    ? Math.max(0, Math.min(1, 1 - excessOutOfBand / filledSlots))
-    : 1.0
-  const competitiveApplicable = filledSlots > 0
-  const competitiveVerdict: Verdict = competitiveRatio >= 0.85 ? 'optimal' : competitiveRatio >= 0.65 ? 'good' : 'limited'
-  const competitiveLimitedBy = competitiveVerdict === 'limited'
-    ? 'wide rating spread forced some out-of-band pairings'
-    : undefined
-  const competitiveGuidance = competitiveVerdict === 'limited'
-    ? 'Some matches exceeded the stretch band — split the pool by tier or add tables/rounds.'
-    : undefined
-
-  const varietyCeiling = rounds > 0 ? Math.min(rounds, Math.max(0, playerCount - 1)) : 0
-  const varietyApplicable = varietyCeiling > 0
-  const varietyDenominator = Math.max(1, varietyCeiling)
-  const opponentVarietyRatio = rounds > 0 ? Math.min(1, uniqueOpponentsSummary.avg / varietyDenominator) : 1.0
-  const varietyVerdict: Verdict = opponentVarietyRatio >= 0.8 ? 'optimal' : opponentVarietyRatio >= 0.6 ? 'good' : 'limited'
-  const varietyLimitedBy = varietyVerdict === 'limited'
-    ? 'small pool forces rematches across rounds'
-    : undefined
-  const varietyGuidance = varietyVerdict === 'limited'
-    ? 'Pool is small relative to rounds, so some rematches are unavoidable — add players or reduce rounds for more variety.'
-    : undefined
-
-  const gameEquityRatio = matchesSummary.max > 0 ? matchesSummary.min / matchesSummary.max : 1.0
-  const gameEquityApplicable = matchesSummary.max > 0
-  const equityVerdict: Verdict = gameEquityRatio >= 0.85 ? 'optimal' : gameEquityRatio >= 0.7 ? 'good' : 'limited'
-  const equityLimitedBy = equityVerdict === 'limited'
-    ? 'table/round capacity yields uneven match counts'
-    : undefined
-  const equityGuidance = equityVerdict === 'limited'
-    ? 'Uneven match counts from table/round capacity — add a table or adjust rounds.'
-    : undefined
-
-  const unavoidableByes = parityForcesBye ? rounds : 0
-  const byesRatio = counts.bye <= unavoidableByes ? 1.0 : (unavoidableByes / counts.bye)
-  const byesVerdict: Verdict = counts.bye === unavoidableByes ? 'optimal' : counts.bye <= unavoidableByes + 1 ? 'good' : 'limited'
-  const byesLimitedBy = counts.bye > unavoidableByes ? 'odd player count' : undefined
-  const byesGuidance = byesVerdict === 'limited'
-    ? 'Odd player count forces a bye each round — add or drop a player for full pairing.'
-    : undefined
-
-  const gameEquityDisplay = matchesSummary.max > 0
-    ? (matchesSummary.min === matchesSummary.max
-      ? `all played ${matchesSummary.max}`
-      : `min ${matchesSummary.min} / max ${matchesSummary.max}`)
-    : 'n/a'
-
-  const dimensions: QualityDimension[] = [
-    {
-      key: 'competitive-balance',
-      label: 'Competitive balance',
-      achieved: competitiveApplicable
-        ? `${counts.outOfBand} out-of-band${counts.outOfBand > 0 && excessOutOfBand === 0 ? ' (unavoidable)' : ''} · avg gap ${tightnessScore} (within stretch band ≤${stretchMaxGap})`
-        : 'n/a',
-      ratio: Math.max(0, Math.min(1, competitiveRatio)),
-      verdict: competitiveVerdict,
-      limitedBy: competitiveLimitedBy,
-      guidance: competitiveGuidance,
-      applicable: competitiveApplicable,
-    },
-    {
-      key: 'opponent-variety',
-      label: 'Opponent variety',
-      achieved: varietyApplicable
-        ? `${uniqueOpponentsSummary.avg.toFixed(1)} of ${varietyCeiling} possible`
-        : 'n/a',
-      ratio: Math.max(0, Math.min(1, opponentVarietyRatio)),
-      verdict: varietyVerdict,
-      limitedBy: varietyLimitedBy,
-      guidance: varietyGuidance,
-      applicable: varietyApplicable,
-    },
-    {
-      key: 'game-equity',
-      label: 'Game equity',
-      achieved: gameEquityDisplay,
-      ratio: Math.max(0, Math.min(1, gameEquityRatio)),
-      verdict: equityVerdict,
-      limitedBy: equityLimitedBy,
-      guidance: equityGuidance,
-      applicable: gameEquityApplicable,
-    },
-    {
-      key: 'rest-distribution',
-      label: 'Rest distribution',
-      achieved: `${counts.bye} of ${unavoidableByes} unavoidable bye${unavoidableByes !== 1 ? 's' : ''}`,
-      ratio: Math.max(0, Math.min(1, byesRatio)),
-      verdict: byesVerdict,
-      limitedBy: byesLimitedBy,
-      guidance: byesGuidance,
-      applicable: true,
-    },
-    {
-      key: 'stretch-reach',
-      label: 'Stretch reach',
-      achieved: eligibleForStretch > 0
-        ? `${achievedStretchCount} of ${eligibleForStretch} eligible · ${playerCount - eligibleForStretch} at pool ceiling`
-        : 'n/a',
-      ratio: Math.max(0, Math.min(1, stretchReachRatio)),
-      verdict: stretchReachVerdict,
-      limitedBy: stretchReachLimitedBy,
-      guidance: stretchReachGuidance,
-      applicable: stretchReachApplicable,
-    },
-  ]
-
-  const applicableDimensions = dimensions.filter(d => d.applicable)
-  const applicableWeightSum = applicableDimensions.reduce((sum, dim) => sum + (phaseWeights[dim.key] ?? 0), 0)
-  const overallScore = applicableWeightSum > 0
-    ? Math.round(
-        (applicableDimensions.reduce((sum, dim) => sum + dim.ratio * (phaseWeights[dim.key] ?? 0), 0) / applicableWeightSum) * 100
-      )
-    : 50
+  const minimalOverallScore = Math.round(Math.max(0, Math.min(100, fairnessIndex)))
   const overallLabel: 'Strong' | 'Good' | 'Fair' | 'Constrained' =
-    overallScore >= 90 ? 'Strong' : overallScore >= 75 ? 'Good' : overallScore >= 50 ? 'Fair' : 'Constrained'
+    minimalOverallScore >= 90 ? 'Strong' : minimalOverallScore >= 75 ? 'Good' : minimalOverallScore >= 50 ? 'Fair' : 'Constrained'
 
+  const dimensions: QualityDimension[] = []
   const quality: QualityReport = {
     dimensions,
-    overallScore,
+    overallScore: minimalOverallScore,
     overallLabel,
   }
 
-  // ──── Narrative ────
   const phaseIntro = phase === 'DISCOVERY'
     ? 'This is a discovery session — the goal is broad opponent exposure to settle ratings, not tight competitive balance.'
     : phase === 'TRANSITION'
       ? 'This session balances rating discovery with competitive integrity.'
       : 'This session emphasizes competitive integrity and stretch-band delivery.'
 
-  const strengths: string[] = []
-  if (competitiveVerdict === 'optimal' && competitiveApplicable) strengths.push('excellent competitive balance')
-  if (varietyVerdict === 'optimal' && varietyApplicable) strengths.push('strong opponent variety')
-  if (equityVerdict === 'optimal' && gameEquityApplicable) strengths.push('strong game equity')
-  if (byesVerdict === 'optimal') strengths.push('balanced rest distribution')
-
-  const limitedDimensions = dimensions.filter(d => d.applicable && d.verdict === 'limited')
-  const limitingDim = limitedDimensions
-    .filter(d => d.limitedBy)
-    .sort((a, b) => a.ratio - b.ratio)[0]
-    ?? limitedDimensions[0]
-  const limitingConstraint = limitingDim?.limitedBy ?? null
-
-  let narrativeText = `${phaseIntro} Fixture quality is **${overallLabel}**. `
-  if (strengths.length > 0) {
-    narrativeText += `Highlights: ${strengths.join(', ')}. `
-  }
-  if (limitedDimensions.length > 0) {
-    const limitedNames = limitedDimensions.map(d => d.label.toLowerCase()).join(', ')
-    if (limitingConstraint) {
-      narrativeText += `Limited by **${limitingConstraint}**: ${limitedNames} affected.`
-    } else {
-      narrativeText += `Limited: ${limitedNames} affected.`
-    }
-  } else {
-    narrativeText += 'Excellent fixture quality across all dimensions.'
-  }
-  const narrative = narrativeText
+  const narrative = `${phaseIntro} Fixture quality is **${overallLabel}**.`
 
   return {
     totalSlots,

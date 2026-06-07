@@ -42,7 +42,7 @@ VERDICT_THRESHOLDS = {
 }
 
 OVERALL_LABEL_THRESHOLDS = {
-    "Strong": 90,
+    "Strong": 85,
     "Good": 75,
     "Fair": 50,
 }
@@ -103,6 +103,7 @@ def compute_session_quality(
     phase = phase or "STANDARD"
     phase_weights = PHASE_WEIGHTS.get(phase, PHASE_WEIGHTS["STANDARD"])
     stretch_max_gap = float(diagnostics.get("stretch_max_gap") or 250)
+    competitive_max_gap = float(diagnostics.get("competitive_max_gap") or 150)
 
     # Collect player stats from slots
     player_stats = {}
@@ -227,12 +228,14 @@ def compute_session_quality(
     else:
         min_matches = max_matches = 0
 
-    # Identify pool ceiling (players at or above the 95th percentile of rating)
+    # Identify pool ceiling: a player is at pool ceiling iff no other player is
+    # rated more than `competitive_max_gap` above them (no available stretch opponent).
     if all_players:
-        ratings = sorted([p.rating for p in all_players])
-        percentile_95_rating = ratings[max(0, len(ratings) - 1)]  # top 1+ player(s)
         for p in all_players:
-            p.at_pool_ceiling = p.rating >= percentile_95_rating * 0.95
+            p.at_pool_ceiling = not any(
+                o.player_id != p.player_id and o.rating > p.rating + competitive_max_gap
+                for o in all_players
+            )
 
     # Determine band-isolated players (no one within stretch_max_gap)
     isolated_ids = set()

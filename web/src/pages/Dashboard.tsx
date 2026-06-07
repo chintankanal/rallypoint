@@ -424,6 +424,10 @@ function SessionsTab({ academyId }: { academyId: string }) {
     { numTables: openedSession?.num_tables, sessionMinutes: openedSession?.session_minutes }
   ) : null
   const bootstrapPhase = fixtureAnalytics?.bootstrapPhase ?? fixtureResult?.bootstrap_phase ?? openedSession?.bootstrap_phase ?? 'STANDARD'
+  // Prefer server-provided `quality` when available; fall back to client analysis
+  const serverQuality = fixturesQ.data?.quality
+  const displayQuality = serverQuality ?? fixtureAnalytics?.quality
+  const displayNarrative = serverQuality?.narrative ?? fixtureAnalytics?.narrative
 
   return (
     <div className="space-y-5">
@@ -648,8 +652,8 @@ function SessionsTab({ academyId }: { academyId: string }) {
 
                       <div className="flex flex-col items-start gap-3 sm:items-end">
                         <div className="text-xs uppercase tracking-[0.24em] text-gray-400">Fixture Quality</div>
-                        <div className="text-3xl font-semibold text-white">{fixtureAnalytics.quality.overallLabel}</div>
-                        <span className="text-xs text-gray-400">{fixtureAnalytics.quality.overallScore}%</span>
+                        <div className="text-3xl font-semibold text-white">{serverQuality ? serverQuality.overall_label : fixtureAnalytics?.quality.overallLabel}</div>
+                        <span className="text-xs text-gray-400">{serverQuality ? `${serverQuality.overall_score}%` : `${fixtureAnalytics?.quality.overallScore}%`}</span>
                         <button
                           type="button"
                           onClick={() => setDiagnosticsExpanded(prev => !prev)}
@@ -661,11 +665,11 @@ function SessionsTab({ academyId }: { academyId: string }) {
                       </div>
                     </div>
 
-                    {diagnosticsExpanded && (
+                          {diagnosticsExpanded && (
                       <div className="space-y-4">
                         {/* Narrative verdict */}
                         <div className="rounded-2xl border border-gray-800 bg-gray-950/90 p-4 text-sm text-gray-300 leading-relaxed">
-                          {fixtureAnalytics.narrative.split('**').map((part, i) =>
+                          {(displayNarrative ?? '').split('**').map((part, i) =>
                             i % 2 === 0 ? part : <span key={i} className="font-semibold text-white">{part}</span>
                           )}
                         </div>
@@ -725,7 +729,7 @@ function SessionsTab({ academyId }: { academyId: string }) {
                           <div className="space-y-3">
                             <div className="text-xs uppercase tracking-[0.24em] text-gray-400 font-semibold">How fairly it delivered</div>
                             <div className="space-y-2">
-                              {fixtureAnalytics.quality.dimensions.map(dim => {
+                              {(displayQuality?.dimensions ?? []).map(dim => {
                                 const verdictColors = {
                                   n_a: 'bg-slate-800/30 border-slate-700/50 text-slate-300',
                                   optimal: 'bg-emerald-900/30 border-emerald-700/50 text-emerald-200',
@@ -757,11 +761,11 @@ function SessionsTab({ academyId }: { academyId: string }) {
                                       </span>
                                     </div>
                                     <div className="mt-2 text-white font-semibold">{dim.achieved}</div>
-                                    {dim.limitedBy && (
+                                    {((dim as any).limitedBy ?? (dim as any).limited_by) && (
                                       <div className="mt-1 text-xs text-gray-400">
-                                        <div>Limited by: {dim.limitedBy}</div>
-                                        {dim.guidance && (
-                                          <div className="mt-1 text-gray-500 text-[11px]">{dim.guidance}</div>
+                                        <div>Limited by: {((dim as any).limitedBy ?? (dim as any).limited_by)}</div>
+                                        {((dim as any).guidance) && (
+                                          <div className="mt-1 text-gray-500 text-[11px]">{(dim as any).guidance}</div>
                                         )}
                                       </div>
                                     )}

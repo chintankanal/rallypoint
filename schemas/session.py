@@ -40,6 +40,17 @@ class SessionResponse(BaseModel):
     created_at: datetime
 
 
+class SessionDiagnostics(BaseModel):
+    regime: str | None = None
+    bootstrap_phase: str
+    raw_spread: float | None = None
+    core_spread: float | None = None
+    provisional_count: int | None = None
+    present_player_count: int | None = None
+    competitive_max_gap: float | None = None
+    stretch_max_gap: float | None = None
+
+
 class GenerateFixturesRequest(BaseModel):
     player_ids: list[str]
 
@@ -96,6 +107,7 @@ class SessionFixturesResponse(BaseModel):
     fixture_slots_created: int
     slots: list[FixtureSlotResponse]
     warnings: list[FixtureWarning] = []
+    diagnostics: SessionDiagnostics | None = None
 
 
 class SessionStatusUpdate(BaseModel):

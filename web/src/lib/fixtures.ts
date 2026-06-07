@@ -65,6 +65,16 @@ export const GAP_BAND_LEGEND: LegendItem[] = [
   { label: 'Out of band', bg: 'bg-red-500' },
 ]
 
+export const MATCH_CAT_BADGE: Record<string, string> = {
+  COMPETITIVE: 'bg-blue-500/10 text-blue-300 border-blue-500/20',
+  STRETCH: 'bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20',
+  ANCHOR: 'bg-amber-500/10 text-amber-300 border-amber-500/20',
+  DEVELOPMENTAL: 'bg-slate-500/10 text-slate-300 border-slate-500/20',
+  OUT_OF_BAND: 'bg-red-500/10 text-red-300 border-red-500/20',
+  BYE: 'bg-gray-700/10 text-gray-300 border-gray-700/30',
+  UNKNOWN: 'bg-gray-700/10 text-gray-300 border-gray-700/30',
+}
+
 function normalizeGapBand(value?: string | null) {
   return (value ?? 'COMPETITIVE').toString().trim().toUpperCase().replace(/\s+/g, '_').replace(/__+/g, '_')
 }

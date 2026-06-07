@@ -571,6 +571,17 @@ export interface FixtureSlot {
   } | null
 }
 
+export interface SessionDiagnostics {
+  regime: string | null
+  bootstrap_phase: string
+  raw_spread: number | null
+  core_spread: number | null
+  provisional_count: number | null
+  present_player_count: number | null
+  competitive_max_gap: number | null
+  stretch_max_gap: number | null
+}
+
 export interface FixturesResponse {
   session_id: string
   bootstrap_phase: string
@@ -578,6 +589,7 @@ export interface FixturesResponse {
   fixture_slots_created: number
   slots: FixtureSlot[]
   warnings?: FixtureWarning[]
+  diagnostics?: SessionDiagnostics
 }
 
 export const sessionsApi = {
@@ -586,7 +598,7 @@ export const sessionsApi = {
   create: (eventId: string, body: { session_date: string; num_tables: number; session_minutes: number; match_format?: string }) =>
     request<SessionSummary>(`/events/${eventId}/sessions`, { method: 'POST', body: JSON.stringify(body) }),
   generateFixtures: (sessionId: string, playerIds: string[]) =>
-    request<{ bootstrap_phase: string; matches_per_player: number; fixture_slots_created: number }>(
+    request<FixturesResponse>(
       `/sessions/${sessionId}/generate-fixtures`,
       { method: 'POST', body: JSON.stringify({ player_ids: playerIds }) },
     ),

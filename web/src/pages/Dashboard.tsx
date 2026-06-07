@@ -2,10 +2,11 @@ import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   matchesApi, playersApi, academiesApi, eventsApi, sessionsApi,
-  type PlayerSearchResult, type LeaderboardEntry, type SessionSummary, type FixtureSlot,
+  type PlayerSearchResult, type LeaderboardEntry, type SessionSummary, type FixtureSlot, type FixturesResponse,
 } from '../api/client'
 import FixtureMatrixGrid from '../components/FixtureMatrixGrid'
-import { buildMatrixModel, classifyCell, TIER_META, GAP_BAND_LEGEND } from '../lib/fixtures'
+import { buildMatrixModel, classifyCell, TIER_META, GAP_BAND_LEGEND, MATCH_CAT_BADGE } from '../lib/fixtures'
+import { analyzeFixtureSlots } from '../lib/fixtureAnalytics'
 import { Layout, TierBadge, CRBar, Spinner, ErrorMsg, ProtectedRoute } from '../components/Layout'
 import { EventDetailPanel } from '../components/EventDetailPanel'
 import { SetPointsInput } from '../components/SetPointsInput'
@@ -283,7 +284,7 @@ function SessionsTab({ academyId }: { academyId: string }) {
   const [showNewForm, setShowNewForm] = useState(false)
   const [sessionForm, setSessionForm] = useState({ session_date: new Date().toISOString().slice(0, 10), num_tables: '3', session_minutes: '150', match_format: '' })
   const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set())
-  const [fixtureResult, setFixtureResult] = useState<{ bootstrap_phase: string; matches_per_player: number; fixture_slots_created: number } | null>(null)
+  const [fixtureResult, setFixtureResult] = useState<FixturesResponse | null>(null)
   const [resultSlot, setResultSlot] = useState<FixtureSlot | null>(null)
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -400,16 +401,6 @@ function SessionsTab({ academyId }: { academyId: string }) {
   const roster = rosterQ.data?.items ?? []
   const sessions = sessionsQ.data ?? []
 
-  const MATCH_CAT_BADGE: Record<string, string> = {
-    COMPETITIVE: 'bg-blue-500/10 text-blue-300 border-blue-500/20',
-    STRETCH: 'bg-purple-500/10 text-purple-300 border-purple-500/20',
-    ANCHOR: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
-    DEVELOPMENTAL: 'bg-slate-500/10 text-slate-300 border-slate-500/20',
-    OUT_OF_BAND: 'bg-orange-500/10 text-orange-300 border-orange-500/20',
-    BYE: 'bg-gray-700/10 text-gray-300 border-gray-700/30',
-    UNKNOWN: 'bg-gray-700/10 text-gray-300 border-gray-700/30',
-  }
-
   const BOOTSTRAP_PHASE_BADGE: Record<string, string> = {
     DISCOVERY: 'bg-blue-500/10 text-blue-300 border-blue-500/20',
     TRANSITION: 'bg-purple-500/10 text-purple-300 border-purple-500/20',
@@ -426,64 +417,8 @@ function SessionsTab({ academyId }: { academyId: string }) {
   }
 
   const hasFixtures = !!fixtureResult || (openedSession?.generated_at != null)
-  const bootstrapPhase = fixtureResult?.bootstrap_phase ?? openedSession?.bootstrap_phase ?? 'STANDARD'
-
-  const fixtureAnalytics = fixturesQ.data ? (() => {
-    const counts: Record<string, number> = {
-      COMPETITIVE: 0,
-      STRETCH: 0,
-      ANCHOR: 0,
-      DEVELOPMENTAL: 0,
-      OUT_OF_BAND: 0,
-      BYE: 0,
-      UNKNOWN: 0,
-    }
-    let totalDelta = 0
-    let deltasCount = 0
-    let filledCount = 0
-
-    fixturesQ.data.slots.forEach(slot => {
-      const meta = classifyCell(slot as any, slot.player_a as any, slot.player_b as any)
-      const code = (c: string) => {
-        if (c === 'competitive') return 'COMPETITIVE'
-        if (c === 'stretch') return 'STRETCH'
-        if (c === 'anchor') return 'ANCHOR'
-        if (c === 'developmental') return 'DEVELOPMENTAL'
-        if (c === 'outOfBand') return 'OUT_OF_BAND'
-        if (c === 'bye') return 'BYE'
-        return 'UNKNOWN'
-      }
-      const tcode = code(meta.category)
-      counts[tcode] = (counts[tcode] ?? 0) + 1
-      if (slot.player_b && slot.player_a) {
-        filledCount += 1
-        totalDelta += Math.abs(Math.round(slot.player_a.current_rating) - Math.round(slot.player_b.current_rating))
-        deltasCount += 1
-      }
-    })
-
-    const totalSlots = fixturesQ.data.slots.length
-    const asPercent = (value: number) => totalSlots ? Math.round((value / totalSlots) * 100) : 0
-    const byeBalanced = counts.BYE === 0 || counts.BYE <= 1
-
-    return {
-      totalSlots,
-      counts,
-      percentages: {
-        competitive: asPercent(counts.COMPETITIVE),
-        stretch: asPercent(counts.STRETCH),
-        anchor: asPercent(counts.ANCHOR),
-        developmental: asPercent(counts.DEVELOPMENTAL),
-        outOfBand: asPercent(counts.OUT_OF_BAND),
-        bye: asPercent(counts.BYE),
-      },
-      density: totalSlots ? Math.round((filledCount / totalSlots) * 100) : 0,
-      tightnessScore: deltasCount ? Number((totalDelta / deltasCount).toFixed(1)) : 0,
-      byeBalanced,
-      outOfBandCount: counts.OUT_OF_BAND,
-      byeCount: counts.BYE,
-    }
-  })() : null
+  const fixtureAnalytics = fixturesQ.data ? analyzeFixtureSlots(fixturesQ.data.slots, fixturesQ.data.diagnostics) : null
+  const bootstrapPhase = fixtureAnalytics?.bootstrapPhase ?? fixtureResult?.bootstrap_phase ?? openedSession?.bootstrap_phase ?? 'STANDARD'
 
   return (
     <div className="space-y-5">
@@ -753,37 +688,44 @@ function SessionsTab({ academyId }: { academyId: string }) {
                       </div>
                     )}
 
-                    {fixtureAnalytics && (() => {
-                      const rematchRate = fixturesQ.data ? (() => {
-                        const pairingCounts: Record<string, number> = {}
-                        fixturesQ.data.slots.forEach(slot => {
-                          if (slot.player_a && slot.player_b) {
-                            const key = [slot.player_a.player_id, slot.player_b.player_id].sort().join('|')
-                            pairingCounts[key] = (pairingCounts[key] ?? 0) + 1
-                          }
-                        })
-                        const rematchCount = Object.values(pairingCounts).filter(count => count > 1).length
-                        const filledSlots = fixturesQ.data.slots.filter(s => s.player_a && s.player_b).length
-                        return filledSlots > 0 ? Math.round((rematchCount / filledSlots) * 100) : 0
-                      })() : 0
-                      return (
-                        <div className="col-span-full grid gap-2">
-                          <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 px-3 py-2 text-sm text-blue-200">
-                            <span className="font-semibold">Rematch Rate:</span> {rematchRate}% — {rematchRate === 0 ? 'No player pairings are repeated within this session.' : `${rematchRate}% of matchups appear multiple times across rounds.`}
-                          </div>
-                          {fixtureAnalytics.outOfBandCount > 0 && (
-                            <div className="rounded-2xl border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-sm text-orange-100">
-                              ⚠️ High Gap Variance: Resource constraints forced {fixtureAnalytics.outOfBandCount} mismatch slot{fixtureAnalytics.outOfBandCount !== 1 ? 's' : ''}.
-                            </div>
-                          )}
-                          {fixtureAnalytics.byeBalanced && (
-                            <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 px-3 py-2 text-sm text-blue-200">
-                              Tightness: {fixtureAnalytics.tightnessScore} avg. rating gap
-                            </div>
-                          )}
+                    {fixtureAnalytics && (
+                      <div className="col-span-full grid gap-2">
+                        <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 px-3 py-2 text-sm text-blue-200">
+                          <span className="font-semibold">Rematch Rate:</span> {fixtureAnalytics.rematchRate}% — {fixtureAnalytics.rematchRate === 0 ? 'No player pairings are repeated within this session.' : `${fixtureAnalytics.rematchRate}% of matchups appear multiple times across rounds.`}
                         </div>
-                      )
-                    })()}
+                        <div className="grid gap-2 md:grid-cols-2">
+                          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 text-sm text-slate-200">
+                            <div className="text-xs uppercase tracking-[0.24em] text-gray-500">Regime</div>
+                            <div className="mt-2 text-lg font-semibold text-white">{fixtureAnalytics.regime ?? 'Default'}</div>
+                            <div className="text-xs text-gray-400 mt-1">
+                              {fixtureAnalytics.diagnostics
+                                ? `Raw spread ${fixtureAnalytics.diagnostics.raw_spread ?? '—'}, core spread ${fixtureAnalytics.diagnostics.core_spread ?? '—'}`
+                                : 'No regime diagnostics available'}
+                            </div>
+                          </div>
+                          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 text-sm text-slate-200">
+                            <div className="text-xs uppercase tracking-[0.24em] text-gray-500">Provisional / gap thresholds</div>
+                            <div className="mt-2 text-lg font-semibold text-white">{fixtureAnalytics.diagnostics?.provisional_count ?? '--'} provisional</div>
+                            <div className="text-xs text-gray-400 mt-1">
+                              {fixtureAnalytics.diagnostics
+                                ? `Competitive gap ≤ ${fixtureAnalytics.diagnostics.competitive_max_gap ?? '—'}, Stretch gap ≤ ${fixtureAnalytics.diagnostics.stretch_max_gap ?? '—'}`
+                                : 'Diagnostics unavailable'}
+                            </div>
+                          </div>
+                        </div>
+
+                        {fixtureAnalytics.outOfBandCount > 0 && (
+                          <div className="rounded-2xl border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-sm text-orange-100">
+                            ⚠️ High gap variance: {fixtureAnalytics.outOfBandCount} mismatch slot{fixtureAnalytics.outOfBandCount !== 1 ? 's' : ''}.
+                          </div>
+                        )}
+                        {fixtureAnalytics.byeBalanced && (
+                          <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 px-3 py-2 text-sm text-blue-200">
+                            Tightness: {fixtureAnalytics.tightnessScore} avg. rating gap
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

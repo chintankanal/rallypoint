@@ -141,37 +141,27 @@ def _percentile(values: list[float], p: float) -> float:
     return s[lo] + (s[hi] - s[lo]) * frac
 
 
-def detect_phase(
+def detect_phase_verbose(
     players: list[dict],
     *,
     cfg: FixtureConfig | None = None,
-) -> str:
+) -> dict:
     """
-    Robust phase detection (critique §7 + §18).
+    Extended phase detection output for diagnostics.
 
-    Hierarchy of signals:
-      1. If a majority of players are provisional / low-maturity → DISCOVERY.
-         The pool is too noisy to support standard-tier logic regardless of
-         spread.
-      2. Otherwise compute core_spread = P90(rating) - P10(rating) and apply
-         the design boundaries (≤ discovery_spread_max → DISCOVERY,
-         ≤ transition_spread_max → TRANSITION, else STANDARD).
-
-    Falling back to raw max-min spread (critique §7) is brittle because a single
-    outlier can drag the whole session into STANDARD. P90/P10 gives a more
-    representative "core" picture.
-
-    Optional `cfg` arg lets tests inject custom thresholds; production callers
-    use the cached system_configuration view via _safe_load_fixture_config().
+    Returns a dict with the chosen phase plus spread and provisional metrics.
     """
     if len(players) < 2:
-        return "DISCOVERY"
+        return {
+            "phase": "DISCOVERY",
+            "core_spread": 0.0,
+            "raw_spread": 0.0,
+            "provisional_count": 0,
+            "classifiable_count": 0,
+        }
 
     fcfg = cfg or _safe_load_fixture_config()
 
-    # Provisional-majority check (critique §7). Players carrying explicit
-    # `is_provisional` get counted; otherwise we infer from total-match evidence
-    # if present, else skip.
     provisional_count = 0
     classifiable = 0
     for p in players:
@@ -185,26 +175,54 @@ def detect_phase(
             classifiable += 1
             if int(total) + int(virtual) < 5:
                 provisional_count += 1
-    if classifiable > 0 and (provisional_count / classifiable) >= fcfg.provisional_majority_threshold:
-        return "DISCOVERY"
 
     ratings = [float(p["current_rating"]) for p in players]
-    # P90-P10 is only meaningful with a sample large enough to have non-trivial
-    # tails. For small pools (< 10 players) we fall back to raw max-min spread
-    # so the design boundaries from critique §18 still apply cleanly. The
-    # outlier-robustness benefit (critique §7) shows up in larger pools.
+    raw_spread = max(ratings) - min(ratings) if ratings else 0.0
+
+    if classifiable > 0 and (provisional_count / classifiable) >= fcfg.provisional_majority_threshold:
+        return {
+            "phase": "DISCOVERY",
+            "core_spread": raw_spread,
+            "raw_spread": raw_spread,
+            "provisional_count": provisional_count,
+            "classifiable_count": classifiable,
+        }
+
     if len(ratings) < 10:
-        spread = max(ratings) - min(ratings)
+        core_spread = raw_spread
     else:
-        spread = _percentile(ratings, fcfg.core_spread_p_high) - _percentile(
+        core_spread = _percentile(ratings, fcfg.core_spread_p_high) - _percentile(
             ratings, fcfg.core_spread_p_low
         )
 
-    if spread <= fcfg.discovery_spread_max:
-        return "DISCOVERY"
-    if spread <= fcfg.transition_spread_max:
-        return "TRANSITION"
-    return "STANDARD"
+    if core_spread <= fcfg.discovery_spread_max:
+        phase = "DISCOVERY"
+    elif core_spread <= fcfg.transition_spread_max:
+        phase = "TRANSITION"
+    else:
+        phase = "STANDARD"
+
+    return {
+        "phase": phase,
+        "core_spread": core_spread,
+        "raw_spread": raw_spread,
+        "provisional_count": provisional_count,
+        "classifiable_count": classifiable,
+    }
+
+
+def detect_phase(
+    players: list[dict],
+    *,
+    cfg: FixtureConfig | None = None,
+) -> str:
+    """
+    Robust phase detection (critique §7 + §18).
+
+    This wrapper preserves the original behavior while delegating the
+    diagnostic work to detect_phase_verbose.
+    """
+    return detect_phase_verbose(players, cfg=cfg)["phase"]
 
 
 def rating_spread(players: list[dict]) -> float:
@@ -918,22 +936,58 @@ def generate_fixtures(
 
     fcfg = cfg or _safe_load_fixture_config()
     thresholds = _resolve_regime_thresholds(players, cfg=fcfg)
+    phase_info = detect_phase_verbose(players, cfg=fcfg)
+    phase = phase_info["phase"]
 
     # Critique §19: small sessions skip phase-based heuristics entirely and run a
     # pure round-robin (discovery generator). Phase is still reported truthfully
     # so callers don't see DISCOVERY when the spread says otherwise.
     if len(players) < _SMALL_SESSION_PLAYER_COUNT:
-        phase = detect_phase(players)
         if num_rounds == 0:
-            return {"phase": phase, "spread": spread, "matches_per_player": 0, "slots": []}
+            return {
+                "phase": phase,
+                "spread": spread,
+                "raw_spread": phase_info["raw_spread"],
+                "core_spread": phase_info["core_spread"],
+                "provisional_count": phase_info["provisional_count"],
+                "present_player_count": len(players),
+                "regime": thresholds.name,
+                "competitive_max_gap": thresholds.competitive_max_gap,
+                "stretch_max_gap": thresholds.stretch_max_gap,
+                "matches_per_player": 0,
+                "slots": [],
+            }
         slots = generate_discovery_fixtures(
             players, num_rounds, num_tables, rotation_offset=rotation_offset, thresholds=thresholds,
         )
-        return {"phase": phase, "spread": spread, "matches_per_player": mpp, "slots": slots}
+        return {
+            "phase": phase,
+            "spread": spread,
+            "raw_spread": phase_info["raw_spread"],
+            "core_spread": phase_info["core_spread"],
+            "provisional_count": phase_info["provisional_count"],
+            "present_player_count": len(players),
+            "regime": thresholds.name,
+            "competitive_max_gap": thresholds.competitive_max_gap,
+            "stretch_max_gap": thresholds.stretch_max_gap,
+            "matches_per_player": mpp,
+            "slots": slots,
+        }
 
-    phase = detect_phase(players)
     if num_rounds == 0:
-        return {"phase": phase, "spread": spread, "matches_per_player": 0, "slots": []}
+        return {
+            "phase": phase,
+            "spread": spread,
+            "raw_spread": phase_info["raw_spread"],
+            "core_spread": phase_info["core_spread"],
+            "provisional_count": phase_info["provisional_count"],
+            "present_player_count": len(players),
+            "regime": thresholds.name,
+            "competitive_max_gap": thresholds.competitive_max_gap,
+            "stretch_max_gap": thresholds.stretch_max_gap,
+            "matches_per_player": 0,
+            "slots": [],
+        }
 
     if phase == "DISCOVERY":
         slots = generate_discovery_fixtures(
@@ -960,6 +1014,13 @@ def generate_fixtures(
     return {
         "phase": phase,
         "spread": spread,
+        "raw_spread": phase_info["raw_spread"],
+        "core_spread": phase_info["core_spread"],
+        "provisional_count": phase_info["provisional_count"],
+        "present_player_count": len(players),
+        "regime": thresholds.name,
+        "competitive_max_gap": thresholds.competitive_max_gap,
+        "stretch_max_gap": thresholds.stretch_max_gap,
         "matches_per_player": mpp,
         "slots": slots,
     }

@@ -3,12 +3,15 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.database import get_connection
+from app.services.fixture_config import load_fixture_config
+from app.services.rating_regime import regime_thresholds
 from app.utils.rating_math import _load_config, get_tier
 from app.dependencies.auth import get_current_user, require_roles
 from schemas.session import (
     FixtureSlotResponse,
     GenerateFixturesRequest,
     SessionCreate,
+    SessionDiagnostics,
     SessionFixturesResponse,
     SessionResponse,
     SessionStatusUpdate,
@@ -191,13 +194,16 @@ def generate_session_fixtures(
                 """
                 UPDATE session
                 SET bootstrap_phase = %s, rating_spread = %s, matches_per_player = %s,
-                    present_player_count = %s, generated_at = NOW(), generated_by = %s,
+                    present_player_count = %s, regime = %s,
+                    core_spread = %s, provisional_count = %s,
+                    generated_at = NOW(), generated_by = %s,
                     updated_by = %s, updated_at = NOW()
                 WHERE session_id = %s
                 """,
                 (
                     result["phase"], result["spread"], result["matches_per_player"],
-                    len(players), user_id, user_id, session_id,
+                    len(players), result["regime"], result["core_spread"], result["provisional_count"],
+                    user_id, user_id, session_id,
                 ),
             )
 
@@ -270,6 +276,16 @@ def generate_session_fixtures(
         fixture_slots_created=len(response_slots),
         slots=response_slots,
         warnings=warnings,
+        diagnostics=SessionDiagnostics(
+            regime=result["regime"],
+            bootstrap_phase=result["phase"],
+            raw_spread=result["spread"],
+            core_spread=result["core_spread"],
+            provisional_count=result["provisional_count"],
+            present_player_count=result["present_player_count"],
+            competitive_max_gap=result["competitive_max_gap"],
+            stretch_max_gap=result["stretch_max_gap"],
+        ),
     )
 
 
@@ -342,12 +358,38 @@ def get_session_fixtures(session_id: str, _: dict = _ANY):
         for s in slots
     ]
 
+    diagnostics = None
+    if session.get("regime") is not None:
+        thresholds = regime_thresholds(session["regime"], cfg=load_fixture_config())
+        diagnostics = SessionDiagnostics(
+            regime=session["regime"],
+            bootstrap_phase=session["bootstrap_phase"],
+            raw_spread=float(session["rating_spread"]),
+            core_spread=float(session["core_spread"]) if session["core_spread"] is not None else None,
+            provisional_count=session["provisional_count"],
+            present_player_count=session["present_player_count"],
+            competitive_max_gap=thresholds.competitive_max_gap,
+            stretch_max_gap=thresholds.stretch_max_gap,
+        )
+    else:
+        diagnostics = SessionDiagnostics(
+            regime=None,
+            bootstrap_phase=session["bootstrap_phase"],
+            raw_spread=float(session["rating_spread"]),
+            core_spread=float(session["core_spread"]) if session["core_spread"] is not None else None,
+            provisional_count=session["provisional_count"],
+            present_player_count=session["present_player_count"],
+            competitive_max_gap=None,
+            stretch_max_gap=None,
+        )
+
     return SessionFixturesResponse(
         session_id=str(session["session_id"]),
         bootstrap_phase=session["bootstrap_phase"],
         matches_per_player=session["matches_per_player"],
         fixture_slots_created=len(response_slots),
         slots=response_slots,
+        diagnostics=diagnostics,
     )
 
 

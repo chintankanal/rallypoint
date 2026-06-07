@@ -128,3 +128,32 @@ def test_pool_regime_respects_provisional_signal():
         for i in range(4)
     ]
     assert detect_pool_regime(players) == REGIME_VOLATILE_LOW
+
+
+def test_detect_player_regime_absent_maturity_falls_back_to_rating():
+    """Missing maturity fields should not force VOLATILE_LOW when rating is mature-range."""
+    cfg = DEFAULT_FIXTURE_CONFIG
+    assert detect_player_regime(1500.0, None, cfg=cfg) == REGIME_HIGH_LEVEL
+    assert detect_player_regime(1500.0, 2, cfg=cfg) == REGIME_VOLATILE_LOW
+
+
+def test_detect_pool_regime_missing_fields_does_not_force_volatile_low():
+    players = [
+        {"player_id": "a", "current_rating": 1500.0},
+        {"player_id": "b", "current_rating": 1520.0},
+    ]
+    assert detect_pool_regime(players) == REGIME_HIGH_LEVEL
+
+
+def test_detect_pool_regime_uses_maturity():
+    players = [
+        {"player_id": "a", "current_rating": 1500.0, "rated_matches_completed": 30},
+        {"player_id": "b", "current_rating": 1550.0, "rated_matches_completed": 30},
+    ]
+    assert detect_pool_regime(players) == REGIME_HIGH_LEVEL
+
+    provisional_players = [
+        {"player_id": "a", "current_rating": 1500.0, "rated_matches_completed": 1, "is_provisional": True},
+        {"player_id": "b", "current_rating": 1550.0, "rated_matches_completed": 1, "is_provisional": True},
+    ]
+    assert detect_pool_regime(provisional_players) == REGIME_VOLATILE_LOW

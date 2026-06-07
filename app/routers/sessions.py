@@ -3,6 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.database import get_connection
+from app.utils.rating_math import _load_config, get_tier
 from app.dependencies.auth import get_current_user, require_roles
 from schemas.session import (
     FixtureSlotResponse,
@@ -132,13 +133,19 @@ def generate_session_fixtures(
 
             cur.execute(
                 """
-                SELECT player_id::text, name, current_rating
+                SELECT player_id::text, name, current_rating,
+                       rated_matches_completed, virtual_matches
                 FROM player
                 WHERE player_id = ANY(%s::uuid[]) AND status = 'ACTIVE'
                 """,
                 (body.player_ids,),
             )
-            players = [dict(r) for r in cur.fetchall()]
+            cfg = _load_config()
+            players = []
+            for row in cur.fetchall():
+                p = dict(row)
+                p["tier"] = get_tier(float(p["current_rating"]), cfg)
+                players.append(p)
             if len(players) < 2:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,

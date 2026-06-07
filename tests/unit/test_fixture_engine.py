@@ -13,10 +13,12 @@ import math
 
 import pytest
 
+from app.services.fixture_config import DEFAULT_FIXTURE_CONFIG
 from app.services.fixture_engine import (
     _canonical,
     _classify_gap,
     _circle_round,
+    _resolve_regime_thresholds,
     calculate_session_capacity,
     detect_phase,
     generate_discovery_fixtures,
@@ -29,6 +31,7 @@ from app.services.fixture_engine import (
 from app.services.rating_regime import (
     REGIME_DEVELOPING,
     REGIME_VOLATILE_LOW,
+    REGIME_HIGH_LEVEL,
     regime_thresholds,
 )
 
@@ -86,6 +89,72 @@ def test_classify_gap_uses_regime_thresholds():
 
     assert _classify_gap(130.0, vol_thresholds) == "COMPETITIVE"
     assert _classify_gap(130.0, dev_thresholds) == "STRETCH"
+
+
+def test_resolve_regime_thresholds_varies_with_pool():
+    mature_pool = [
+        {"player_id": "p1", "current_rating": 1500.0, "rated_matches_completed": 30},
+        {"player_id": "p2", "current_rating": 1520.0, "rated_matches_completed": 40},
+    ]
+    provisional_pool = [
+        {"player_id": "p1", "current_rating": 1500.0, "rated_matches_completed": 1, "is_provisional": True},
+        {"player_id": "p2", "current_rating": 1520.0, "rated_matches_completed": 1, "is_provisional": True},
+    ]
+    mature_thresholds = _resolve_regime_thresholds(mature_pool, cfg=DEFAULT_FIXTURE_CONFIG)
+    provisional_thresholds = _resolve_regime_thresholds(provisional_pool, cfg=DEFAULT_FIXTURE_CONFIG)
+
+    assert mature_thresholds.name == REGIME_HIGH_LEVEL
+    assert mature_thresholds.competitive_max_gap == 75.0
+    assert provisional_thresholds.name == REGIME_VOLATILE_LOW
+    assert provisional_thresholds.competitive_max_gap == 150.0
+
+
+def test_generate_fixtures_gap_bands_adapt_to_pool():
+    mature_pool = [
+        {"player_id": "p1", "current_rating": 1500.0, "rated_matches_completed": 30},
+        {"player_id": "p2", "current_rating": 1415.0, "rated_matches_completed": 30},
+        {"player_id": "p3", "current_rating": 1450.0, "rated_matches_completed": 30},
+        {"player_id": "p4", "current_rating": 1420.0, "rated_matches_completed": 30},
+    ]
+    developing_pool = [
+        {"player_id": "p1", "current_rating": 1250.0, "rated_matches_completed": 30},
+        {"player_id": "p2", "current_rating": 1165.0, "rated_matches_completed": 30},
+        {"player_id": "p3", "current_rating": 1200.0, "rated_matches_completed": 30},
+        {"player_id": "p4", "current_rating": 1170.0, "rated_matches_completed": 30},
+    ]
+    mature_thresholds = _resolve_regime_thresholds(mature_pool, cfg=DEFAULT_FIXTURE_CONFIG)
+    developing_thresholds = _resolve_regime_thresholds(developing_pool, cfg=DEFAULT_FIXTURE_CONFIG)
+
+    assert mature_thresholds.name == REGIME_HIGH_LEVEL
+    assert developing_thresholds.name == REGIME_DEVELOPING
+    assert mature_thresholds.competitive_max_gap == 75.0
+    assert developing_thresholds.competitive_max_gap == 100.0
+
+    mature_result = generate_fixtures(
+        players=mature_pool,
+        recent_match_pairs=set(),
+        round_offset=0,
+        session_minutes=90,
+        num_tables=2,
+        match_format="BEST_OF_3",
+        cfg=DEFAULT_FIXTURE_CONFIG,
+    )
+    developing_result = generate_fixtures(
+        players=developing_pool,
+        recent_match_pairs=set(),
+        round_offset=0,
+        session_minutes=90,
+        num_tables=2,
+        match_format="BEST_OF_3",
+        cfg=DEFAULT_FIXTURE_CONFIG,
+    )
+
+    mature_bands = {slot["gap_band"] for slot in mature_result["slots"] if slot["player_b_id"] is not None}
+    developing_bands = {slot["gap_band"] for slot in developing_result["slots"] if slot["player_b_id"] is not None}
+
+    assert "STRETCH" in mature_bands
+    assert "COMPETITIVE" in developing_bands
+    assert mature_bands != developing_bands
 
 
 # ── Session capacity ───────────────────────────────────────────────────────────

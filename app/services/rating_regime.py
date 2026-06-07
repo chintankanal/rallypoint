@@ -43,7 +43,7 @@ class RegimeThresholds:
 
 def detect_player_regime(
     rating: float,
-    total_matches: int,
+    total_matches: int | None,
     *,
     is_provisional: bool = False,
     tier: str | None = None,
@@ -63,12 +63,12 @@ def detect_player_regime(
     """
     # Provisional / low maturity players always start at VOLATILE_LOW so the
     # solver doesn't over-react to noisy ratings.
-    if is_provisional or total_matches < 5:
+    if is_provisional or (total_matches is not None and total_matches < 5):
         return REGIME_VOLATILE_LOW
 
     if rating >= cfg.regime_high_level_max:
         return REGIME_ELITE_PROXIMITY
-    if tier == "NATIONAL_TRACK" and total_matches >= 30:
+    if tier == "NATIONAL_TRACK" and total_matches is not None and total_matches >= 30:
         return REGIME_ELITE_PROXIMITY
     if rating >= cfg.regime_developing_max:
         return REGIME_HIGH_LEVEL
@@ -129,7 +129,12 @@ def detect_pool_regime(
     counts: dict[str, int] = {r: 0 for r in REGIMES}
     for p in players:
         rating = float(p["current_rating"])
-        total = int(p.get("rated_matches_completed", 0)) + int(p.get("virtual_matches", 0))
+        has_maturity = (
+            "rated_matches_completed" in p or "virtual_matches" in p
+        )
+        total = None
+        if has_maturity:
+            total = int(p.get("rated_matches_completed", 0)) + int(p.get("virtual_matches", 0))
         is_prov = bool(p.get("is_provisional", False))
         tier = p.get("tier")
         regime = detect_player_regime(

@@ -727,10 +727,12 @@ function SessionsTab({ academyId }: { academyId: string }) {
                             <div className="space-y-2">
                               {fixtureAnalytics.quality.dimensions.map(dim => {
                                 const verdictColors = {
+                                  n_a: 'bg-slate-800/30 border-slate-700/50 text-slate-300',
                                   optimal: 'bg-emerald-900/30 border-emerald-700/50 text-emerald-200',
                                   good: 'bg-blue-900/30 border-blue-700/50 text-blue-200',
                                   limited: 'bg-amber-900/30 border-amber-700/50 text-amber-200',
                                 }
+                                const verdictKey = !dim.applicable ? 'n_a' : dim.verdict
                                 const dimensionHelpText: Record<string, string> = {
                                   'competitive-balance': 'Share of matches kept within sane rating bands — only out-of-band pairings count against this.',
                                   'opponent-variety': 'Average distinct opponents per player vs the most possible given rounds and pool size.',
@@ -739,7 +741,7 @@ function SessionsTab({ academyId }: { academyId: string }) {
                                   'stretch-reach': 'Of players who had a higher-rated opponent available, how many got a play-up match.',
                                 }
                                 return (
-                                  <div key={dim.key} className={`rounded-2xl border ${verdictColors[dim.verdict]} bg-slate-950/70 p-3 text-sm`}>
+                                  <div key={dim.key} className={`rounded-2xl border ${verdictColors[verdictKey]} bg-slate-950/70 p-3 text-sm`}>
                                     <div className="flex items-center justify-between gap-2">
                                       <div className="flex items-center gap-1">
                                         <div className="text-xs text-gray-400">{dim.label}</div>
@@ -751,7 +753,7 @@ function SessionsTab({ academyId }: { academyId: string }) {
                                         </span>
                                       </div>
                                       <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-white/10 border border-white/20">
-                                        {dim.verdict === 'optimal' ? '✓ Optimal' : dim.verdict === 'good' ? '✓ Good' : '⚠ Limited'}
+                                        {!dim.applicable ? 'n/a' : dim.verdict === 'optimal' ? '✓ Optimal' : dim.verdict === 'good' ? '✓ Good' : '⚠ Limited'}
                                       </span>
                                     </div>
                                     <div className="mt-2 text-white font-semibold">{dim.achieved}</div>

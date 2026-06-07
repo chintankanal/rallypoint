@@ -18,9 +18,7 @@ export interface SummaryStat {
 }
 
 export interface RoleExposureSummary {
-  underChallengedCount: number
-  overloadedCount: number
-  mentorLoadCount: number
+  noStretchExposureCount: number
   stretchingSummary: SummaryStat
   anchoringSummary: SummaryStat
   peerSummary: SummaryStat
@@ -37,13 +35,10 @@ export interface FixturePlayerAnalytics {
   byes: number
   sos: number
   maxPlayStreak: number
-  tablesUsed: number
   peer: number
   stretching: number
   anchoring: number
-  underChallenged: boolean
-  overloaded: boolean
-  mentorLoad: boolean
+  atPoolCeiling: boolean
   signedChallenge: number
 }
 
@@ -62,10 +57,8 @@ export interface FixtureAnalytics {
   regime: string | null
   fairnessIndex: number
   sosSpread: number
-  avgMaxPlayStreak: number
   criticalTraps: number
   warningTraps: number
-  avgTablesPerPlayer: number
   matchesSummary: SummaryStat
   uniqueOpponentsSummary: SummaryStat
   byesSummary: SummaryStat
@@ -259,10 +252,6 @@ export function analyzeFixtureSlots(slots: FixtureSlot[], diagnostics?: SessionD
       prevPhase = phase
     }
 
-    const underChallenged = stats.matches >= 3 && stats.stretching === 0
-    const overloaded = stats.matches >= 3 && stats.stretching / stats.matches > 0.6
-    const mentorLoad = stats.matches >= 3 && stats.anchoring / stats.matches > 0.6
-
     return {
       playerId: stats.playerId,
       name: stats.name,
@@ -273,49 +262,66 @@ export function analyzeFixtureSlots(slots: FixtureSlot[], diagnostics?: SessionD
       byes: stats.byes,
       sos: Math.round(sos * 10) / 10,
       maxPlayStreak,
-      tablesUsed: stats.tableNumbers.size,
       peer: stats.peer,
       stretching: stats.stretching,
       anchoring: stats.anchoring,
-      underChallenged,
-      overloaded,
-      mentorLoad,
+      atPoolCeiling: false, // will be computed after pool is complete
       signedChallenge: Math.round(signedChallenge * 10) / 10,
     }
   })
 
-  const fairPlayerData = [...perPlayer].sort((a, b) => b.rating - a.rating)
   const matchesSummary = summaryStat(perPlayer.map(p => p.matches))
   const uniqueOpponentsSummary = summaryStat(perPlayer.map(p => p.uniqueOpponents))
   const byesSummary = summaryStat(perPlayer.map(p => p.byes))
-  const avgTablesPerPlayer = perPlayer.length
-    ? Math.round(perPlayer.reduce((sum, player) => sum + player.tablesUsed, 0) / perPlayer.length * 10) / 10
-    : 0
-  const avgMaxPlayStreak = perPlayer.length
-    ? perPlayer.reduce((sum, player) => sum + player.maxPlayStreak, 0) / perPlayer.length
-    : 0
-  const restBalanceScore = Math.max(0, 100 - Math.round((avgMaxPlayStreak - 1) * 20))
 
+  // Compute atPoolCeiling for each player: true if no other player is rated high enough to be a stretch
   const maxPlayerRating = Math.max(...perPlayer.map(p => p.rating), 1000)
-  const dynamicCeiling = maxPlayerRating * 0.25
-  const ratingRelativeOffsets = perPlayer
-    .filter(player => player.matches >= 2)
-    .map(player => Math.abs(player.rating - player.sos))
-  const sosSpread = ratingRelativeOffsets.length ? Math.max(...ratingRelativeOffsets) : 0
-  const sosBalanceScore = Math.max(0, 100 - Math.round((sosSpread / dynamicCeiling) * 100))
-  const fairnessIndex = Math.round((restBalanceScore + sosBalanceScore) / 2)
+  const stretchThreshold = diagnostics?.competitive_max_gap ?? 150 // use existing competitive gap as proxy
+  
+  const perPlayerWithCeiling = perPlayer.map(player => ({
+    ...player,
+    atPoolCeiling: !perPlayer.some(other =>
+      other.playerId !== player.playerId &&
+      other.rating > player.rating + stretchThreshold
+    ),
+  }))
 
-  const criticalTraps = perPlayer.filter(player => player.maxPlayStreak >= 3).length
-  const warningTraps = perPlayer.filter(player => player.maxPlayStreak === 2).length
+  // Intra-fairness: SoS balance + opponent variety + games equity (NO rest, NO table-rotation)
+  const filterableStats = perPlayerWithCeiling.filter(p => p.matches >= 2)
+  const ratingRelativeOffsets = filterableStats.map(player =>
+    Math.abs(player.rating - player.sos)
+  )
+  const sosSpread = ratingRelativeOffsets.length ? Math.max(...ratingRelativeOffsets) : 0
+  const dynamicCeiling = maxPlayerRating * 0.25
+  const sosBalanceScore = Math.max(0, 100 - Math.round((sosSpread / dynamicCeiling) * 100))
+
+  // Opponent variety: how many unique opponents each player faced / total matches
+  const opponentVarietyScores = filterableStats.map(player =>
+    player.matches > 0 ? (player.uniqueOpponents / player.matches) : 0
+  )
+  const avgOpponentVariety = opponentVarietyScores.length
+    ? opponentVarietyScores.reduce((sum, score) => sum + score, 0) / opponentVarietyScores.length
+    : 0
+  const opponentVarietyScore = Math.round(avgOpponentVariety * 100)
+
+  // Games equity: how evenly distributed matches are
+  const matchDelta = matchesSummary.max - matchesSummary.min
+  const gamesEquityScore = Math.max(0, 100 - Math.round((matchDelta / Math.max(matchesSummary.avg, 1)) * 50))
+
+  // Fairness is weighted average: SoS (50%) + variety (30%) + games equity (20%)
+  const fairnessIndex = Math.round(sosBalanceScore * 0.5 + opponentVarietyScore * 0.3 + gamesEquityScore * 0.2)
+
+  const criticalTraps = perPlayerWithCeiling.filter(player => player.maxPlayStreak >= 3).length
+  const warningTraps = perPlayerWithCeiling.filter(player => player.maxPlayStreak === 2).length
 
   const roleExposureSummary: RoleExposureSummary = {
-    underChallengedCount: perPlayer.filter(player => player.underChallenged).length,
-    overloadedCount: perPlayer.filter(player => player.overloaded).length,
-    mentorLoadCount: perPlayer.filter(player => player.mentorLoad).length,
-    stretchingSummary: summaryStat(perPlayer.map(player => player.stretching)),
-    anchoringSummary: summaryStat(perPlayer.map(player => player.anchoring)),
-    peerSummary: summaryStat(perPlayer.map(player => player.peer)),
-    signedChallengeSummary: summaryStat(perPlayer.map(player => player.signedChallenge)),
+    noStretchExposureCount: perPlayerWithCeiling.filter(
+      player => player.stretching === 0 && !player.atPoolCeiling
+    ).length,
+    stretchingSummary: summaryStat(perPlayerWithCeiling.map(player => player.stretching)),
+    anchoringSummary: summaryStat(perPlayerWithCeiling.map(player => player.anchoring)),
+    peerSummary: summaryStat(perPlayerWithCeiling.map(player => player.peer)),
+    signedChallengeSummary: summaryStat(perPlayerWithCeiling.map(player => player.signedChallenge)),
   }
 
   const totalSlots = slots.length
@@ -350,14 +356,13 @@ export function analyzeFixtureSlots(slots: FixtureSlot[], diagnostics?: SessionD
     regime: diagnostics?.regime ?? null,
     fairnessIndex,
     sosSpread: Math.round(sosSpread * 10) / 10,
-    avgMaxPlayStreak: Math.round(avgMaxPlayStreak * 10) / 10,
     criticalTraps,
     warningTraps,
-    avgTablesPerPlayer,
     matchesSummary,
     uniqueOpponentsSummary,
     byesSummary,
     roleExposureSummary,
-    perPlayer: fairPlayerData,
+    perPlayer: [...perPlayerWithCeiling].sort((a, b) => b.rating - a.rating),
   }
 }
+

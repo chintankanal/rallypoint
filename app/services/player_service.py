@@ -262,12 +262,12 @@ def _get_player_role_exposure(cur, player_id: str, period_days: int = 90) -> dic
     row = cur.fetchone()
     if not row:
         return {"as_peer": 0, "as_anchoring": 0, "as_stretching": 0, "bye_count": 0}
-    # Be defensive: tests may supply a different-shaped mock row; default missing counts to 0
+    # All columns are guaranteed by the SQL; use strict indexing to surface schema drift
     return {
-        "as_peer": int(row.get("as_peer", 0)),
-        "as_anchoring": int(row.get("as_anchoring", 0)),
-        "as_stretching": int(row.get("as_stretching", 0)),
-        "bye_count": int(row.get("bye_count", 0)),
+        "as_peer": int(row["as_peer"]),
+        "as_anchoring": int(row["as_anchoring"]),
+        "as_stretching": int(row["as_stretching"]),
+        "bye_count": int(row["bye_count"]),
     }
 
 

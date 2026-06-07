@@ -111,11 +111,27 @@ class SessionQualityDimension(BaseModel):
     guidance: str | None = None
 
 
+class SessionQualityConstraints(BaseModel):
+    """Session constraints that impact fixture quality (server-sourced)."""
+    player_count: int
+    parity_forces_bye: bool
+    raw_spread: float | None = None
+    core_spread: float | None = None
+    tier_distribution: dict[str, int]
+    provisional_count: int | None = None
+    rounds: int
+    num_tables: int | None = None
+    regime: str | None = None
+    competitive_max_gap: float | None = None
+    stretch_max_gap: float | None = None
+
+
 class SessionQuality(BaseModel):
     dimensions: list[SessionQualityDimension]
     overall_score: int
     overall_label: str
     narrative: str
+    constraints: SessionQualityConstraints
 
 
 class SessionFixturesResponse(BaseModel):

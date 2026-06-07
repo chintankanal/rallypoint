@@ -7,7 +7,7 @@ scoring, and narrative generation.
 """
 from dataclasses import dataclass
 from typing import Optional
-from schemas.session import SessionQuality, SessionQualityDimension
+from schemas.session import SessionQuality, SessionQualityDimension, SessionQualityConstraints
 
 
 # ── Phase-based weighting and verdict thresholds ────────────────────────────
@@ -498,9 +498,31 @@ def compute_session_quality(
     else:
         narrative += "Excellent fixture quality across all dimensions."
 
+    # Build tier distribution from player stats
+    tier_distribution = {}
+    for ps in all_players:
+        tier = ps.tier or "Unrated"
+        tier_distribution[tier] = tier_distribution.get(tier, 0) + 1
+
+    # Build constraints
+    constraints = SessionQualityConstraints(
+        player_count=player_count,
+        parity_forces_bye=parity_forces_bye,
+        raw_spread=diagnostics.get("raw_spread"),
+        core_spread=diagnostics.get("core_spread"),
+        tier_distribution=tier_distribution,
+        provisional_count=diagnostics.get("provisional_count"),
+        rounds=rounds,
+        num_tables=num_tables,
+        regime=diagnostics.get("regime"),
+        competitive_max_gap=competitive_max_gap,
+        stretch_max_gap=stretch_max_gap,
+    )
+
     return SessionQuality(
         dimensions=dimensions,
         overall_score=overall_score,
         overall_label=overall_label,
         narrative=narrative,
+        constraints=constraints,
     )

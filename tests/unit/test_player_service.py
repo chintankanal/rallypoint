@@ -42,6 +42,16 @@ def _mock_row(
     }
 
 
+def _mock_role_exposure_row():
+    """Mock row returned by _get_player_role_exposure SQL query."""
+    return {
+        "as_peer": 5,
+        "as_anchoring": 2,
+        "as_stretching": 3,
+        "bye_count": 1,
+    }
+
+
 @pytest.fixture
 def mock_conn(monkeypatch):
     """Patch get_connection to yield a fake connection with configurable fetchone."""
@@ -57,29 +67,31 @@ def mock_conn(monkeypatch):
 
 
 def test_computed_stats_not_found(mock_conn):
-    mock_conn.fetchone.return_value = None
+    mock_conn.fetchone.side_effect = [None]
     assert get_computed_stats("nonexistent") is None
 
 
 def test_computed_stats_tier_from_rating(mock_conn):
-    mock_conn.fetchone.return_value = _mock_row(current_rating=1350)
+    mock_conn.fetchone.side_effect = [_mock_row(current_rating=1350), _mock_role_exposure_row()]
     stats = get_computed_stats("p1")
     assert stats["tier"] == "ELITE"
 
 
 def test_computed_stats_provisional_unseeded_under_15(mock_conn):
-    mock_conn.fetchone.return_value = _mock_row(
-        seeding_level="UNSEEDED", rated_matches_completed=5, virtual_matches=5
-    )
+    mock_conn.fetchone.side_effect = [
+        _mock_row(seeding_level="UNSEEDED", rated_matches_completed=5, virtual_matches=5),
+        _mock_role_exposure_row(),
+    ]
     stats = get_computed_stats("p1")
     assert stats["is_provisional"] is True
     assert stats["provisional_matches_remaining"] == 5
 
 
 def test_computed_stats_provisional_clears_at_15(mock_conn):
-    mock_conn.fetchone.return_value = _mock_row(
-        seeding_level="UNSEEDED", rated_matches_completed=10, virtual_matches=5
-    )
+    mock_conn.fetchone.side_effect = [
+        _mock_row(seeding_level="UNSEEDED", rated_matches_completed=10, virtual_matches=5),
+        _mock_role_exposure_row(),
+    ]
     stats = get_computed_stats("p1")
     assert stats["is_provisional"] is False
     assert stats["provisional_matches_remaining"] == 0
@@ -87,15 +99,16 @@ def test_computed_stats_provisional_clears_at_15(mock_conn):
 
 def test_computed_stats_district_not_provisional(mock_conn):
     # DISTRICT players are never provisional regardless of match count
-    mock_conn.fetchone.return_value = _mock_row(
-        seeding_level="DISTRICT", rated_matches_completed=0, virtual_matches=10
-    )
+    mock_conn.fetchone.side_effect = [
+        _mock_row(seeding_level="DISTRICT", rated_matches_completed=0, virtual_matches=10),
+        _mock_role_exposure_row(),
+    ]
     stats = get_computed_stats("p1")
     assert stats["is_provisional"] is False
 
 
 def test_computed_stats_weeks_inactive_when_no_last_match(mock_conn):
-    mock_conn.fetchone.return_value = _mock_row(last_match_date=None)
+    mock_conn.fetchone.side_effect = [_mock_row(last_match_date=None), _mock_role_exposure_row()]
     stats = get_computed_stats("p1")
     assert stats["weeks_inactive"] is None
     assert stats["inactivity_decay_active"] is False
@@ -110,7 +123,10 @@ def test_computed_stats_inactivity_decay(monkeypatch, mock_conn, days_ago, expec
     from datetime import timedelta
     today = date(2026, 4, 28)
     monkeypatch.setattr("app.services.player_service.date", type("_D", (), {"today": staticmethod(lambda: today)})())
-    mock_conn.fetchone.return_value = _mock_row(last_match_date=today - timedelta(days=days_ago))
+    mock_conn.fetchone.side_effect = [
+        _mock_row(last_match_date=today - timedelta(days=days_ago)),
+        _mock_role_exposure_row(),
+    ]
     stats = get_computed_stats("p1")
     assert stats["inactivity_decay_active"] is expected_inactive
 
@@ -121,8 +137,9 @@ def test_computed_stats_inactivity_decay(monkeypatch, mock_conn, days_ago, expec
 ])
 def test_computed_stats_provisional_boundary_exact(mock_conn, total, expected_tier):
     rm = max(0, total - 0)
-    mock_conn.fetchone.return_value = _mock_row(
-        seeding_level="UNSEEDED", rated_matches_completed=rm, virtual_matches=0
-    )
+    mock_conn.fetchone.side_effect = [
+        _mock_row(seeding_level="UNSEEDED", rated_matches_completed=rm, virtual_matches=0),
+        _mock_role_exposure_row(),
+    ]
     stats = get_computed_stats("p1")
     assert stats["is_provisional"] is expected_tier

@@ -261,6 +261,79 @@ class TestSessionQualityParity:
         assert result.overall_label == "Strong"
 
 
+class TestSessionQualityConstraints:
+    """Test that constraints are correctly populated in the quality result."""
+
+    def test_constraints_populated(self):
+        """Constraints should be populated with session metadata."""
+        ratings = [1400, 1300, 1258, 1200, 1172, 1111, 1068, 1000, 992, 850]
+        players = [
+            {"player_id": f"p{i}", "current_rating": ratings[i], "tier": f"T{i//5 + 1}"}
+            for i in range(len(ratings))
+        ]
+
+        # Create 2 rounds
+        slots = []
+        pairs_r1 = [(0, 1), (2, 3), (4, 5), (6, 7), (8, 9)]
+        for a, b in pairs_r1:
+            slots.append({
+                "round_number": 1,
+                "wave_number": 1,
+                "gap_band": "COMPETITIVE",
+                "round_intent": "PEER",
+                "player_a_role": "PEER",
+                "player_b_role": "PEER",
+                "status": "SCHEDULED",
+                "player_a": {"player_id": players[a]["player_id"], "current_rating": players[a]["current_rating"], "tier": players[a]["tier"]},
+                "player_b": {"player_id": players[b]["player_id"], "current_rating": players[b]["current_rating"], "tier": players[b]["tier"]},
+            })
+
+        pairs_r2 = [(0, 2), (1, 3), (4, 6), (5, 7), (8, 9)]
+        for a, b in pairs_r2:
+            slots.append({
+                "round_number": 2,
+                "wave_number": 1,
+                "gap_band": "COMPETITIVE",
+                "round_intent": "PEER",
+                "player_a_role": "PEER",
+                "player_b_role": "PEER",
+                "status": "SCHEDULED",
+                "player_a": {"player_id": players[a]["player_id"], "current_rating": players[a]["current_rating"], "tier": players[a]["tier"]},
+                "player_b": {"player_id": players[b]["player_id"], "current_rating": players[b]["current_rating"], "tier": players[b]["tier"]},
+            })
+
+        diagnostics = {
+            "regime": "TIER_BALANCED",
+            "competitive_max_gap": 100,
+            "stretch_max_gap": 250,
+            "raw_spread": max(ratings) - min(ratings),
+            "core_spread": ratings[1] - ratings[-2],
+            "provisional_count": 0,
+            "present_player_count": len(ratings),
+        }
+
+        result = compute_session_quality(slots, diagnostics, phase="STANDARD", num_tables=3)
+        assert result is not None
+        assert result.constraints is not None
+
+        # Verify constraints fields
+        assert result.constraints.player_count == 10
+        assert result.constraints.parity_forces_bye == False  # 10 is even
+        assert result.constraints.rounds == 2
+        assert result.constraints.num_tables == 3
+        assert result.constraints.regime == "TIER_BALANCED"
+        assert result.constraints.competitive_max_gap == 100
+        assert result.constraints.stretch_max_gap == 250
+
+        # Verify tier distribution (should have 2 tiers based on tier assignment above)
+        assert len(result.constraints.tier_distribution) > 0
+        assert sum(result.constraints.tier_distribution.values()) == 10
+
+        # Verify spreads pass through
+        assert result.constraints.raw_spread == 550  # 1400 - 850
+        assert result.constraints.provisional_count == 0
+
+
 class TestSessionQualityApplicability:
     """Test that n/a dimensions are correctly excluded from scoring."""
 

@@ -259,6 +259,27 @@ def test_discovery_fixtures_rotation_offset_shifts_pairs():
     assert pairs_0 != pairs_3
 
 
+def test_discovery_fixtures_consecutive_sessions_produce_distinct_pairings():
+    """
+    Advancing rotation_offset (0, 1, 2, 3...) produces distinct pairings across
+    consecutive sessions to avoid repetition when the seed advances by session count.
+    """
+    players = _make_players([1000.0] * 8)
+    all_pair_sets = []
+    for rotation_offset in range(4):
+        slots = generate_discovery_fixtures(
+            players, matches_per_player=1, num_tables=4, rotation_offset=rotation_offset
+        )
+        pairs = frozenset((_canonical(s["player_a_id"], s["player_b_id"])) for s in slots if s["player_b_id"])
+        all_pair_sets.append(pairs)
+    
+    # All 4 should be distinct; if they weren't, we'd have duplicates
+    assert len(set(all_pair_sets)) == 4, (
+        f"Expected all 4 rotation_offsets to produce distinct pairings, "
+        f"got {len(set(all_pair_sets))} unique sets"
+    )
+
+
 def test_discovery_fixtures_round_numbers_session_local():
     """Round numbers are 1, 2, 3, ... regardless of rotation_offset."""
     players = _make_players([1000.0] * 8)

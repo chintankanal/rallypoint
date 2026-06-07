@@ -168,10 +168,11 @@ def generate_session_fixtures(
 
             cur.execute(
                 """
-                SELECT COALESCE(MAX(fs.round_number), 0) AS offset
-                FROM fixture_slot fs
-                JOIN session s ON s.session_id = fs.session_id
-                WHERE s.event_id = %s AND s.session_date < %s
+                SELECT COUNT(*) AS offset
+                FROM session s
+                WHERE s.event_id = %s
+                  AND s.session_date < %s
+                  AND s.generated_at IS NOT NULL
                 """,
                 (session["event_id"], session["session_date"]),
             )

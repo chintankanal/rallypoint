@@ -6,6 +6,7 @@ from app.database import get_connection
 from app.dependencies.auth import get_current_user, require_roles
 from app.services import event_service, event_player_service
 from app.services.fixture_engine import generate_league_fixtures
+from app.utils.rating_math import _load_config, get_tier
 from app.services.rating_engine import apply_ratings_batch
 from app.services.webhook_service import fire
 from schemas.event import (
@@ -257,6 +258,10 @@ def generate_event_fixtures(
                 (event_id,),
             )
             all_players = [dict(r) for r in cur.fetchall()]
+            # Populate authoritative tier for each player using current config
+            cfg = _load_config()
+            for p in all_players:
+                p["tier"] = get_tier(float(p["current_rating"]), cfg)
 
             if len(all_players) < 2:
                 raise HTTPException(
@@ -432,6 +437,8 @@ def get_event_fixtures(event_id: str, _: dict = _ANY):
     real_count = sum(1 for r in rows if r["player_b_id"])
     cross_pct = round(cross_count / real_count * 100, 1) if real_count > 0 else 0.0
 
+    # Compute tiers for players in the result set using current config
+    cfg = _load_config()
     slots = [
         EventFixtureSlotResponse(
             slot_id=r["slot_id"],
@@ -449,6 +456,7 @@ def get_event_fixtures(event_id: str, _: dict = _ANY):
                 current_rating=float(r["player_a_rating"]),
                 academy_id=r["player_a_academy_id"],
                 academy_name=r["player_a_academy_name"],
+                tier=get_tier(float(r["player_a_rating"]), cfg),
             ),
             player_b=EventFixturePlayer(
                 player_id=r["player_b_id"],
@@ -456,6 +464,7 @@ def get_event_fixtures(event_id: str, _: dict = _ANY):
                 current_rating=float(r["player_b_rating"]),
                 academy_id=r["player_b_academy_id"],
                 academy_name=r["player_b_academy_name"],
+                tier=(get_tier(float(r["player_b_rating"]), cfg) if r["player_b_rating"] is not None else None),
             ) if r["player_b_id"] else None,
             expected_rating_gap=float(r["expected_rating_gap"]),
             status=r["status"],
@@ -638,6 +647,7 @@ def _build_slot_responses(
                     current_rating=float(pa["current_rating"]),
                     academy_id=pa["academy_id"],
                     academy_name=pa["academy_name"],
+                    tier=pa.get("tier"),
                 ),
                 player_b=EventFixturePlayer(
                     player_id=pb["player_id"],
@@ -645,6 +655,7 @@ def _build_slot_responses(
                     current_rating=float(pb["current_rating"]),
                     academy_id=pb["academy_id"],
                     academy_name=pb["academy_name"],
+                    tier=pb.get("tier"),
                 ) if pb else None,
                 expected_rating_gap=float(sr["expected_rating_gap"]),
                 status=sr["status"],

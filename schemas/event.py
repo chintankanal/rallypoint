@@ -151,6 +151,7 @@ class EventFixturePlayer(BaseModel):
     current_rating: float
     academy_id: str
     academy_name: str
+    tier: str | None = None
 
 
 class EventFixtureSlotResponse(BaseModel):

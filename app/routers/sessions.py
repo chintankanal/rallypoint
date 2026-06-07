@@ -316,8 +316,10 @@ def get_session_fixtures(session_id: str, _: dict = _ANY):
                 (session_id,),
             )
             slots = [dict(r) for r in cur.fetchall()]
+            # Load config to compute authoritative tiers for returned players
+            cfg = _load_config()
 
-    response_slots = [
+            response_slots = [
         FixtureSlotResponse(
             slot_id=str(s["slot_id"]),
             round_number=s["round_number"],
@@ -329,8 +331,8 @@ def get_session_fixtures(session_id: str, _: dict = _ANY):
             player_a_role=s["player_a_role"],
             player_b_role=s["player_b_role"],
             match_category=s["match_category"],
-            player_a=s["player_a"],
-            player_b=s["player_b"],
+            player_a={**s["player_a"], "tier": get_tier(float(s["player_a"]["current_rating"]), cfg)},
+            player_b=( {**s["player_b"], "tier": get_tier(float(s["player_b"]["current_rating"]), cfg)} if s["player_b"] else None ),
             expected_rating_gap=float(s["expected_rating_gap"]),
             status=s["status"],
             match_id=str(s["match_id"]) if s.get("match_id") else None,

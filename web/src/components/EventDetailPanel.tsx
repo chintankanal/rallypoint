@@ -7,6 +7,8 @@
   } from '../api/client'
   import { Spinner, ErrorMsg } from './Layout'
   import { SetPointsInput } from './SetPointsInput'
+  import FixtureMatrixGrid from './FixtureMatrixGrid'
+  import { buildMatrixModel, getFirstName, getOpponentLabel, classifyCell } from '../lib/fixtures'
 
   type FixtureState = 'ROSTER_OPEN' | 'FIXTURES_READY' | 'FIXTURE_FROZEN' | 'RESULTS_SUBMITTED' | 'RATINGS_APPLIED' | null
 
@@ -37,90 +39,7 @@
 
   const MATCH_DURATION_MIN: Record<string, number> = { BEST_OF_3: 18, BEST_OF_5: 30, BEST_OF_7: 45 }
 
-  function getFirstName(fullName: string) {
-    return fullName.trim().split(/\s+/)[0] ?? fullName
-  }
-
-  function normalizeGapBand(value: string | undefined | null) {
-    return (value ?? 'COMPETITIVE')
-      .toString()
-      .trim()
-      .toUpperCase()
-      .replace(/\s+/g, '_')
-      .replace(/__+/g, '_')
-  }
-
-  function getGapBandCategory(slot: EventFixtureSlot) {
-    const band = normalizeGapBand(slot.gap_band ?? slot.match_category ?? slot.round_intent)
-    if (band === 'COMPETITIVE') return 'competitive'
-    if (band === 'STRETCH') return 'stretch'
-    if (band === 'ANCHOR') return 'anchor'
-    if (band === 'OUT_OF_BAND' || band.replace(/_/g, '') === 'OUTOFBAND') return 'out_of_band'
-    return 'competitive'
-  }
-
-  function getOpponentLabel(opponent: EventFixturePlayer, firstNameCounts: Record<string, number>) {
-    const parts = opponent.name.trim().split(/\s+/)
-    const first = parts[0]
-    if ((firstNameCounts[first] ?? 0) <= 1 || parts.length < 2) return first
-    const second = parts[1]
-    const suffix = second.slice(0, 2)
-    return `${first} ${suffix}.`
-  }
-
-  function getMatchTypeMeta(slot: EventFixtureSlot, playerRating: number, opponentRating?: number) {
-    const type = normalizeGapBand(slot.gap_band || slot.match_category || slot.round_intent)
-    if (type === 'COMPETITIVE') {
-      return { label: 'Competitive', shortLabel: 'C', title: 'Competitive', className: 'text-blue-300' }
-    }
-
-    if (type === 'DEVELOPMENTAL') {
-      return { label: 'Developmental', shortLabel: 'D', title: 'Developmental', className: 'text-gray-300' }
-    }
-
-    if (type === 'OUT_OF_BAND' || type.replace(/_/g, '') === 'OUTOFBAND') {
-      return { label: 'Out of band', shortLabel: 'O', title: 'Out of band', className: 'text-orange-300' }
-    }
-
-    if (type === 'ANCHOR') {
-      return { label: 'Anchor', shortLabel: 'A', title: 'Anchor', className: 'text-green-300' }
-    }
-
-    if (type === 'STRETCH') {
-      if (opponentRating != null) {
-        if (playerRating < opponentRating) {
-          return {
-            label: 'Stretch',
-            shortLabel: 'S',
-            title: 'Stretch: playing up against stronger opponent',
-            className: 'text-purple-300',
-          }
-        }
-        if (playerRating > opponentRating) {
-          return {
-            label: 'Anchor',
-            shortLabel: 'A',
-            title: 'Anchor: playing down as stronger opponent',
-            className: 'text-amber-300',
-          }
-        }
-      }
-
-      return { label: 'Stretch', shortLabel: 'S', title: 'Stretch', className: 'text-purple-300' }
-    }
-
-    return { label: type ?? 'Unknown', shortLabel: (type?.[0] ?? 'U'), title: type ?? 'Unknown', className: 'text-gray-400' }
-  }
-
-  function getSlotLabel(slot: EventFixtureSlot) {
-    const band = normalizeGapBand(slot.round_intent ?? slot.gap_band ?? slot.match_category)
-    if (band === 'COMPETITIVE') return 'Competitive'
-    if (band === 'DEVELOPMENTAL') return 'Developmental'
-    if (band === 'STRETCH') return 'Stretch'
-    if (band === 'OUT_OF_BAND' || band.replace(/_/g, '') === 'OUTOFBAND') return 'Out of band'
-    if (slot.match_category) return slot.match_category.charAt(0) + slot.match_category.slice(1).toLowerCase()
-    return 'Unknown'
-  }
+  // Shared helpers and matrix grid are provided by web/src/lib/fixtures and FixtureMatrixGrid
 
   export function EventDetailPanel({ eventId, canManage }: { eventId: string; canManage: boolean }) {
     // default to fixtures view for read-only coach embeds, roster for admin managers
@@ -609,7 +528,27 @@
                   matchFormat={eventQ.data?.default_match_format ?? 'BEST_OF_3'}
                   numTables={numTables}
                 />
-                <FixtureMatrix fixtures={fixtures} colorMap={colorMap} />
+                {(() => {
+                  const model = buildMatrixModel(fixtures.slots as any, {
+                    sectionOf: (p: any) => p.academy_id,
+                    sectionMeta: (id: string, players: any[]) => ({
+                      label: players[0]?.academy_name ?? id,
+                      accent: colorMap[id] ?? ACADEMY_PALETTE[0],
+                    }),
+                    cellOf: (slot: any, self: any, opp: any) => {
+                      const meta = classifyCell(slot as any, self as any, opp as any)
+                      return { label: meta.label, stripClass: meta.stripClass, category: meta.category }
+                    },
+                    totalRounds: fixtures.total_rounds,
+                    sectionSort: (a, b) => a.label.localeCompare(b.label),
+                  })
+
+                  const legend = model.sections.map(s => ({ label: s.label, bg: s.accent.bg }))
+
+                  return (
+                    <FixtureMatrixGrid model={model} legend={legend} sectionFilter={true} />
+                  )
+                })()}
                 <SlotResultList
                   fixtures={fixtures}
                   colorMap={colorMap}
@@ -1253,16 +1192,16 @@
     const schedule: Record<string, Record<number, Cell>> = {}
     const playerById: Record<string, EventFixturePlayer> = {}
 
-    for (const slot of fixtures.slots) {
+      for (const slot of fixtures.slots) {
       playerById[slot.player_a.player_id] = slot.player_a
       if (slot.player_b) playerById[slot.player_b.player_id] = slot.player_b
       const pa = slot.player_a.player_id
       const pb = slot.player_b?.player_id
       if (!schedule[pa]) schedule[pa] = {}
-      schedule[pa][slot.round_number] = { opponent: slot.player_b, is_bye: !pb, category: getSlotLabel(slot) }
+      schedule[pa][slot.round_number] = { opponent: slot.player_b, is_bye: !pb, category: classifyCell(slot as any, slot.player_a as any, slot.player_b as any).label }
       if (pb) {
         if (!schedule[pb]) schedule[pb] = {}
-        schedule[pb][slot.round_number] = { opponent: slot.player_a, is_bye: false, category: getSlotLabel(slot) }
+        schedule[pb][slot.round_number] = { opponent: slot.player_a, is_bye: false, category: classifyCell(slot as any, slot.player_b as any, slot.player_a as any).label }
       }
     }
 

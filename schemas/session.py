@@ -66,8 +66,15 @@ class FixtureSlotResponse(BaseModel):
     player_b_role: str
     # Legacy compatibility field — kept until downstream consumers migrate.
     match_category: str
-    player_a: dict
-    player_b: dict | None  # None when player_b is a BYE
+    # Structured player payload for fixtures (adds `tier`)
+    class FixturePlayer(BaseModel):
+        player_id: str
+        name: str
+        current_rating: float
+        tier: str | None = None
+
+    player_a: FixturePlayer
+    player_b: FixturePlayer | None  # None when player_b is a BYE
     expected_rating_gap: float
     status: str
     match_id: str | None

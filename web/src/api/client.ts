@@ -415,6 +415,7 @@ export interface EventFixturePlayer {
   current_rating: number
   academy_id: string
   academy_name: string
+  tier?: string
 }
 
 export interface EventFixtureSlot {
@@ -540,6 +541,7 @@ export interface FixturePlayer {
   player_id: string
   name: string
   current_rating: number
+  tier?: string
 }
 
 export interface FixtureSlot {

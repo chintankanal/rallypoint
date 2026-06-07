@@ -4,6 +4,8 @@ import {
   matchesApi, playersApi, academiesApi, eventsApi, sessionsApi,
   type PlayerSearchResult, type LeaderboardEntry, type SessionSummary, type FixtureSlot,
 } from '../api/client'
+import FixtureMatrixGrid from '../components/FixtureMatrixGrid'
+import { buildMatrixModel, classifyCell, TIER_META, GAP_BAND_LEGEND } from '../lib/fixtures'
 import { Layout, TierBadge, CRBar, Spinner, ErrorMsg, ProtectedRoute } from '../components/Layout'
 import { EventDetailPanel } from '../components/EventDetailPanel'
 import { SetPointsInput } from '../components/SetPointsInput'
@@ -414,51 +416,7 @@ function SessionsTab({ academyId }: { academyId: string }) {
     STANDARD: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
   }
 
-  const getSlotRoleCode = (slot: { player_a_role?: string | null; player_b_role?: string | null }) => {
-    if (slot.player_a_role === 'BYE' || slot.player_b_role === 'BYE') return 'BYE'
-    if (slot.player_a_role === 'PEER' && slot.player_b_role === 'PEER') return 'COMPETITIVE'
-    if (
-      (slot.player_a_role === 'STRETCHING' && slot.player_b_role === 'ANCHORING') ||
-      (slot.player_a_role === 'ANCHORING' && slot.player_b_role === 'STRETCHING')
-    ) return 'STRETCH'
-    if (slot.player_a_role === 'STRETCHING' || slot.player_b_role === 'STRETCHING') return 'STRETCH'
-    if (slot.player_a_role === 'ANCHORING' || slot.player_b_role === 'ANCHORING') return 'ANCHOR'
-    if (slot.player_a_role === 'PEER' || slot.player_b_role === 'PEER') return 'COMPETITIVE'
-    return 'UNKNOWN'
-  }
-
-  const getSlotTypeCode = (slot: { player_a_role?: string | null; player_b_role?: string | null; round_intent?: string | null; gap_band?: string | null; match_category?: string | null }) => {
-    const roleCode = getSlotRoleCode(slot)
-    if (roleCode !== 'UNKNOWN') return roleCode
-    if (slot.gap_band === 'COMPETITIVE') return 'COMPETITIVE'
-    if (slot.gap_band === 'STRETCH') return 'STRETCH'
-    if (slot.gap_band === 'OUT_OF_BAND') return 'OUT_OF_BAND'
-    if (slot.round_intent === 'COMPETITIVE') return 'COMPETITIVE'
-    if (slot.round_intent === 'DEVELOPMENTAL') return 'DEVELOPMENTAL'
-    if (slot.match_category) return slot.match_category
-    return 'UNKNOWN'
-  }
-
-  const getSlotLabel = (slot: { player_a_role?: string | null; player_b_role?: string | null; round_intent?: string | null; gap_band?: string | null; match_category?: string | null }) => {
-    if (slot.player_a_role || slot.player_b_role) {
-      if (slot.player_a_role === 'BYE' || slot.player_b_role === 'BYE') return 'Bye'
-      if (slot.player_a_role === 'PEER' && slot.player_b_role === 'PEER') return 'Competitive'
-      if (
-        (slot.player_a_role === 'STRETCHING' && slot.player_b_role === 'ANCHORING') ||
-        (slot.player_a_role === 'ANCHORING' && slot.player_b_role === 'STRETCHING')
-      ) return 'Stretch / Anchor'
-      if (slot.player_a_role === 'STRETCHING' || slot.player_b_role === 'STRETCHING') return 'Stretch'
-      if (slot.player_a_role === 'ANCHORING' || slot.player_b_role === 'ANCHORING') return 'Anchor'
-      if (slot.player_a_role === 'PEER' || slot.player_b_role === 'PEER') return 'Competitive'
-    }
-    if (slot.gap_band === 'COMPETITIVE') return 'Competitive'
-    if (slot.gap_band === 'STRETCH') return 'Stretch'
-    if (slot.gap_band === 'OUT_OF_BAND') return 'Out of band'
-    if (slot.round_intent === 'COMPETITIVE') return 'Competitive'
-    if (slot.round_intent === 'DEVELOPMENTAL') return 'Developmental'
-    if (slot.match_category) return slot.match_category
-    return 'Unknown'
-  }
+  // Slot classification and labeling provided by shared fixtures helpers
 
   const SESSION_STATUS_COLOR: Record<string, string> = {
     SCHEDULED: 'bg-yellow-800 text-yellow-100',
@@ -485,8 +443,18 @@ function SessionsTab({ academyId }: { academyId: string }) {
     let filledCount = 0
 
     fixturesQ.data.slots.forEach(slot => {
-      const type = getSlotTypeCode(slot)
-      counts[type] = (counts[type] ?? 0) + 1
+      const meta = classifyCell(slot as any, slot.player_a as any, slot.player_b as any)
+      const code = (c: string) => {
+        if (c === 'competitive') return 'COMPETITIVE'
+        if (c === 'stretch') return 'STRETCH'
+        if (c === 'anchor') return 'ANCHOR'
+        if (c === 'developmental') return 'DEVELOPMENTAL'
+        if (c === 'outOfBand') return 'OUT_OF_BAND'
+        if (c === 'bye') return 'BYE'
+        return 'UNKNOWN'
+      }
+      const tcode = code(meta.category)
+      counts[tcode] = (counts[tcode] ?? 0) + 1
       if (slot.player_b && slot.player_a) {
         filledCount += 1
         totalDelta += Math.abs(Math.round(slot.player_a.current_rating) - Math.round(slot.player_b.current_rating))
@@ -822,6 +790,26 @@ function SessionsTab({ academyId }: { academyId: string }) {
 
               {fixturesQ.isLoading && <Spinner />}
 
+              {fixturesQ.data && fixturesQ.data.slots.length > 0 && (() => {
+                const model = buildMatrixModel(fixturesQ.data.slots as any, {
+                  sectionOf: (p: any) => p.tier ?? 'UNKNOWN',
+                  sectionMeta: (id: string, players: any[]) => ({
+                    label: (TIER_META[id]?.label ?? id),
+                    accent: (TIER_META[id]?.accent ?? { bg: 'bg-gray-700', text: 'text-gray-200' }),
+                  }),
+                  cellOf: (slot: any, self: any, opp: any) => {
+                    const meta = classifyCell(slot as any, self as any, opp as any)
+                    return { label: meta.label, stripClass: meta.stripClass, category: meta.category }
+                  },
+                  sectionSort: (a, b) => (TIER_META[b.id]?.rank ?? 0) - (TIER_META[a.id]?.rank ?? 0),
+                  totalRounds: fixturesQ.data.total_rounds,
+                })
+
+                return (
+                  <FixtureMatrixGrid model={model} legend={GAP_BAND_LEGEND} dimCategory={activeCategoryFilter} />
+                )
+              })()}
+
               {fixturesQ.data && (() => {
                 const byRound = fixturesQ.data.slots.reduce<Record<number, typeof fixturesQ.data.slots>>((acc, slot) => {
                   ;(acc[slot.round_number] ??= []).push(slot)
@@ -835,7 +823,17 @@ function SessionsTab({ academyId }: { academyId: string }) {
 
                     <div className="space-y-3">
                       {slots.map(slot => {
-                        const categoryCode = getSlotTypeCode(slot)
+                        const meta = classifyCell(slot as any, slot.player_a as any, slot.player_b as any)
+                        const code = (c: string) => {
+                          if (c === 'competitive') return 'COMPETITIVE'
+                          if (c === 'stretch') return 'STRETCH'
+                          if (c === 'anchor') return 'ANCHOR'
+                          if (c === 'developmental') return 'DEVELOPMENTAL'
+                          if (c === 'outOfBand') return 'OUT_OF_BAND'
+                          if (c === 'bye') return 'BYE'
+                          return 'UNKNOWN'
+                        }
+                        const categoryCode = code(meta.category)
                         const badgeClasses = MATCH_CAT_BADGE[categoryCode] ?? MATCH_CAT_BADGE.UNKNOWN
                         const winnerA = slot.status === 'PLAYED' && slot.match_result?.winner_id === slot.player_a.player_id
                         const winnerB = slot.status === 'PLAYED' && slot.match_result?.winner_id === slot.player_b?.player_id
@@ -845,7 +843,7 @@ function SessionsTab({ academyId }: { academyId: string }) {
                               <div className="space-y-3 min-w-0">
                                 <div className="flex flex-wrap items-center gap-2">
                                   <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${badgeClasses}`}>
-                                    {getSlotLabel(slot)}
+                                    {meta.label}
                                   </span>
                                   <span className="text-xs text-gray-500">Table {slot.table_number}</span>
                                 </div>

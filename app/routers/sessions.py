@@ -174,10 +174,10 @@ def generate_session_fixtures(
                 SELECT COUNT(*) AS offset
                 FROM session s
                 WHERE s.event_id = %s
-                  AND s.session_date < %s
                   AND s.generated_at IS NOT NULL
+                  AND (s.session_date, s.created_at) < (%s, %s)
                 """,
-                (session["event_id"], session["session_date"]),
+                (session["event_id"], session["session_date"], session["created_at"]),
             )
             rotation_offset = cur.fetchone()["offset"]
 

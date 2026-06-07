@@ -458,15 +458,16 @@ def _circle_round(players: list[dict], round_idx: int) -> list[tuple]:
 
 def generate_discovery_fixtures(
     players: list[dict],
-    round_offset: int,
     matches_per_player: int,
     num_tables: int,
+    rotation_offset: int = 0,
     thresholds: RegimeThresholds | None = None,
 ) -> list[dict]:
     """
     Round-robin via circle method.
-    round_offset = number of rounds already played for this event (from prior sessions).
-    Produces matches_per_player rounds starting at round_offset.
+    rotation_offset = offset to vary circle-method rotation across sessions for discovery variety.
+      Used only for computing the round rotation seed; does not affect round numbering.
+    Produces matches_per_player rounds numbered 1, 2, 3, ... (session-local).
     All matches are COMPETITIVE intent; the per-slot gap_band reflects the
     actual rating gap, which is typically COMPETITIVE in a discovery pool.
     """
@@ -479,9 +480,9 @@ def generate_discovery_fixtures(
     slots: list[dict] = []
     resolved_thresholds = thresholds or regime_thresholds(REGIME_DEVELOPING)
     for step in range(matches_per_player):
-        round_idx = (round_offset + step) % total_rounds
+        round_idx = (rotation_offset + step) % total_rounds
         pairs = _circle_round(players, round_idx)
-        round_number = round_offset + step + 1
+        round_number = step + 1  # session-local numbering
         slots.extend(
             _assign_tables(
                 pairs,
@@ -568,7 +569,7 @@ def generate_transition_fixtures(
     players: list[dict],
     matches_per_player: int,
     num_tables: int,
-    round_offset: int = 0,
+    rotation_offset: int = 0,
     thresholds: RegimeThresholds | None = None,
 ) -> list[dict]:
     """
@@ -577,8 +578,9 @@ def generate_transition_fixtures(
     upper-half top vs lower-half top.
 
     Critique #1 fix: legal one-match-per-player rounds.
-    Critique #12 fix: round_offset shifts numbering so multi-session events
-    have a stable global round counter.
+    rotation_offset parameter is accepted for API consistency but not used
+    (transition does not vary pairing via rotation like discovery does).
+    Rounds are numbered 1, 2, 3, ... (session-local).
     """
     if len(players) < 2:
         return []
@@ -594,7 +596,7 @@ def generate_transition_fixtures(
     stretch_done = 0      # shift counter for cross-half rounds
 
     for step in range(matches_per_player):
-        round_number = round_offset + step + 1
+        round_number = step + 1  # session-local numbering
         is_stretch_round = (step == 1)  # round 2 (index 1) is the stretch round
 
         if is_stretch_round:
@@ -632,7 +634,7 @@ def generate_standard_fixtures(
     recent_match_pairs: set[tuple],
     matches_per_player: int,
     num_tables: int,
-    round_offset: int = 0,
+    rotation_offset: int = 0,
     thresholds: RegimeThresholds | None = None,
 ) -> list[dict]:
     """
@@ -642,8 +644,9 @@ def generate_standard_fixtures(
       100-250 (intent=DEVELOPMENTAL)
     - BYE for odd player count (rotating)
     - recent_match_pairs: canonical (a,b) pairs to exclude from stretch round
-    - round_offset: shifts emitted round numbers so multi-session events keep
-      a stable global counter (critique #12).
+    - rotation_offset parameter is accepted for API consistency but not used
+      (standard does not vary pairing via rotation like discovery does).
+    Rounds are numbered 1, 2, 3, ... (session-local).
 
     Out-of-band leftover pairings (gap > 250) are no longer silently labeled
     STRETCH — _build_slot derives gap_band=OUT_OF_BAND from the actual gap
@@ -824,7 +827,7 @@ def generate_standard_fixtures(
     session_pairs: set[tuple] = set()  # Bug 4: track pairs already played this session
 
     for step in range(matches_per_player):
-        round_number = round_offset + step + 1  # critique #12: honor round_offset
+        round_number = step + 1  # session-local numbering
         is_stretch = (step == 2) if has_odd_tier else (step % 2 == 1)
 
         if is_stretch:
@@ -889,10 +892,10 @@ def generate_standard_fixtures(
 def generate_fixtures(
     players: list[dict],
     recent_match_pairs: set[tuple],
-    round_offset: int,
     session_minutes: int,
     num_tables: int,
     match_format: str,
+    rotation_offset: int = 0,
     cfg: FixtureConfig | None = None,
 ) -> dict:
     """
@@ -903,6 +906,8 @@ def generate_fixtures(
       "matches_per_player": int,
       "slots": list[dict],
     }
+    rotation_offset: offset to vary circle-method rotation for discovery diversity
+      across sessions in the same event. Only used by generate_discovery_fixtures.
     """
     spread = rating_spread(players)
     capacity = calculate_session_capacity(
@@ -922,7 +927,7 @@ def generate_fixtures(
         if num_rounds == 0:
             return {"phase": phase, "spread": spread, "matches_per_player": 0, "slots": []}
         slots = generate_discovery_fixtures(
-            players, round_offset, num_rounds, num_tables, thresholds=thresholds,
+            players, num_rounds, num_tables, rotation_offset=rotation_offset, thresholds=thresholds,
         )
         return {"phase": phase, "spread": spread, "matches_per_player": mpp, "slots": slots}
 
@@ -932,14 +937,14 @@ def generate_fixtures(
 
     if phase == "DISCOVERY":
         slots = generate_discovery_fixtures(
-            players, round_offset, num_rounds, num_tables, thresholds=thresholds,
+            players, num_rounds, num_tables, rotation_offset=rotation_offset, thresholds=thresholds,
         )
     elif phase == "TRANSITION":
         slots = generate_transition_fixtures(
             players,
             num_rounds,
             num_tables,
-            round_offset=round_offset,
+            rotation_offset=rotation_offset,
             thresholds=thresholds,
         )
     else:
@@ -948,7 +953,7 @@ def generate_fixtures(
             recent_match_pairs,
             num_rounds,
             num_tables,
-            round_offset=round_offset,
+            rotation_offset=rotation_offset,
             thresholds=thresholds,
         )
 

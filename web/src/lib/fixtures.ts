@@ -195,8 +195,19 @@ export function buildMatrixModel<P extends MatrixPlayer>(
 
   if (opts.sectionSort) sections.sort(opts.sectionSort)
 
-  const totalRounds = opts.totalRounds ?? Math.max(0, ...Object.values(schedule).flatMap(r => Object.keys(r).map(k => Number(k))))
-  const rounds = Array.from({ length: totalRounds }, (_, i) => i + 1)
+  let rounds: number[]
+  if (opts.totalRounds !== undefined) {
+    // League path: render rounds 1..totalRounds
+    rounds = Array.from({ length: opts.totalRounds }, (_, i) => i + 1)
+  } else {
+    // Intra/session path: render only the distinct rounds actually present, sorted
+    const present = [...new Set(
+      Object.values(schedule).flatMap(r =>
+        Object.keys(r).map(Number)
+      )
+    )].sort((a, b) => a - b)
+    rounds = present
+  }
 
   return { sections, rounds, schedule }
 }

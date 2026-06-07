@@ -175,15 +175,15 @@ def generate_session_fixtures(
                 """,
                 (session["event_id"], session["session_date"]),
             )
-            round_offset = cur.fetchone()["offset"]
+            rotation_offset = cur.fetchone()["offset"]
 
             result = generate_fixtures(
                 players=players,
                 recent_match_pairs=recent_pairs,
-                round_offset=round_offset,
                 session_minutes=session["session_minutes"],
                 num_tables=session["num_tables"],
                 match_format=session["match_format"],
+                rotation_offset=rotation_offset,
             )
 
             cur.execute(

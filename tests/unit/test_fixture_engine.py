@@ -130,23 +130,26 @@ def test_generate_fixtures_gap_bands_adapt_to_pool():
     assert mature_thresholds.competitive_max_gap == 75.0
     assert developing_thresholds.competitive_max_gap == 100.0
 
+    cfg = DEFAULT_FIXTURE_CONFIG
+    thresholds = _resolve_regime_thresholds(mature_pool, cfg=cfg)
+
     mature_result = generate_fixtures(
         players=mature_pool,
         recent_match_pairs=set(),
-        round_offset=0,
         session_minutes=90,
         num_tables=2,
         match_format="BEST_OF_3",
-        cfg=DEFAULT_FIXTURE_CONFIG,
+        rotation_offset=0,
+        cfg=cfg,
     )
     developing_result = generate_fixtures(
         players=developing_pool,
         recent_match_pairs=set(),
-        round_offset=0,
         session_minutes=90,
         num_tables=2,
         match_format="BEST_OF_3",
-        cfg=DEFAULT_FIXTURE_CONFIG,
+        rotation_offset=0,
+        cfg=cfg,
     )
 
     mature_bands = {slot["gap_band"] for slot in mature_result["slots"] if slot["player_b_id"] is not None}
@@ -240,25 +243,36 @@ def test_circle_round_odd_players_each_player_gets_bye():
 
 def test_discovery_fixtures_no_self_pairings():
     players = _make_players([1000.0] * 8)
-    slots = generate_discovery_fixtures(players, round_offset=0, matches_per_player=4, num_tables=4)
+    slots = generate_discovery_fixtures(players, matches_per_player=4, num_tables=4, rotation_offset=0)
     for slot in slots:
         if slot["player_b_id"] is not None:
             assert slot["player_a_id"] != slot["player_b_id"]
 
 
-def test_discovery_fixtures_round_offset_shifts_pairs():
+def test_discovery_fixtures_rotation_offset_shifts_pairs():
+    """rotation_offset varies circle-method rotation for discovery diversity."""
     players = _make_players([1000.0] * 8)
-    slots_0 = generate_discovery_fixtures(players, round_offset=0, matches_per_player=1, num_tables=4)
-    slots_3 = generate_discovery_fixtures(players, round_offset=3, matches_per_player=1, num_tables=4)
+    slots_0 = generate_discovery_fixtures(players, matches_per_player=1, num_tables=4, rotation_offset=0)
+    slots_3 = generate_discovery_fixtures(players, matches_per_player=1, num_tables=4, rotation_offset=3)
     pairs_0 = {(_canonical(s["player_a_id"], s["player_b_id"])) for s in slots_0 if s["player_b_id"]}
     pairs_3 = {(_canonical(s["player_a_id"], s["player_b_id"])) for s in slots_3 if s["player_b_id"]}
     assert pairs_0 != pairs_3
 
 
+def test_discovery_fixtures_round_numbers_session_local():
+    """Round numbers are 1, 2, 3, ... regardless of rotation_offset."""
+    players = _make_players([1000.0] * 8)
+    slots = generate_discovery_fixtures(players, matches_per_player=4, num_tables=4, rotation_offset=5)
+    round_numbers = {s["round_number"] for s in slots}
+    assert round_numbers == {1, 2, 3, 4}, (
+        f"Expected rounds 1-4 (session-local), got {sorted(round_numbers)}"
+    )
+
+
 def test_discovery_fixtures_sub_rounds_when_more_pairs_than_tables():
     # 8 players → 4 pairs per round, 3 tables → needs sub-rounds
     players = _make_players([1000.0] * 8)
-    slots = generate_discovery_fixtures(players, round_offset=0, matches_per_player=1, num_tables=3)
+    slots = generate_discovery_fixtures(players, matches_per_player=1, num_tables=3, rotation_offset=0)
     sub_rounds = {s["sub_round"] for s in slots}
     assert "A" in sub_rounds
     assert "B" in sub_rounds
@@ -267,7 +281,7 @@ def test_discovery_fixtures_sub_rounds_when_more_pairs_than_tables():
 def test_discovery_fixtures_no_sub_rounds_when_fits():
     # 8 players → 4 pairs per round, 4 tables → fits without sub-rounds
     players = _make_players([1000.0] * 8)
-    slots = generate_discovery_fixtures(players, round_offset=0, matches_per_player=1, num_tables=4)
+    slots = generate_discovery_fixtures(players, matches_per_player=1, num_tables=4, rotation_offset=0)
     assert all(s["sub_round"] is None for s in slots)
 
 
@@ -377,10 +391,10 @@ def test_generate_fixtures_discovery_20_players():
     result = generate_fixtures(
         players=players,
         recent_match_pairs=set(),
-        round_offset=0,
         session_minutes=150,
         num_tables=5,
         match_format="BEST_OF_3",
+        rotation_offset=0,
     )
     assert result["phase"] == "DISCOVERY"
     assert result["matches_per_player"] == 3
@@ -402,10 +416,10 @@ def test_generate_fixtures_returns_phase_and_spread():
     result = generate_fixtures(
         players=players,
         recent_match_pairs=set(),
-        round_offset=0,
         session_minutes=120,
         num_tables=2,
         match_format="BEST_OF_3",
+        rotation_offset=0,
     )
     assert result["phase"] == "STANDARD"
     assert result["spread"] == 300.0
@@ -417,10 +431,10 @@ def test_generate_fixtures_zero_capacity():
     result = generate_fixtures(
         players=players,
         recent_match_pairs=set(),
-        round_offset=0,
         session_minutes=20,  # 20 < 25 (BEST_OF_3 + changeover)
         num_tables=1,
         match_format="BEST_OF_3",
+        rotation_offset=0,
     )
     assert result["matches_per_player"] == 0
     assert result["slots"] == []
@@ -437,10 +451,10 @@ def test_generate_fixtures_transition_phase():
     result = generate_fixtures(
         players=players,
         recent_match_pairs=set(),
-        round_offset=0,
         session_minutes=120,
         num_tables=3,
         match_format="BEST_OF_3",
+        rotation_offset=0,
     )
     assert result["phase"] == "TRANSITION"
 
@@ -1510,35 +1524,29 @@ def test_tier_matched_singleton_tier_player_not_silently_dropped():
     )
 
 
-# ── #12 round_offset honored by every phase ───────────────────────────────────
-
-def test_transition_honors_round_offset():
-    """
-    Critique #12: round_offset must shift the numbering of every phase. The
-    transition generator currently restarts from 1 regardless of offset.
-    """
+def test_transition_fixtures_round_numbers_session_local():
+    """Round numbers are 1, 2, 3, ... (session-local), not offset-based."""
     players = _make_players([1300.0, 1250.0, 1200.0, 1150.0, 1100.0, 1050.0, 1000.0, 950.0])
     slots = generate_transition_fixtures(
-        players, matches_per_player=2, num_tables=4, round_offset=5
+        players, matches_per_player=2, num_tables=4, rotation_offset=5
     )
     round_numbers = {s["round_number"] for s in slots}
-    assert min(round_numbers) >= 6, (
-        f"Transition ignored round_offset=5; first round is {min(round_numbers)} (expected ≥6)"
+    assert round_numbers == {1, 2}, (
+        f"Expected rounds 1-2 (session-local), got {sorted(round_numbers)}"
     )
 
 
-def test_standard_honors_round_offset():
-    """Critique #12: standard generator must also accept round_offset."""
+def test_standard_fixtures_round_numbers_session_local():
+    """Round numbers are 1, 2, 3, ... (session-local), not offset-based."""
     players = _make_players(
         [1600.0, 1500.0, 1400.0, 1300.0, 1200.0, 1100.0, 1000.0, 900.0]
     )
     slots = generate_standard_fixtures(
-        players, set(), matches_per_player=2, num_tables=4, round_offset=10
+        players, set(), matches_per_player=2, num_tables=4, rotation_offset=10
     )
     round_numbers = {s["round_number"] for s in slots}
-    assert min(round_numbers) >= 11, (
-        f"Standard ignored round_offset=10; first round is {min(round_numbers)} "
-        f"(expected ≥11)"
+    assert round_numbers == {1, 2}, (
+        f"Expected rounds 1-2 (session-local), got {sorted(round_numbers)}"
     )
 
 
@@ -1689,10 +1697,10 @@ def test_small_session_under_6_players_uses_pure_round_robin():
     result = generate_fixtures(
         players=players,
         recent_match_pairs=set(),
-        round_offset=0,
         session_minutes=240,
         num_tables=2,
         match_format="BEST_OF_3",
+        rotation_offset=0,
     )
     # Pure round-robin: every player appears in every round (as match or BYE).
     attending = {p["player_id"] for p in players}
@@ -1724,8 +1732,8 @@ def test_discovery_deterministic_ordering_independent_of_input_order():
     ]
     pool_b = list(reversed(pool_a))  # same players, reversed input order
 
-    slots_a = generate_discovery_fixtures(pool_a, round_offset=0, matches_per_player=1, num_tables=3)
-    slots_b = generate_discovery_fixtures(pool_b, round_offset=0, matches_per_player=1, num_tables=3)
+    slots_a = generate_discovery_fixtures(pool_a, matches_per_player=1, num_tables=3, rotation_offset=0)
+    slots_b = generate_discovery_fixtures(pool_b, matches_per_player=1, num_tables=3, rotation_offset=0)
 
     pairs_a = {_canonical(s["player_a_id"], s["player_b_id"]) for s in slots_a if s["player_b_id"]}
     pairs_b = {_canonical(s["player_a_id"], s["player_b_id"]) for s in slots_b if s["player_b_id"]}
@@ -1790,7 +1798,7 @@ def test_multi_wave_unique_numbering_three_plus_waves():
     # 14 players, 2 tables → up to 7 pairs per round → at most 7 waves.
     players = _make_players([1000.0] * 14)
     slots = generate_discovery_fixtures(
-        players, round_offset=0, matches_per_player=1, num_tables=2,
+        players, matches_per_player=1, num_tables=2, rotation_offset=0,
     )
     by_round = _slots_by_round(slots)
     assert by_round, "expected at least one round generated"
@@ -1816,7 +1824,7 @@ def test_sub_round_legacy_label_only_for_two_wave_rounds():
     # 8 players, 3 tables → 4 pairs per round → 2 waves.
     p_2wave = _make_players([1000.0] * 8)
     slots_2wave = generate_discovery_fixtures(
-        p_2wave, round_offset=0, matches_per_player=1, num_tables=3,
+        p_2wave, matches_per_player=1, num_tables=3, rotation_offset=0,
     )
     labels_2wave = {s["sub_round"] for s in slots_2wave}
     assert labels_2wave == {"A", "B"}, (
@@ -1825,7 +1833,7 @@ def test_sub_round_legacy_label_only_for_two_wave_rounds():
 
     # 8 players, 4 tables → 4 pairs per round → 1 wave.
     slots_1wave = generate_discovery_fixtures(
-        p_2wave, round_offset=0, matches_per_player=1, num_tables=4,
+        p_2wave, matches_per_player=1, num_tables=4, rotation_offset=0,
     )
     labels_1wave = {s["sub_round"] for s in slots_1wave}
     assert labels_1wave == {None}, (
@@ -1835,7 +1843,7 @@ def test_sub_round_legacy_label_only_for_two_wave_rounds():
     # 14 players, 2 tables → 7 pairs per round → 4 waves → no A/B label.
     p_4wave = _make_players([1000.0] * 14)
     slots_4wave = generate_discovery_fixtures(
-        p_4wave, round_offset=0, matches_per_player=1, num_tables=2,
+        p_4wave, matches_per_player=1, num_tables=2, rotation_offset=0,
     )
     labels_4wave = {s["sub_round"] for s in slots_4wave}
     assert labels_4wave == {None}, (
@@ -1851,7 +1859,7 @@ def test_table_number_bounded_by_num_tables():
     """
     players = _make_players([1000.0] * 10)
     slots = generate_discovery_fixtures(
-        players, round_offset=0, matches_per_player=1, num_tables=3,
+        players, matches_per_player=1, num_tables=3, rotation_offset=0,
     )
     for s in slots:
         assert 1 <= s["table_number"] <= 3, (
@@ -1876,9 +1884,9 @@ def test_no_duplicate_player_across_all_phase_dispatches(pool, tables):
     result = generate_fixtures(
         players=pool,
         recent_match_pairs=set(),
-        round_offset=0,
         session_minutes=300,
         num_tables=tables,
         match_format="BEST_OF_3",
+        rotation_offset=0,
     )
     _assert_no_duplicate_player_per_round(result["slots"])

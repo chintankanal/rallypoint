@@ -110,11 +110,11 @@ export default function FixtureMatrixGrid({
             <tr className="bg-gray-900/80">
               <th className="text-left px-3 py-2 text-gray-500 border-b border-gray-800 sticky left-0 bg-gray-900 min-w-[150px] z-10">Player</th>
               <th className="text-right px-2 py-2 text-gray-500 border-b border-gray-800">Rtg</th>
-              {rounds.map((r: number) => (
+              {rounds.map((r: number, i: number) => (
                 <th key={r} onClick={() => setHighlightRound(highlightRound === r ? null : r)}
                   className="text-center px-1.5 py-2 text-gray-600 border-b border-gray-800 cursor-pointer hover:bg-gray-800/50"
-                  title={`Round ${r}`}>
-                  R{r}
+                  title={`Round ${i + 1}`}>
+                  R{i + 1}
                 </th>
               ))}
             </tr>

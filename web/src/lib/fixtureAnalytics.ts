@@ -12,21 +12,9 @@ export type FixtureCategory =
   | 'unknown'
 
 export interface FixtureAnalytics {
-  totalSlots: number
-  counts: Record<FixtureCategory, number>
   percentages: Record<'competitive' | 'stretch' | 'anchor' | 'developmental' | 'outOfBand' | 'bye', number>
-  density: number
-  tightnessScore: number
-  byeBalanced: boolean
-  outOfBandCount: number
-  byeCount: number
-  diagnostics?: SessionDiagnostics
   bootstrapPhase: string
   regime: string | null
-  fairnessIndex: number
-  sosSpread: number
-  criticalTraps: number
-  warningTraps: number
 }
 
 const CATEGORY_MAP: Record<string, FixtureCategory> = {
@@ -49,21 +37,6 @@ function clampPercentage(value: number) {
   return Math.round(Math.min(100, Math.max(0, value)))
 }
 
-function normalizeRole(role?: string | null) {
-  const value = (role ?? '').trim().toUpperCase()
-  if (value === 'PEER') return 'PEER'
-  if (value.includes('STRETCH')) return 'STRETCHING'
-  if (value.includes('ANCHOR')) return 'ANCHORING'
-  return 'PEER'
-}
-
-function getNextChronoPhase(phase: { round_number: number; wave_number: number }, maxWave: number) {
-  if (phase.wave_number < maxWave) {
-    return { round_number: phase.round_number, wave_number: phase.wave_number + 1 }
-  }
-  return { round_number: phase.round_number + 1, wave_number: 1 }
-}
-
 export function analyzeFixtureSlots(
   slots: FixtureSlot[],
   diagnostics?: SessionDiagnostics,
@@ -78,177 +51,12 @@ export function analyzeFixtureSlots(
     unknown: 0,
   }
 
-  let filledCount = 0
-  let totalDelta = 0
-  let deltasCount = 0
-
-  const maxWavePerRound: Record<number, number> = {}
-  const playerStats: Record<string, {
-    playerId: string
-    name: string
-    rating: number
-    tier?: string
-    matches: number
-    opponents: Set<string>
-    byes: number
-    opponentRatings: number[]
-    phases: { round_number: number; wave_number: number }[]
-    peer: number
-    stretching: number
-    anchoring: number
-  }> = {}
-
-  const ensurePlayer = (player: FixtureSlot['player_a']) => {
-    if (!playerStats[player.player_id]) {
-      playerStats[player.player_id] = {
-        playerId: player.player_id,
-        name: player.name,
-        rating: player.current_rating,
-        tier: player.tier,
-        matches: 0,
-        opponents: new Set(),
-        byes: 0,
-        opponentRatings: [],
-        phases: [],
-        peer: 0,
-        stretching: 0,
-        anchoring: 0,
-      }
-    }
-    return playerStats[player.player_id]
-  }
-
   for (const slot of slots) {
     const category = getSlotCategory(slot)
     counts[category] = (counts[category] ?? 0) + 1
-
-    maxWavePerRound[slot.round_number] = Math.max(maxWavePerRound[slot.round_number] ?? 0, slot.wave_number)
-
-    const a = slot.player_a
-    const aStats = ensurePlayer(a)
-
-    const isBye = slot.status === 'BYE' || !slot.player_b
-    if (isBye) {
-      aStats.byes += 1
-      continue
-    }
-
-    const b = slot.player_b!
-    const bStats = ensurePlayer(b)
-
-    if (slot.player_b && slot.player_a) {
-      filledCount += 1
-      totalDelta += Math.abs(Math.round(a.current_rating) - Math.round(b.current_rating))
-      deltasCount += 1
-    }
-
-    const phase = { round_number: slot.round_number, wave_number: slot.wave_number }
-    aStats.phases.push(phase)
-    bStats.phases.push(phase)
-
-    const recordMatch = (selfStats: typeof aStats, opponent: FixtureSlot['player_a'], roleValue?: string) => {
-      selfStats.matches += 1
-      selfStats.opponents.add(opponent.player_id)
-      selfStats.opponentRatings.push(opponent.current_rating)
-      const role = normalizeRole(roleValue)
-      if (role === 'PEER') selfStats.peer += 1
-      else if (role === 'STRETCHING') selfStats.stretching += 1
-      else if (role === 'ANCHORING') selfStats.anchoring += 1
-    }
-
-    recordMatch(aStats, b, slot.player_a_role)
-    recordMatch(bStats, a, slot.player_b_role)
   }
 
-  const playerIds = Object.keys(playerStats)
-  const perPlayer = playerIds.map(pid => {
-    const stats = playerStats[pid]
-    const sos = stats.opponentRatings.length
-      ? stats.opponentRatings.reduce((sum, value) => sum + value, 0) / stats.opponentRatings.length
-      : 0
-    const phases = stats.phases.slice().sort((a, b) =>
-      a.round_number === b.round_number
-        ? a.wave_number - b.wave_number
-        : a.round_number - b.round_number,
-    )
-    let currentStreak = 0
-    let maxPlayStreak = 0
-    let prevPhase: { round_number: number; wave_number: number } | null = null
-    for (const phase of phases) {
-      if (!prevPhase) {
-        currentStreak = 1
-      } else {
-        const nextPhase = getNextChronoPhase(prevPhase, maxWavePerRound[prevPhase.round_number] ?? phase.wave_number)
-        if (phase.round_number === nextPhase.round_number && phase.wave_number === nextPhase.wave_number) {
-          currentStreak += 1
-        } else {
-          currentStreak = 1
-        }
-      }
-      maxPlayStreak = Math.max(maxPlayStreak, currentStreak)
-      prevPhase = phase
-    }
-
-    return {
-      playerId: stats.playerId,
-      name: stats.name,
-      rating: stats.rating,
-      tier: stats.tier,
-      matches: stats.matches,
-      uniqueOpponents: stats.opponents.size,
-      byes: stats.byes,
-      sos: Math.round(sos * 10) / 10,
-      maxPlayStreak,
-      peer: stats.peer,
-      stretching: stats.stretching,
-      anchoring: stats.anchoring,
-      atPoolCeiling: false, // will be computed after pool is complete
-    }
-  })
-
-  // Compute atPoolCeiling for each player: true if no other player is rated high enough to be a stretch
-  const maxPlayerRating = Math.max(...perPlayer.map(p => p.rating), 1000)
-  const stretchThreshold = diagnostics?.competitive_max_gap ?? 150 // use existing competitive gap as proxy
-  
-  const perPlayerWithCeiling = perPlayer.map(player => ({
-    ...player,
-    atPoolCeiling: !perPlayer.some(other =>
-      other.playerId !== player.playerId &&
-      other.rating > player.rating + stretchThreshold
-    ),
-  }))
-
-  // Intra-fairness: SoS balance + opponent variety + games equity
-  const filterableStats = perPlayerWithCeiling.filter(p => p.matches >= 2)
-  const ratingRelativeOffsets = filterableStats.map(player =>
-    Math.abs(player.rating - player.sos)
-  )
-  const sosSpread = ratingRelativeOffsets.length ? Math.max(...ratingRelativeOffsets) : 0
-  const dynamicCeiling = maxPlayerRating * 0.25
-  const sosBalanceScore = Math.max(0, 100 - Math.round((sosSpread / dynamicCeiling) * 100))
-
-  // Opponent variety: how many unique opponents each player faced / total matches
-  const opponentVarietyScores = filterableStats.map(player =>
-    player.matches > 0 ? (player.uniqueOpponents / player.matches) : 0
-  )
-  const avgOpponentVariety = opponentVarietyScores.length
-    ? opponentVarietyScores.reduce((sum, score) => sum + score, 0) / opponentVarietyScores.length
-    : 0
-  const opponentVarietyScore = Math.round(avgOpponentVariety * 100)
-
-  // Compute match statistics for games equity
-  const matchStats = perPlayer.map(p => p.matches)
-  const matchDelta = Math.max(...matchStats, 0) - Math.min(...matchStats, 0)
-  const avgMatches = matchStats.length ? matchStats.reduce((sum, val) => sum + val, 0) / matchStats.length : 0
-  const gamesEquityScore = Math.max(0, 100 - Math.round((matchDelta / Math.max(avgMatches, 1)) * 50))
-
-  // Fairness is weighted average: SoS (50%) + variety (30%) + games equity (20%)
-  const fairnessIndex = Math.round(sosBalanceScore * 0.5 + opponentVarietyScore * 0.3 + gamesEquityScore * 0.2)
-
-  const criticalTraps = perPlayerWithCeiling.filter(player => player.maxPlayStreak >= 3).length
-  const warningTraps = perPlayerWithCeiling.filter(player => player.maxPlayStreak === 2).length
-
-  const totalSlots = slots.length
+  const totalSlots = slots.length || 0
   const asPercent = (value: number) => (totalSlots ? clampPercentage((value / totalSlots) * 100) : 0)
   const percentages = {
     competitive: asPercent(counts.competitive),
@@ -259,26 +67,10 @@ export function analyzeFixtureSlots(
     bye: asPercent(counts.bye),
   }
 
-  const density = totalSlots ? Math.round((filledCount / totalSlots) * 100) : 0
-  const tightnessScore = deltasCount ? Number((totalDelta / deltasCount).toFixed(1)) : 0
-  const byeBalanced = counts.bye === 0 || counts.bye <= 1
-
   return {
-    totalSlots,
-    counts,
     percentages,
-    density,
-    tightnessScore,
-    byeBalanced,
-    outOfBandCount: counts.outOfBand,
-    byeCount: counts.bye,
-    diagnostics,
     bootstrapPhase: diagnostics?.bootstrap_phase ?? 'STANDARD',
     regime: diagnostics?.regime ?? null,
-    fairnessIndex,
-    sosSpread: Math.round(sosSpread * 10) / 10,
-    criticalTraps,
-    warningTraps,
   }
 }
 

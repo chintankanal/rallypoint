@@ -241,7 +241,7 @@ def compute_session_quality(
     isolated_ids = set()
     for p in all_players:
         has_nearby = any(
-            other.player_id != p.player_id and abs(other.rating - p.rating) < stretch_max_gap
+            other.player_id != p.player_id and abs(other.rating - p.rating) <= stretch_max_gap
             for other in all_players
         )
         if not has_nearby:

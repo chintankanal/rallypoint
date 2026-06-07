@@ -418,11 +418,23 @@ export function analyzeFixtureSlots(
   const stretchMaxGap = diagnostics?.stretch_max_gap ?? 250
   const filledSlots = Math.max(0, totalSlots - counts.bye)
 
-  const uniqueRatings = perPlayerWithCeiling.map(p => p.rating)
-  const minAchievableOutOfBand = uniqueRatings.reduce((count, rating, index) => {
-    const hasNearby = uniqueRatings.some((other, idx) => idx !== index && Math.abs(other - rating) <= stretchMaxGap)
-    return count + (hasNearby ? 0 : 1)
-  }, 0)
+  const isolatedIds = new Set(
+    perPlayerWithCeiling
+      .filter((p, i) =>
+        !perPlayerWithCeiling.some(
+          (o, j) =>
+            i !== j &&
+            Math.abs(o.rating - p.rating) <= stretchMaxGap
+        )
+      )
+      .map(p => p.playerId)
+  )
+  const minAchievableOutOfBand = slots.filter(
+    s =>
+      s.player_b &&
+      s.player_a &&
+      (isolatedIds.has(s.player_a.player_id) || isolatedIds.has(s.player_b.player_id))
+  ).length
   const excessOutOfBand = Math.max(0, counts.outOfBand - minAchievableOutOfBand)
   const competitiveRatio = filledSlots > 0
     ? Math.max(0, Math.min(1, 1 - excessOutOfBand / filledSlots))
@@ -477,7 +489,7 @@ export function analyzeFixtureSlots(
       key: 'competitive-balance',
       label: 'Competitive balance',
       achieved: competitiveApplicable
-        ? `${counts.outOfBand} out-of-band · avg gap ${tightnessScore} (within stretch band ≤${stretchMaxGap})`
+        ? `${counts.outOfBand} out-of-band${counts.outOfBand > 0 && excessOutOfBand === 0 ? ' (unavoidable)' : ''} · avg gap ${tightnessScore} (within stretch band ≤${stretchMaxGap})`
         : 'n/a',
       ratio: Math.max(0, Math.min(1, competitiveRatio)),
       verdict: competitiveVerdict,

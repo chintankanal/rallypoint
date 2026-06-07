@@ -418,23 +418,12 @@ function SessionsTab({ academyId }: { academyId: string }) {
   }
 
   const hasFixtures = !!fixtureResult || (openedSession?.generated_at != null)
-  const fixtureAnalytics = fixturesQ.data ? analyzeFixtureSlots(fixturesQ.data.slots, fixturesQ.data.diagnostics) : null
+  const fixtureAnalytics = fixturesQ.data ? analyzeFixtureSlots(
+    fixturesQ.data.slots,
+    fixturesQ.data.diagnostics,
+    { numTables: openedSession?.num_tables, sessionMinutes: openedSession?.session_minutes }
+  ) : null
   const bootstrapPhase = fixtureAnalytics?.bootstrapPhase ?? fixtureResult?.bootstrap_phase ?? openedSession?.bootstrap_phase ?? 'STANDARD'
-
-  const fairnessBadge = (index: number) => {
-    if (index >= 75) return { label: 'Balanced', className: 'bg-green-900 text-green-200' }
-    if (index >= 50) return { label: 'Moderate', className: 'bg-yellow-900 text-yellow-200' }
-    return { label: 'Unbalanced', className: 'bg-red-900 text-red-200' }
-  }
-
-  const topByePlayers = fixtureAnalytics
-    ? fixtureAnalytics.perPlayer
-        .filter(player => player.byes > 0)
-        .sort((a, b) => b.byes - a.byes || b.matches - a.matches)
-        .slice(0, 3)
-    : []
-
-  const formatSignedChallenge = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(1)}`
 
   return (
     <div className="space-y-5">
@@ -658,11 +647,9 @@ function SessionsTab({ academyId }: { academyId: string }) {
                       </div>
 
                       <div className="flex flex-col items-start gap-3 sm:items-end">
-                        <div className="text-xs uppercase tracking-[0.24em] text-gray-400">Fixture Fairness</div>
-                        <div className="text-3xl font-semibold text-white">{fixtureAnalytics.fairnessIndex}%</div>
-                        <span className={`inline-flex items-center rounded-full px-2 py-1 text-[10px] font-semibold ${fairnessBadge(fixtureAnalytics.fairnessIndex).className}`}>
-                          {fairnessBadge(fixtureAnalytics.fairnessIndex).label}
-                        </span>
+                        <div className="text-xs uppercase tracking-[0.24em] text-gray-400">Fixture Quality</div>
+                        <div className="text-3xl font-semibold text-white">{fixtureAnalytics.quality.overallLabel}</div>
+                        <span className="text-xs text-gray-400">{fixtureAnalytics.quality.overallScore}%</span>
                         <button
                           type="button"
                           onClick={() => setDiagnosticsExpanded(prev => !prev)}
@@ -676,179 +663,130 @@ function SessionsTab({ academyId }: { academyId: string }) {
 
                     {diagnosticsExpanded && (
                       <div className="space-y-4">
-                        <div className="grid gap-4 xl:grid-cols-[1.3fr_0.9fr]">
-                          <div className="space-y-4">
-                            <div className="text-xs uppercase tracking-[0.24em] text-gray-400">Matchup category mix</div>
-                            <div className="flex w-full h-3 overflow-hidden rounded-full bg-gray-800 border border-gray-700">
-                              {[
-                                { key: 'competitive', color: 'bg-blue-500', percentage: fixtureAnalytics.percentages.competitive },
-                                { key: 'stretch', color: 'bg-fuchsia-500', percentage: fixtureAnalytics.percentages.stretch },
-                                { key: 'anchor', color: 'bg-amber-500', percentage: fixtureAnalytics.percentages.anchor },
-                                { key: 'developmental', color: 'bg-slate-400', percentage: fixtureAnalytics.percentages.developmental },
-                                { key: 'outOfBand', color: 'bg-red-500', percentage: fixtureAnalytics.percentages.outOfBand },
-                                { key: 'bye', color: 'bg-gray-600', percentage: fixtureAnalytics.percentages.bye },
-                              ].map(category => (
-                                <div key={category.key}
-                                  className={`${category.color} h-full transition-all duration-200 ${activeCategoryFilter && activeCategoryFilter !== category.key ? 'opacity-30' : 'opacity-100'}`}
-                                  style={{ width: activeCategoryFilter ? (activeCategoryFilter === category.key ? `${category.percentage}%` : '0%') : `${category.percentage}%` }}
-                                />
-                              ))}
-                            </div>
-                            <div className="grid grid-cols-3 gap-2 text-[10px] uppercase tracking-[0.25em] text-gray-500">
-                              {[
-                                { key: 'competitive', label: 'Comp', color: 'bg-blue-500', value: fixtureAnalytics.percentages.competitive },
-                                { key: 'stretch', label: 'Stretch', color: 'bg-fuchsia-500', value: fixtureAnalytics.percentages.stretch },
-                                { key: 'anchor', label: 'Anchor', color: 'bg-amber-500', value: fixtureAnalytics.percentages.anchor },
-                                { key: 'developmental', label: 'Developmental', color: 'bg-slate-400', value: fixtureAnalytics.percentages.developmental },
-                                { key: 'outOfBand', label: 'Out-of-band', color: 'bg-red-500', value: fixtureAnalytics.percentages.outOfBand },
-                                { key: 'bye', label: 'Bye', color: 'bg-gray-600', value: fixtureAnalytics.percentages.bye },
-                              ].map(category => (
-                                <button key={category.key} type="button"
-                                  onClick={() => setActiveCategoryFilter(prev => prev === category.key ? null : category.key)}
-                                  className={`flex items-center gap-2 text-left ${activeCategoryFilter === category.key ? 'text-white font-semibold' : 'text-gray-400 hover:text-white'} focus:outline-none transition-colors`}>
-                                  <span className={`inline-block h-2 w-2 rounded-full ${category.color}`} />
-                                  {category.label} ({category.value}%)
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div className="grid gap-3">
-                            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 text-sm text-slate-200">
-                              <div className="text-xs uppercase tracking-[0.24em] text-gray-500">Rematch Rate</div>
-                              <div className="mt-2 text-lg font-semibold text-white">{fixtureAnalytics.rematchRate}%</div>
-                              <div className="text-xs text-gray-400 mt-1">
-                                {fixtureAnalytics.rematchRate === 0 ? 'No pairings repeat in this session.' : `${fixtureAnalytics.rematchRate}% of matchups repeat across rounds.`}
-                              </div>
-                            </div>
-                            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 text-sm text-slate-200">
-                              <div className="text-xs uppercase tracking-[0.24em] text-gray-500">Regime</div>
-                              <div className="mt-2 text-lg font-semibold text-white">{fixtureAnalytics.regime ?? 'Default'}</div>
-                              <div className="text-xs text-gray-400 mt-1">
-                                {fixtureAnalytics?.diagnostics
-                                  ? `Raw spread ${fixtureAnalytics.diagnostics.raw_spread != null ? Math.round(fixtureAnalytics.diagnostics.raw_spread) : '—'}, core spread ${fixtureAnalytics.diagnostics.core_spread != null ? Math.round(fixtureAnalytics.diagnostics.core_spread) : '—'}`
-                                  : 'No regime diagnostics available'}
-                              </div>
-                            </div>
-                            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 text-sm text-slate-200">
-                              <div className="text-xs uppercase tracking-[0.24em] text-gray-500">Provisional / gap thresholds</div>
-                              <div className="mt-2 text-lg font-semibold text-white">
-                                {fixtureAnalytics.diagnostics
-                                  ? `${fixtureAnalytics.diagnostics.provisional_count} of ${fixtureAnalytics.diagnostics.present_player_count} players provisional`
-                                  : '--'}
-                              </div>
-                              <div className="text-xs text-gray-400 mt-1">
-                                {fixtureAnalytics.diagnostics
-                                  ? `Competitive gap ≤ ${fixtureAnalytics.diagnostics.competitive_max_gap ?? '—'}, Stretch gap ≤ ${fixtureAnalytics.diagnostics.stretch_max_gap ?? '—'}`
-                                  : 'Diagnostics unavailable'}
-                              </div>
-                            </div>
-                          </div>
+                        {/* Narrative verdict */}
+                        <div className="rounded-2xl border border-gray-800 bg-gray-950/90 p-4 text-sm text-gray-300 leading-relaxed">
+                          {fixtureAnalytics.narrative.split('**').map((part, i) =>
+                            i % 2 === 0 ? part : <span key={i} className="font-semibold text-white">{part}</span>
+                          )}
                         </div>
 
-                        <div className="grid gap-3 sm:grid-cols-3">
-                          <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3 text-sm text-gray-400">
-                            <div className="text-[10px] uppercase tracking-[0.24em] text-gray-500">Matches</div>
-                            <div className="mt-3 space-y-1 text-white">
-                              <div>min {fixtureAnalytics.matchesSummary.min}</div>
-                              <div>avg {fixtureAnalytics.matchesSummary.avg}</div>
-                              <div>max {fixtureAnalytics.matchesSummary.max}</div>
-                            </div>
-                          </div>
-                          <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3 text-sm text-gray-400">
-                            <div className="text-[10px] uppercase tracking-[0.24em] text-gray-500">Unique opponents</div>
-                            <div className="mt-3 space-y-1 text-white">
-                              <div>min {fixtureAnalytics.uniqueOpponentsSummary.min}</div>
-                              <div>avg {fixtureAnalytics.uniqueOpponentsSummary.avg}</div>
-                              <div>max {fixtureAnalytics.uniqueOpponentsSummary.max}</div>
-                            </div>
-                          </div>
-                          <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3 text-sm text-gray-400">
-                            <div className="text-[10px] uppercase tracking-[0.24em] text-gray-500">Byes</div>
-                            <div className="mt-3 space-y-1 text-white">
-                              <div>min {fixtureAnalytics.byesSummary.min}</div>
-                              <div>avg {fixtureAnalytics.byesSummary.avg}</div>
-                              <div>max {fixtureAnalytics.byesSummary.max}</div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="grid gap-3 sm:grid-cols-3">
-                          <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3 text-sm text-gray-400">
-                            <div className="text-[10px] uppercase tracking-[0.24em] text-gray-500">No stretch exposure</div>
-                            <div className="mt-3 text-lg font-semibold text-white">{fixtureAnalytics.roleExposureSummary.noStretchExposureCount}</div>
-                          </div>
-                          <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3 text-sm text-gray-400">
-                            <div className="text-[10px] uppercase tracking-[0.24em] text-gray-500">Stretch opportunities</div>
-                            <div className="mt-2 space-y-1 text-white">
-                              <div>min {fixtureAnalytics.roleExposureSummary.stretchingSummary.min}</div>
-                              <div>avg {fixtureAnalytics.roleExposureSummary.stretchingSummary.avg}</div>
-                              <div>max {fixtureAnalytics.roleExposureSummary.stretchingSummary.max}</div>
-                            </div>
-                          </div>
-                          <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3 text-sm text-gray-400">
-                            <div className="text-[10px] uppercase tracking-[0.24em] text-gray-500">Signed challenge</div>
-                            <div className="mt-2 space-y-1 text-white">
-                              <div>min {formatSignedChallenge(fixtureAnalytics.roleExposureSummary.signedChallengeSummary.min)}</div>
-                              <div>avg {formatSignedChallenge(fixtureAnalytics.roleExposureSummary.signedChallengeSummary.avg)}</div>
-                              <div>max {formatSignedChallenge(fixtureAnalytics.roleExposureSummary.signedChallengeSummary.max)}</div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="rounded-2xl border border-gray-800 bg-gray-950/90 p-3 text-sm text-gray-300">
-                          <div className="text-xs uppercase tracking-[0.24em] text-gray-400">Development Focus</div>
-                          <div className="mt-2">
-                            Reflects development mix achievable for this pool; players at pool ceiling have limited stretch opponents.
-                          </div>
-                        </div>
-
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          {fixtureAnalytics.perPlayer.map(player => {
-                            const flags = []
-                            if (player.atPoolCeiling) flags.push('At pool ceiling')
-                            else if (player.stretching === 0) flags.push('No stretch exposure')
-                            return (
-                              <div key={player.playerId} className="rounded-2xl border border-gray-800 bg-slate-900/90 p-3">
-                                <div className="flex flex-wrap items-center justify-between gap-3">
-                                  <div className="min-w-0">
-                                    <div className="text-sm font-semibold text-white truncate">{player.name}</div>
-                                    <div className="text-xs text-gray-400 font-mono">{Math.round(player.rating)}</div>
-                                  </div>
-                                  <div className="text-right text-xs text-gray-400">
-                                    {formatSignedChallenge(player.signedChallenge)}
-                                  </div>
-                                </div>
-                                <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.24em] text-gray-400">
-                                  <span className="rounded-full bg-blue-500/10 text-blue-300 px-2 py-1">Peer {player.peer}</span>
-                                  <span className="rounded-full bg-fuchsia-500/10 text-fuchsia-300 px-2 py-1">Stretch {player.stretching}</span>
-                                  <span className="rounded-full bg-amber-500/10 text-amber-300 px-2 py-1">Anchor {player.anchoring}</span>
-                                </div>
-                                {flags.length > 0 && (
-                                  <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-gray-300">
-                                    {flags.map(flag => (
-                                      <span key={flag} className="rounded-full bg-white/5 px-2 py-1 text-xs text-gray-200">{flag}</span>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            )
-                          })}
-                        </div>
-
-                        {topByePlayers.length > 0 && (
-                          <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3 text-sm text-gray-300">
-                            <div className="text-[10px] uppercase tracking-[0.24em] text-gray-500 mb-2">Top benched players</div>
+                        {/* Two-column: Constraints vs Quality */}
+                        <div className="grid gap-4 lg:grid-cols-2">
+                          {/* Left: Constraints */}
+                          <div className="space-y-3">
+                            <div className="text-xs uppercase tracking-[0.24em] text-gray-400 font-semibold">What constrained this session?</div>
                             <div className="space-y-2">
-                              {topByePlayers.map(player => (
-                                <div key={player.playerId} className="flex items-center justify-between gap-3">
-                                  <span>{player.name}</span>
-                                  <span className="text-xs text-gray-400">{player.byes} bye{player.byes !== 1 ? 's' : ''}</span>
+                              <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3 text-sm">
+                                <div className="text-xs text-gray-500">Player count & parity</div>
+                                <div className="mt-1 text-white font-semibold">
+                                  {fixtureAnalytics.constraints.playerCount} players{fixtureAnalytics.constraints.parityForcesBye ? ' (odd → forced byes)' : ' (even)'}
                                 </div>
-                              ))}
+                              </div>
+                              {fixtureAnalytics.constraints.rawSpread != null && (
+                                <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3 text-sm">
+                                  <div className="text-xs text-gray-500">Rating spread</div>
+                                  <div className="mt-1 text-white font-semibold">Raw {Math.round(fixtureAnalytics.constraints.rawSpread)} · Core {Math.round(fixtureAnalytics.constraints.coreSpread ?? 0)}</div>
+                                </div>
+                              )}
+                              {Object.keys(fixtureAnalytics.constraints.tierDistribution).length > 0 && (
+                                <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3 text-sm">
+                                  <div className="text-xs text-gray-500">Tier distribution</div>
+                                  <div className="mt-1 text-white text-xs font-mono">
+                                    {Object.entries(fixtureAnalytics.constraints.tierDistribution)
+                                      .map(([tier, count]) => `${count} ${tier}`)
+                                      .join(' · ')}
+                                  </div>
+                                </div>
+                              )}
+                              {fixtureAnalytics.constraints.provisionalCount != null && (
+                                <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3 text-sm">
+                                  <div className="text-xs text-gray-500">Provisional players</div>
+                                  <div className="mt-1 text-white font-semibold">
+                                    {fixtureAnalytics.constraints.provisionalCount} of {fixtureAnalytics.constraints.playerCount}
+                                  </div>
+                                </div>
+                              )}
+                              <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3 text-sm">
+                                <div className="text-xs text-gray-500">Session structure</div>
+                                <div className="mt-1 text-white font-semibold text-xs">
+                                  {fixtureAnalytics.constraints.rounds} round{fixtureAnalytics.constraints.rounds !== 1 ? 's' : ''}{fixtureAnalytics.constraints.numTables ? ` · ${fixtureAnalytics.constraints.numTables} table${fixtureAnalytics.constraints.numTables !== 1 ? 's' : ''}` : ''}
+                                </div>
+                              </div>
+                              <div className="rounded-2xl border border-gray-800 bg-slate-950/70 p-3 text-sm">
+                                <div className="text-xs text-gray-500">Gap targets</div>
+                                <div className="mt-1 text-white text-xs font-mono">
+                                  Competitive ≤ {fixtureAnalytics.constraints.competitiveMaxGap ?? '—'} · Stretch ≤ {fixtureAnalytics.constraints.stretchMaxGap ?? '—'}
+                                </div>
+                              </div>
                             </div>
                           </div>
-                        )}
+
+                          {/* Right: Quality dimensions */}
+                          <div className="space-y-3">
+                            <div className="text-xs uppercase tracking-[0.24em] text-gray-400 font-semibold">How fairly it delivered</div>
+                            <div className="space-y-2">
+                              {fixtureAnalytics.quality.dimensions.map(dim => {
+                                const verdictColors = {
+                                  optimal: 'bg-emerald-900/30 border-emerald-700/50 text-emerald-200',
+                                  good: 'bg-blue-900/30 border-blue-700/50 text-blue-200',
+                                  limited: 'bg-amber-900/30 border-amber-700/50 text-amber-200',
+                                }
+                                return (
+                                  <div key={dim.key} className={`rounded-2xl border ${verdictColors[dim.verdict]} bg-slate-950/70 p-3 text-sm`}>
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="text-xs text-gray-400">{dim.label}</div>
+                                      <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-white/10 border border-white/20">
+                                        {dim.verdict === 'optimal' ? '✓ Optimal' : dim.verdict === 'good' ? '✓ Good' : '⚠ Limited'}
+                                      </span>
+                                    </div>
+                                    <div className="mt-2 text-white font-semibold">{dim.achieved}</div>
+                                    {dim.limitedBy && (
+                                      <div className="mt-1 text-xs text-gray-400">Limited by: {dim.limitedBy}</div>
+                                    )}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Category mix and rematch info */}
+                        <div className="space-y-3">
+                          <div className="text-xs uppercase tracking-[0.24em] text-gray-400">Matchup category mix</div>
+                          <div className="flex w-full h-3 overflow-hidden rounded-full bg-gray-800 border border-gray-700">
+                            {[
+                              { key: 'competitive', color: 'bg-blue-500', percentage: fixtureAnalytics.percentages.competitive },
+                              { key: 'stretch', color: 'bg-fuchsia-500', percentage: fixtureAnalytics.percentages.stretch },
+                              { key: 'anchor', color: 'bg-amber-500', percentage: fixtureAnalytics.percentages.anchor },
+                              { key: 'developmental', color: 'bg-slate-400', percentage: fixtureAnalytics.percentages.developmental },
+                              { key: 'outOfBand', color: 'bg-red-500', percentage: fixtureAnalytics.percentages.outOfBand },
+                              { key: 'bye', color: 'bg-gray-600', percentage: fixtureAnalytics.percentages.bye },
+                            ].map(category => (
+                              <div key={category.key}
+                                className={`${category.color} h-full transition-all duration-200 ${activeCategoryFilter && activeCategoryFilter !== category.key ? 'opacity-30' : 'opacity-100'}`}
+                                style={{ width: activeCategoryFilter ? (activeCategoryFilter === category.key ? `${category.percentage}%` : '0%') : `${category.percentage}%` }}
+                              />
+                            ))}
+                          </div>
+                          <div className="grid grid-cols-3 gap-2 text-[10px] uppercase tracking-[0.25em] text-gray-500">
+                            {[
+                              { key: 'competitive', label: 'Comp', color: 'bg-blue-500', value: fixtureAnalytics.percentages.competitive },
+                              { key: 'stretch', label: 'Stretch', color: 'bg-fuchsia-500', value: fixtureAnalytics.percentages.stretch },
+                              { key: 'anchor', label: 'Anchor', color: 'bg-amber-500', value: fixtureAnalytics.percentages.anchor },
+                              { key: 'developmental', label: 'Developmental', color: 'bg-slate-400', value: fixtureAnalytics.percentages.developmental },
+                              { key: 'outOfBand', label: 'Out-of-band', color: 'bg-red-500', value: fixtureAnalytics.percentages.outOfBand },
+                              { key: 'bye', label: 'Bye', color: 'bg-gray-600', value: fixtureAnalytics.percentages.bye },
+                            ].map(category => (
+                              <button key={category.key} type="button"
+                                onClick={() => setActiveCategoryFilter(prev => prev === category.key ? null : category.key)}
+                                className={`flex items-center gap-2 text-left ${activeCategoryFilter === category.key ? 'text-white font-semibold' : 'text-gray-400 hover:text-white'} focus:outline-none transition-colors`}>
+                                <span className={`inline-block h-2 w-2 rounded-full ${category.color}`} />
+                                {category.label} ({category.value}%)
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
                       </div>
                     )}
                   </div>

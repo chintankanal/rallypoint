@@ -80,7 +80,6 @@ export interface FixtureAnalytics {
   byeBalanced: boolean
   outOfBandCount: number
   byeCount: number
-  rematchRate: number
   diagnostics?: SessionDiagnostics
   bootstrapPhase: string
   regime: string | null
@@ -112,12 +111,6 @@ function getSlotCategory(slot: FixtureSlot): FixtureCategory {
   if (!slot.player_b) return 'bye'
   const meta = classifyCell(slot as any, slot.player_a as any, slot.player_b as any)
   return CATEGORY_MAP[meta.category] ?? 'unknown'
-}
-
-function getPairingKey(slot: FixtureSlot) {
-  if (!slot.player_a || !slot.player_b) return null
-  const ids = [slot.player_a.player_id, slot.player_b.player_id].sort()
-  return ids.join('|')
 }
 
 function clampPercentage(value: number) {
@@ -165,7 +158,6 @@ export function analyzeFixtureSlots(
   let filledCount = 0
   let totalDelta = 0
   let deltasCount = 0
-  const pairingCounts: Record<string, number> = {}
 
   const maxWavePerRound: Record<number, number> = {}
   const playerStats: Record<string, {
@@ -223,8 +215,6 @@ export function analyzeFixtureSlots(
 
     if (slot.player_b && slot.player_a) {
       filledCount += 1
-      const pairingKey = getPairingKey(slot)
-      if (pairingKey) pairingCounts[pairingKey] = (pairingCounts[pairingKey] ?? 0) + 1
       totalDelta += Math.abs(Math.round(a.current_rating) - Math.round(b.current_rating))
       deltasCount += 1
     }
@@ -357,8 +347,6 @@ export function analyzeFixtureSlots(
     bye: asPercent(counts.bye),
   }
 
-  const rematchCount = Object.values(pairingCounts).filter(count => count > 1).length
-  const rematchRate = filledCount > 0 ? Math.round((rematchCount / filledCount) * 100) : 0
   const density = totalSlots ? Math.round((filledCount / totalSlots) * 100) : 0
   const tightnessScore = deltasCount ? Number((totalDelta / deltasCount).toFixed(1)) : 0
   const byeBalanced = counts.bye === 0 || counts.bye <= 1
@@ -395,14 +383,26 @@ export function analyzeFixtureSlots(
   const stretchReachLimitedBy = stretchReachRatio < 0.9 ? 'few higher-rated opponents in pool' : undefined
 
   const competitiveTarget = diagnostics?.competitive_max_gap ?? 150
-  const competitiveRatio = competitiveTarget > 0 ? Math.min(1, (competitiveTarget - tightnessScore) / competitiveTarget) : 1.0
+  const filledSlots = Math.max(0, totalSlots - counts.bye)
+  const outOfBandFraction = filledSlots > 0 ? counts.outOfBand / filledSlots : 0
+  const competitiveRatio = Math.max(0, Math.min(1, 1 - outOfBandFraction))
   const competitiveVerdict: Verdict = competitiveRatio >= 0.85 ? 'optimal' : competitiveRatio >= 0.65 ? 'good' : 'limited'
+  const competitiveLimitedBy = competitiveVerdict === 'limited'
+    ? 'wide rating spread forced some out-of-band pairings'
+    : undefined
 
-  const opponentVarietyRatio = rounds > 0 ? Math.min(1, uniqueOpponentsSummary.avg / rounds) : 1.0
+  const varietyDenominator = rounds > 0 ? Math.min(rounds, Math.max(0, playerCount - 1)) : 1
+  const opponentVarietyRatio = rounds > 0 ? Math.min(1, uniqueOpponentsSummary.avg / Math.max(1, varietyDenominator)) : 1.0
   const varietyVerdict: Verdict = opponentVarietyRatio >= 0.8 ? 'optimal' : opponentVarietyRatio >= 0.6 ? 'good' : 'limited'
+  const varietyLimitedBy = varietyVerdict === 'limited'
+    ? 'small pool forces rematches across rounds'
+    : undefined
 
   const gameEquityRatio = matchesSummary.max > 0 ? matchesSummary.min / matchesSummary.max : 1.0
   const equityVerdict: Verdict = gameEquityRatio >= 0.85 ? 'optimal' : gameEquityRatio >= 0.7 ? 'good' : 'limited'
+  const equityLimitedBy = equityVerdict === 'limited'
+    ? 'table/round capacity yields uneven match counts'
+    : undefined
 
   const unavoidableByes = parityForcesBye ? rounds : 0
   const byesRatio = counts.bye <= unavoidableByes ? 1.0 : (unavoidableByes / counts.bye)
@@ -413,9 +413,10 @@ export function analyzeFixtureSlots(
     {
       key: 'competitive-balance',
       label: 'Competitive balance',
-      achieved: `${tightnessScore} avg gap`,
+      achieved: `${counts.outOfBand} out-of-band (${tightnessScore} avg gap, target ≤${competitiveTarget})`,
       ratio: Math.max(0, Math.min(1, competitiveRatio)),
       verdict: competitiveVerdict,
+      limitedBy: competitiveLimitedBy,
     },
     {
       key: 'opponent-variety',
@@ -423,6 +424,7 @@ export function analyzeFixtureSlots(
       achieved: `${uniqueOpponentsSummary.avg.toFixed(1)} unique per player`,
       ratio: Math.max(0, Math.min(1, opponentVarietyRatio)),
       verdict: varietyVerdict,
+      limitedBy: varietyLimitedBy,
     },
     {
       key: 'game-equity',
@@ -430,6 +432,7 @@ export function analyzeFixtureSlots(
       achieved: `${gameEquityRatio.toFixed(2)} ratio (min/max)`,
       ratio: Math.max(0, Math.min(1, gameEquityRatio)),
       verdict: equityVerdict,
+      limitedBy: equityLimitedBy,
     },
     {
       key: 'rest-distribution',
@@ -464,15 +467,27 @@ export function analyzeFixtureSlots(
   const strengths: string[] = []
   if (competitiveVerdict === 'optimal') strengths.push('excellent competitive balance')
   if (varietyVerdict === 'optimal') strengths.push('strong opponent variety')
+  if (equityVerdict === 'optimal') strengths.push('strong game equity')
+  if (byesVerdict === 'optimal') strengths.push('balanced rest distribution')
+
   const limitedDimensions = dimensions.filter(d => d.verdict === 'limited')
-  const limitingConstraint = limitedDimensions.length > 0 ? limitedDimensions[0].limitedBy : null
+  const limitingDim = limitedDimensions
+    .filter(d => d.limitedBy)
+    .sort((a, b) => a.ratio - b.ratio)[0]
+    ?? limitedDimensions[0]
+  const limitingConstraint = limitingDim?.limitedBy ?? null
+
   let narrativeText = `Fixture quality is **${overallLabel}**. `
   if (strengths.length > 0) {
     narrativeText += `Highlights: ${strengths.join(', ')}. `
   }
   if (limitedDimensions.length > 0) {
     const limitedNames = limitedDimensions.map(d => d.label.toLowerCase()).join(', ')
-    narrativeText += `Limited by **${limitingConstraint}**: ${limitedNames} affected.`
+    if (limitingConstraint) {
+      narrativeText += `Limited by **${limitingConstraint}**: ${limitedNames} affected.`
+    } else {
+      narrativeText += `Limited: ${limitedNames} affected.`
+    }
   } else {
     narrativeText += 'Excellent fixture quality across all dimensions.'
   }
@@ -487,7 +502,6 @@ export function analyzeFixtureSlots(
     byeBalanced,
     outOfBandCount: counts.outOfBand,
     byeCount: counts.bye,
-    rematchRate,
     diagnostics,
     bootstrapPhase: diagnostics?.bootstrap_phase ?? 'STANDARD',
     regime: diagnostics?.regime ?? null,

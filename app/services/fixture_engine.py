@@ -37,6 +37,7 @@ from app.services.fixture_config import (
 from app.services.pairing_solver import solve_round_with_fallback
 from app.services.rating_regime import (
     REGIME_DEVELOPING,
+    RegimeThresholds,
     detect_pool_regime,
     regime_thresholds,
 )
@@ -54,6 +55,16 @@ def _safe_load_fixture_config() -> FixtureConfig:
         return load_fixture_config()
     except Exception:
         return DEFAULT_FIXTURE_CONFIG
+
+
+def _resolve_regime_thresholds(
+    players: list[dict],
+    cfg: FixtureConfig | None = None,
+) -> RegimeThresholds:
+    """Resolve per-pool gap thresholds using the detected rating regime."""
+    fcfg = cfg or _safe_load_fixture_config()
+    regime = detect_pool_regime(players, cfg=fcfg)
+    return regime_thresholds(regime, cfg=fcfg)
 
 
 def _build_rematch_context(
@@ -78,15 +89,15 @@ def _build_rematch_context(
 _MATCH_DURATION = {"BEST_OF_3": 20, "BEST_OF_5": 30, "BEST_OF_7": 40}
 _CHANGEOVER = 5
 
-# Gap thresholds. Critique §8 will move these into config in Phase 5; for now
-# they remain module constants tied to the rating-eligible cap of 500 enforced
-# by match_service.
-_COMPETITIVE_MAX = 100   # gap ≤ 100 → COMPETITIVE
-_STRETCH_MAX = 250       # gap 100 < x ≤ 250 → STRETCH
+# Gap thresholds are now regime-driven and sourced from fixture config.
+# The engine still preserves the hard exception cap used to convert extreme
+# leftover pairings into BYEs rather than rating-ineligible matches.
+_COMPETITIVE_MAX = 100   # fallback default for direct internal callers
+_STRETCH_MAX = 250       # fallback default for direct internal callers
 # Critique §2c: forced-exception pairings (singleton tiers, unsalvageable
-# leftovers) may exceed STRETCH but must remain ≤ MAX_EXCEPTION_GAP. Beyond this
-# cap the engine emits a BYE rather than a pairing match_service would reject as
-# not-rating-eligible.
+# leftovers) may exceed the stretch band but must remain ≤ MAX_EXCEPTION_GAP.
+# Beyond this cap the engine emits a BYE rather than a pairing match_service
+# would reject as not-rating-eligible.
 _MAX_EXCEPTION_GAP = 500
 
 # Slot semantic vocabulary — keep aligned with sql/fixture_slot.sql enums.
@@ -252,11 +263,11 @@ def _gap(players_by_id: dict, pid_a: str, pid_b: str) -> float:
     )
 
 
-def _classify_gap(gap: float) -> str:
+def _classify_gap(gap: float, thresholds: RegimeThresholds) -> str:
     """Map a rating gap to its gap_band label (per-slot, derived from gap only)."""
-    if gap <= _COMPETITIVE_MAX:
+    if gap <= thresholds.competitive_max_gap:
         return _BAND_COMPETITIVE
-    if gap <= _STRETCH_MAX:
+    if gap <= thresholds.stretch_max_gap:
         return _BAND_STRETCH
     return _BAND_OUT_OF_BAND
 
@@ -309,6 +320,7 @@ def _build_slot(
     player_a_id: str,
     player_b_id: str | None,
     fixture_strategy: str,
+    thresholds: RegimeThresholds,
 ) -> dict:
     """
     Construct a fully-populated slot dict including additive fields
@@ -338,7 +350,7 @@ def _build_slot(
 
     canon_a, canon_b = _canonical(player_a_id, player_b_id)
     gap = _gap(players_by_id, canon_a, canon_b)
-    band = _classify_gap(gap)
+    band = _classify_gap(gap, thresholds)
     role_a, role_b = _derive_roles(round_intent, band, players_by_id, canon_a, canon_b)
     return {
         "round_number": round_number,
@@ -366,6 +378,7 @@ def _assign_tables(
     round_intent: str,
     players_by_id: dict,
     strategy: str = "TIER_MATCHED",
+    thresholds: RegimeThresholds | None = None,
 ) -> list[dict]:
     """
     Assign pairs to (wave_number, table_number) via the session scheduler.
@@ -387,6 +400,8 @@ def _assign_tables(
     if not cleaned:
         return []
 
+    resolved_thresholds = thresholds or regime_thresholds(REGIME_DEVELOPING)
+
     def _to_slot(pid_a, pid_b, wave_number, table_number, sub_round):
         return _build_slot(
             round_number=round_number,
@@ -398,6 +413,7 @@ def _assign_tables(
             player_a_id=pid_a,
             player_b_id=pid_b,
             fixture_strategy=strategy,
+            thresholds=resolved_thresholds,
         )
 
     return schedule_round(cleaned, num_tables, _to_slot)
@@ -445,6 +461,7 @@ def generate_discovery_fixtures(
     round_offset: int,
     matches_per_player: int,
     num_tables: int,
+    thresholds: RegimeThresholds | None = None,
 ) -> list[dict]:
     """
     Round-robin via circle method.
@@ -460,12 +477,20 @@ def generate_discovery_fixtures(
     total_rounds = (n if n % 2 == 1 else n - 1)  # full round-robin cycle
 
     slots: list[dict] = []
+    resolved_thresholds = thresholds or regime_thresholds(REGIME_DEVELOPING)
     for step in range(matches_per_player):
         round_idx = (round_offset + step) % total_rounds
         pairs = _circle_round(players, round_idx)
         round_number = round_offset + step + 1
         slots.extend(
-            _assign_tables(pairs, num_tables, round_number, _INTENT_COMPETITIVE, players_by_id)
+            _assign_tables(
+                pairs,
+                num_tables,
+                round_number,
+                _INTENT_COMPETITIVE,
+                players_by_id,
+                thresholds=resolved_thresholds,
+            )
         )
     return slots
 
@@ -544,6 +569,7 @@ def generate_transition_fixtures(
     matches_per_player: int,
     num_tables: int,
     round_offset: int = 0,
+    thresholds: RegimeThresholds | None = None,
 ) -> list[dict]:
     """
     Sort by rating desc and split at the median. Competitive rounds pair
@@ -575,7 +601,12 @@ def generate_transition_fixtures(
             pairs = _cross_half_pairs(upper_pids, lower_pids, stretch_done)
             stretch_done += 1
             slots.extend(_assign_tables(
-                pairs, num_tables, round_number, _INTENT_DEVELOPMENTAL, players_by_id
+                pairs,
+                num_tables,
+                round_number,
+                _INTENT_DEVELOPMENTAL,
+                players_by_id,
+                thresholds=thresholds,
             ))
         else:
             shift = competitive_done
@@ -583,8 +614,12 @@ def generate_transition_fixtures(
             pairs_lower = _half_round_pairs(lower_pids, shift)
             competitive_done += 1
             slots.extend(_assign_tables(
-                pairs_upper + pairs_lower, num_tables, round_number,
-                _INTENT_COMPETITIVE, players_by_id,
+                pairs_upper + pairs_lower,
+                num_tables,
+                round_number,
+                _INTENT_COMPETITIVE,
+                players_by_id,
+                thresholds=thresholds,
             ))
 
     return slots
@@ -598,6 +633,7 @@ def generate_standard_fixtures(
     matches_per_player: int,
     num_tables: int,
     round_offset: int = 0,
+    thresholds: RegimeThresholds | None = None,
 ) -> list[dict]:
     """
     Standard algorithm:
@@ -616,6 +652,7 @@ def generate_standard_fixtures(
     from app.utils.rating_math import get_tier, _load_config
 
     cfg = _load_config()
+    thresholds = thresholds or _resolve_regime_thresholds(players)
     sorted_players = sorted(players, key=lambda p: float(p["current_rating"]), reverse=True)
     players_by_id = {p["player_id"]: p for p in players}
     n = len(sorted_players)
@@ -692,8 +729,8 @@ def generate_standard_fixtures(
             max_gap=_MAX_EXCEPTION_GAP,
             rematch_ctx=rematch_ctx,
             rematch_phase="STANDARD",
-            competitive_max=_COMPETITIVE_MAX,
-            stretch_max=_STRETCH_MAX,
+            competitive_max=thresholds.competitive_max_gap,
+            stretch_max=thresholds.stretch_max_gap,
         )
         pairs.extend(solver_pairs)
         for pid in solver_byes:
@@ -728,14 +765,14 @@ def generate_standard_fixtures(
             for offset in range(fold, n - k):
                 pid_b = pids[k + offset]
                 gap = _gap(players_by_id, priority_pid, pid_b)
-                if gap > _STRETCH_MAX:
+                if gap > thresholds.stretch_max_gap:
                     break  # short-circuit: gap only grows from here
                 if pid_b in used:
                     continue
                 canon = _canonical(priority_pid, pid_b)
                 if canon in all_exclude:
                     continue
-                if gap >= _COMPETITIVE_MAX:
+                if gap >= thresholds.competitive_max_gap:
                     pairs.append(canon)
                     used.add(priority_pid)
                     used.add(pid_b)
@@ -749,14 +786,14 @@ def generate_standard_fixtures(
             for offset in range(fold, n - k):
                 pid_b = pids[k + offset]
                 gap = _gap(players_by_id, pid_a, pid_b)
-                if gap > _STRETCH_MAX:
+                if gap > thresholds.stretch_max_gap:
                     break  # short-circuit: gap monotonic, no closer candidate later
                 if pid_b in used:
                     continue
                 canon = _canonical(pid_a, pid_b)
                 if canon in all_exclude:
                     continue
-                if gap < _COMPETITIVE_MAX:
+                if gap < thresholds.competitive_max_gap:
                     continue
                 pairs.append(canon)
                 used.add(pid_a)
@@ -810,22 +847,32 @@ def generate_standard_fixtures(
                     max_gap=_MAX_EXCEPTION_GAP,
                     rematch_ctx=rematch_ctx,
                     rematch_phase="STANDARD",
-                    competitive_max=_COMPETITIVE_MAX,
-                    stretch_max=_STRETCH_MAX,
+                    competitive_max=thresholds.competitive_max_gap,
+                    stretch_max=thresholds.stretch_max_gap,
                 )
                 pairs.extend(solver_pairs)
                 for pid in solver_byes:
                     pairs.append((pid, None))
 
             slots.extend(_assign_tables(
-                pairs, num_tables, round_number, _INTENT_DEVELOPMENTAL, players_by_id
+                pairs,
+                num_tables,
+                round_number,
+                _INTENT_DEVELOPMENTAL,
+                players_by_id,
+                thresholds=thresholds,
             ))
         else:
             pairs = competitive_pairs(competitive_shift, bye_rotation=competitive_shift)
             bye_list = [p[0] for p in pairs if p[1] is None]
             last_bye_pid = bye_list[0] if bye_list else None
             slots.extend(_assign_tables(
-                pairs, num_tables, round_number, _INTENT_COMPETITIVE, players_by_id
+                pairs,
+                num_tables,
+                round_number,
+                _INTENT_COMPETITIVE,
+                players_by_id,
+                thresholds=thresholds,
             ))
             competitive_shift += 1
 
@@ -846,6 +893,7 @@ def generate_fixtures(
     session_minutes: int,
     num_tables: int,
     match_format: str,
+    cfg: FixtureConfig | None = None,
 ) -> dict:
     """
     Main entry point. Returns:
@@ -863,6 +911,9 @@ def generate_fixtures(
     num_rounds = capacity["num_rounds"]  # Bug 1 fix: use round count, not per-player count
     mpp = capacity["matches_per_player"]
 
+    fcfg = cfg or _safe_load_fixture_config()
+    thresholds = _resolve_regime_thresholds(players, cfg=fcfg)
+
     # Critique §19: small sessions skip phase-based heuristics entirely and run a
     # pure round-robin (discovery generator). Phase is still reported truthfully
     # so callers don't see DISCOVERY when the spread says otherwise.
@@ -870,7 +921,9 @@ def generate_fixtures(
         phase = detect_phase(players)
         if num_rounds == 0:
             return {"phase": phase, "spread": spread, "matches_per_player": 0, "slots": []}
-        slots = generate_discovery_fixtures(players, round_offset, num_rounds, num_tables)
+        slots = generate_discovery_fixtures(
+            players, round_offset, num_rounds, num_tables, thresholds=thresholds,
+        )
         return {"phase": phase, "spread": spread, "matches_per_player": mpp, "slots": slots}
 
     phase = detect_phase(players)
@@ -878,14 +931,25 @@ def generate_fixtures(
         return {"phase": phase, "spread": spread, "matches_per_player": 0, "slots": []}
 
     if phase == "DISCOVERY":
-        slots = generate_discovery_fixtures(players, round_offset, num_rounds, num_tables)
+        slots = generate_discovery_fixtures(
+            players, round_offset, num_rounds, num_tables, thresholds=thresholds,
+        )
     elif phase == "TRANSITION":
         slots = generate_transition_fixtures(
-            players, num_rounds, num_tables, round_offset=round_offset,
+            players,
+            num_rounds,
+            num_tables,
+            round_offset=round_offset,
+            thresholds=thresholds,
         )
     else:
         slots = generate_standard_fixtures(
-            players, recent_match_pairs, num_rounds, num_tables, round_offset=round_offset,
+            players,
+            recent_match_pairs,
+            num_rounds,
+            num_tables,
+            round_offset=round_offset,
+            thresholds=thresholds,
         )
 
     return {
@@ -1024,6 +1088,7 @@ def _assign_tables_league(
     strategy: str,
     round_intent: str = _INTENT_COMPETITIVE,
     num_tables: int = 9999,
+    thresholds: RegimeThresholds | None = None,
 ) -> list[dict]:
     """
     Schedule league pairs into (wave_number, table_number) via the session
@@ -1044,6 +1109,8 @@ def _assign_tables_league(
     if not cleaned:
         return []
 
+    resolved_thresholds = thresholds or regime_thresholds(REGIME_DEVELOPING)
+
     def _to_slot(pid_a, pid_b, wave_number, table_number, sub_round):
         return _build_slot(
             round_number=round_number,
@@ -1055,6 +1122,7 @@ def _assign_tables_league(
             player_a_id=pid_a,
             player_b_id=pid_b,
             fixture_strategy=strategy,
+            thresholds=resolved_thresholds,
         )
 
     return schedule_round(cleaned, num_tables, _to_slot)

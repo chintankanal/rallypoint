@@ -15,6 +15,7 @@ import pytest
 
 from app.services.fixture_engine import (
     _canonical,
+    _classify_gap,
     _circle_round,
     calculate_session_capacity,
     detect_phase,
@@ -24,6 +25,11 @@ from app.services.fixture_engine import (
     generate_standard_fixtures,
     generate_transition_fixtures,
     rating_spread,
+)
+from app.services.rating_regime import (
+    REGIME_DEVELOPING,
+    REGIME_VOLATILE_LOW,
+    regime_thresholds,
 )
 
 
@@ -72,6 +78,14 @@ def test_rating_spread():
 
 def test_rating_spread_single_player():
     assert rating_spread([{"player_id": "a", "current_rating": 1000.0}]) == 0.0
+
+
+def test_classify_gap_uses_regime_thresholds():
+    vol_thresholds = regime_thresholds(REGIME_VOLATILE_LOW)
+    dev_thresholds = regime_thresholds(REGIME_DEVELOPING)
+
+    assert _classify_gap(130.0, vol_thresholds) == "COMPETITIVE"
+    assert _classify_gap(130.0, dev_thresholds) == "STRETCH"
 
 
 # ── Session capacity ───────────────────────────────────────────────────────────

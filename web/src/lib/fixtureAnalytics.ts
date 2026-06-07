@@ -49,6 +49,7 @@ export interface QualityDimension {
   ratio: number
   verdict: Verdict
   limitedBy?: string
+  guidance?: string
 }
 
 export interface Constraints {
@@ -381,8 +382,11 @@ export function analyzeFixtureSlots(
   const stretchReachRatio = eligibleForStretch > 0 ? achievedStretchCount / eligibleForStretch : 1.0
   const stretchReachVerdict: Verdict = stretchReachRatio >= 0.9 ? 'optimal' : stretchReachRatio >= 0.7 ? 'good' : 'limited'
   const stretchReachLimitedBy = stretchReachRatio < 0.9 ? 'few higher-rated opponents in pool' : undefined
+  const stretchReachGuidance = stretchReachVerdict === 'limited'
+    ? "Expected for this group's rating spread — no action needed. To add play-up matches, invite higher-rated players."
+    : undefined
 
-  const competitiveTarget = diagnostics?.competitive_max_gap ?? 150
+  const stretchMaxGap = diagnostics?.stretch_max_gap ?? 250
   const filledSlots = Math.max(0, totalSlots - counts.bye)
   const outOfBandFraction = filledSlots > 0 ? counts.outOfBand / filledSlots : 0
   const competitiveRatio = Math.max(0, Math.min(1, 1 - outOfBandFraction))
@@ -390,12 +394,19 @@ export function analyzeFixtureSlots(
   const competitiveLimitedBy = competitiveVerdict === 'limited'
     ? 'wide rating spread forced some out-of-band pairings'
     : undefined
+  const competitiveGuidance = competitiveVerdict === 'limited'
+    ? 'Some matches exceeded the stretch band — split the pool by tier or add tables/rounds.'
+    : undefined
 
-  const varietyDenominator = rounds > 0 ? Math.min(rounds, Math.max(0, playerCount - 1)) : 1
-  const opponentVarietyRatio = rounds > 0 ? Math.min(1, uniqueOpponentsSummary.avg / Math.max(1, varietyDenominator)) : 1.0
+  const varietyCeiling = rounds > 0 ? Math.min(rounds, Math.max(0, playerCount - 1)) : 0
+  const varietyDenominator = Math.max(1, varietyCeiling)
+  const opponentVarietyRatio = rounds > 0 ? Math.min(1, uniqueOpponentsSummary.avg / varietyDenominator) : 1.0
   const varietyVerdict: Verdict = opponentVarietyRatio >= 0.8 ? 'optimal' : opponentVarietyRatio >= 0.6 ? 'good' : 'limited'
   const varietyLimitedBy = varietyVerdict === 'limited'
     ? 'small pool forces rematches across rounds'
+    : undefined
+  const varietyGuidance = varietyVerdict === 'limited'
+    ? 'Pool is small relative to rounds, so some rematches are unavoidable — add players or reduce rounds for more variety.'
     : undefined
 
   const gameEquityRatio = matchesSummary.max > 0 ? matchesSummary.min / matchesSummary.max : 1.0
@@ -403,52 +414,69 @@ export function analyzeFixtureSlots(
   const equityLimitedBy = equityVerdict === 'limited'
     ? 'table/round capacity yields uneven match counts'
     : undefined
+  const equityGuidance = equityVerdict === 'limited'
+    ? 'Uneven match counts from table/round capacity — add a table or adjust rounds.'
+    : undefined
 
   const unavoidableByes = parityForcesBye ? rounds : 0
   const byesRatio = counts.bye <= unavoidableByes ? 1.0 : (unavoidableByes / counts.bye)
   const byesVerdict: Verdict = counts.bye === unavoidableByes ? 'optimal' : counts.bye <= unavoidableByes + 1 ? 'good' : 'limited'
   const byesLimitedBy = counts.bye > unavoidableByes ? 'odd player count' : undefined
+  const byesGuidance = byesVerdict === 'limited'
+    ? 'Odd player count forces a bye each round — add or drop a player for full pairing.'
+    : undefined
+
+  const gameEquityDisplay = matchesSummary.min === matchesSummary.max
+    ? `all played ${matchesSummary.max}`
+    : `min ${matchesSummary.min} / max ${matchesSummary.max}`
 
   const dimensions: QualityDimension[] = [
     {
       key: 'competitive-balance',
       label: 'Competitive balance',
-      achieved: `${counts.outOfBand} out-of-band (${tightnessScore} avg gap, target ≤${competitiveTarget})`,
+      achieved: `${counts.outOfBand} out-of-band · avg gap ${tightnessScore} (within stretch band ≤${stretchMaxGap})`,
       ratio: Math.max(0, Math.min(1, competitiveRatio)),
       verdict: competitiveVerdict,
       limitedBy: competitiveLimitedBy,
+      guidance: competitiveGuidance,
     },
     {
       key: 'opponent-variety',
       label: 'Opponent variety',
-      achieved: `${uniqueOpponentsSummary.avg.toFixed(1)} unique per player`,
+      achieved: varietyCeiling > 0 ? `${uniqueOpponentsSummary.avg.toFixed(1)} of ${varietyCeiling} possible` : 'n/a',
       ratio: Math.max(0, Math.min(1, opponentVarietyRatio)),
       verdict: varietyVerdict,
       limitedBy: varietyLimitedBy,
+      guidance: varietyGuidance,
     },
     {
       key: 'game-equity',
       label: 'Game equity',
-      achieved: `${gameEquityRatio.toFixed(2)} ratio (min/max)`,
+      achieved: gameEquityDisplay,
       ratio: Math.max(0, Math.min(1, gameEquityRatio)),
       verdict: equityVerdict,
       limitedBy: equityLimitedBy,
+      guidance: equityGuidance,
     },
     {
       key: 'rest-distribution',
       label: 'Rest distribution',
-      achieved: `${counts.bye} bye${counts.bye !== 1 ? 's' : ''}${unavoidableByes > 0 ? ` (${unavoidableByes} unavoidable)` : ''}`,
+      achieved: `${counts.bye} of ${unavoidableByes} unavoidable bye${unavoidableByes !== 1 ? 's' : ''}`,
       ratio: Math.max(0, Math.min(1, byesRatio)),
       verdict: byesVerdict,
       limitedBy: byesLimitedBy,
+      guidance: byesGuidance,
     },
     {
       key: 'stretch-reach',
       label: 'Stretch reach',
-      achieved: `${achievedStretchCount} of ${eligibleForStretch} players`,
+      achieved: eligibleForStretch > 0
+        ? `${achievedStretchCount} of ${eligibleForStretch} eligible · ${playerCount - eligibleForStretch} at pool ceiling`
+        : 'n/a',
       ratio: Math.max(0, Math.min(1, stretchReachRatio)),
       verdict: stretchReachVerdict,
       limitedBy: stretchReachLimitedBy,
+      guidance: stretchReachGuidance,
     },
   ]
 

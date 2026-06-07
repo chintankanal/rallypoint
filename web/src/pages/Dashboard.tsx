@@ -731,17 +731,37 @@ function SessionsTab({ academyId }: { academyId: string }) {
                                   good: 'bg-blue-900/30 border-blue-700/50 text-blue-200',
                                   limited: 'bg-amber-900/30 border-amber-700/50 text-amber-200',
                                 }
+                                const dimensionHelpText: Record<string, string> = {
+                                  'competitive-balance': 'Share of matches kept within sane rating bands — only out-of-band pairings count against this.',
+                                  'opponent-variety': 'Average distinct opponents per player vs the most possible given rounds and pool size.',
+                                  'game-equity': 'How evenly match counts are spread (1.00 = everyone played the same number).',
+                                  'rest-distribution': 'Byes given vs the minimum unavoidable for this pool size.',
+                                  'stretch-reach': 'Of players who had a higher-rated opponent available, how many got a play-up match.',
+                                }
                                 return (
                                   <div key={dim.key} className={`rounded-2xl border ${verdictColors[dim.verdict]} bg-slate-950/70 p-3 text-sm`}>
                                     <div className="flex items-center justify-between gap-2">
-                                      <div className="text-xs text-gray-400">{dim.label}</div>
+                                      <div className="flex items-center gap-1">
+                                        <div className="text-xs text-gray-400">{dim.label}</div>
+                                        <span
+                                          title={dimensionHelpText[dim.key] || ''}
+                                          className="text-gray-500 hover:text-gray-300 cursor-help text-[10px] font-bold leading-none"
+                                        >
+                                          ⓘ
+                                        </span>
+                                      </div>
                                       <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-white/10 border border-white/20">
                                         {dim.verdict === 'optimal' ? '✓ Optimal' : dim.verdict === 'good' ? '✓ Good' : '⚠ Limited'}
                                       </span>
                                     </div>
                                     <div className="mt-2 text-white font-semibold">{dim.achieved}</div>
                                     {dim.limitedBy && (
-                                      <div className="mt-1 text-xs text-gray-400">Limited by: {dim.limitedBy}</div>
+                                      <div className="mt-1 text-xs text-gray-400">
+                                        <div>Limited by: {dim.limitedBy}</div>
+                                        {dim.guidance && (
+                                          <div className="mt-1 text-gray-500 text-[11px]">{dim.guidance}</div>
+                                        )}
+                                      </div>
                                     )}
                                   </div>
                                 )

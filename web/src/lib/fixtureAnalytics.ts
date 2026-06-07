@@ -22,7 +22,6 @@ export interface RoleExposureSummary {
   stretchingSummary: SummaryStat
   anchoringSummary: SummaryStat
   peerSummary: SummaryStat
-  signedChallengeSummary: SummaryStat
 }
 
 export interface FixturePlayerAnalytics {
@@ -39,7 +38,37 @@ export interface FixturePlayerAnalytics {
   stretching: number
   anchoring: number
   atPoolCeiling: boolean
-  signedChallenge: number
+}
+
+export type Verdict = 'optimal' | 'good' | 'limited'
+
+export interface QualityDimension {
+  key: string
+  label: string
+  achieved: string
+  ratio: number
+  verdict: Verdict
+  limitedBy?: string
+}
+
+export interface Constraints {
+  playerCount: number
+  parityForcesBye: boolean
+  rawSpread: number | null
+  coreSpread: number | null
+  tierDistribution: Record<string, number>
+  provisionalCount: number | null
+  rounds: number
+  numTables?: number
+  regime: string | null
+  competitiveMaxGap: number | null
+  stretchMaxGap: number | null
+}
+
+export interface QualityReport {
+  dimensions: QualityDimension[]
+  overallScore: number
+  overallLabel: 'Strong' | 'Good' | 'Fair' | 'Constrained'
 }
 
 export interface FixtureAnalytics {
@@ -64,6 +93,9 @@ export interface FixtureAnalytics {
   byesSummary: SummaryStat
   roleExposureSummary: RoleExposureSummary
   perPlayer: FixturePlayerAnalytics[]
+  constraints: Constraints
+  quality: QualityReport
+  narrative: string
 }
 
 const CATEGORY_MAP: Record<string, FixtureCategory> = {
@@ -115,7 +147,11 @@ function getNextChronoPhase(phase: { round_number: number; wave_number: number }
   return { round_number: phase.round_number + 1, wave_number: 1 }
 }
 
-export function analyzeFixtureSlots(slots: FixtureSlot[], diagnostics?: SessionDiagnostics): FixtureAnalytics {
+export function analyzeFixtureSlots(
+  slots: FixtureSlot[],
+  diagnostics?: SessionDiagnostics,
+  sessionContext?: { numTables?: number; sessionMinutes?: number }
+): FixtureAnalytics {
   const counts: Record<FixtureCategory, number> = {
     competitive: 0,
     stretch: 0,
@@ -141,13 +177,10 @@ export function analyzeFixtureSlots(slots: FixtureSlot[], diagnostics?: SessionD
     opponents: Set<string>
     byes: number
     opponentRatings: number[]
-    tableNumbers: Set<number>
     phases: { round_number: number; wave_number: number }[]
     peer: number
     stretching: number
     anchoring: number
-    signedChallengeSum: number
-    signedChallengeCount: number
   }> = {}
 
   const ensurePlayer = (player: FixtureSlot['player_a']) => {
@@ -161,13 +194,10 @@ export function analyzeFixtureSlots(slots: FixtureSlot[], diagnostics?: SessionD
         opponents: new Set(),
         byes: 0,
         opponentRatings: [],
-        tableNumbers: new Set(),
         phases: [],
         peer: 0,
         stretching: 0,
         anchoring: 0,
-        signedChallengeSum: 0,
-        signedChallengeCount: 0,
       }
     }
     return playerStats[player.player_id]
@@ -207,13 +237,10 @@ export function analyzeFixtureSlots(slots: FixtureSlot[], diagnostics?: SessionD
       selfStats.matches += 1
       selfStats.opponents.add(opponent.player_id)
       selfStats.opponentRatings.push(opponent.current_rating)
-      selfStats.tableNumbers.add(slot.table_number)
       const role = normalizeRole(roleValue)
       if (role === 'PEER') selfStats.peer += 1
       else if (role === 'STRETCHING') selfStats.stretching += 1
       else if (role === 'ANCHORING') selfStats.anchoring += 1
-      selfStats.signedChallengeSum += opponent.current_rating - selfStats.rating
-      selfStats.signedChallengeCount += 1
     }
 
     recordMatch(aStats, b, slot.player_a_role)
@@ -225,9 +252,6 @@ export function analyzeFixtureSlots(slots: FixtureSlot[], diagnostics?: SessionD
     const stats = playerStats[pid]
     const sos = stats.opponentRatings.length
       ? stats.opponentRatings.reduce((sum, value) => sum + value, 0) / stats.opponentRatings.length
-      : 0
-    const signedChallenge = stats.signedChallengeCount
-      ? stats.signedChallengeSum / stats.signedChallengeCount
       : 0
     const phases = stats.phases.slice().sort((a, b) =>
       a.round_number === b.round_number
@@ -266,7 +290,6 @@ export function analyzeFixtureSlots(slots: FixtureSlot[], diagnostics?: SessionD
       stretching: stats.stretching,
       anchoring: stats.anchoring,
       atPoolCeiling: false, // will be computed after pool is complete
-      signedChallenge: Math.round(signedChallenge * 10) / 10,
     }
   })
 
@@ -321,7 +344,6 @@ export function analyzeFixtureSlots(slots: FixtureSlot[], diagnostics?: SessionD
     stretchingSummary: summaryStat(perPlayerWithCeiling.map(player => player.stretching)),
     anchoringSummary: summaryStat(perPlayerWithCeiling.map(player => player.anchoring)),
     peerSummary: summaryStat(perPlayerWithCeiling.map(player => player.peer)),
-    signedChallengeSummary: summaryStat(perPlayerWithCeiling.map(player => player.signedChallenge)),
   }
 
   const totalSlots = slots.length
@@ -340,6 +362,121 @@ export function analyzeFixtureSlots(slots: FixtureSlot[], diagnostics?: SessionD
   const density = totalSlots ? Math.round((filledCount / totalSlots) * 100) : 0
   const tightnessScore = deltasCount ? Number((totalDelta / deltasCount).toFixed(1)) : 0
   const byeBalanced = counts.bye === 0 || counts.bye <= 1
+
+  // ──── Constraints ────
+  const playerCount = playerIds.length
+  const tierDistribution: Record<string, number> = {}
+  for (const player of perPlayerWithCeiling) {
+    const tier = player.tier || 'Unrated'
+    tierDistribution[tier] = (tierDistribution[tier] ?? 0) + 1
+  }
+  const rounds = Math.max(...slots.map(s => s.round_number), 0)
+  const parityForcesBye = playerCount % 2 === 1
+
+  const constraints: Constraints = {
+    playerCount,
+    parityForcesBye,
+    rawSpread: diagnostics?.raw_spread ?? null,
+    coreSpread: diagnostics?.core_spread ?? null,
+    tierDistribution,
+    provisionalCount: diagnostics?.provisional_count ?? null,
+    rounds,
+    numTables: sessionContext?.numTables,
+    regime: diagnostics?.regime ?? null,
+    competitiveMaxGap: diagnostics?.competitive_max_gap ?? null,
+    stretchMaxGap: diagnostics?.stretch_max_gap ?? null,
+  }
+
+  // ──── Quality dimensions (ratios benchmarked against achievable) ────
+  const eligibleForStretch = perPlayerWithCeiling.filter(p => !p.atPoolCeiling).length
+  const achievedStretchCount = perPlayerWithCeiling.filter(p => p.stretching > 0).length
+  const stretchReachRatio = eligibleForStretch > 0 ? achievedStretchCount / eligibleForStretch : 1.0
+  const stretchReachVerdict: Verdict = stretchReachRatio >= 0.9 ? 'optimal' : stretchReachRatio >= 0.7 ? 'good' : 'limited'
+  const stretchReachLimitedBy = stretchReachRatio < 0.9 ? 'few higher-rated opponents in pool' : undefined
+
+  const competitiveTarget = diagnostics?.competitive_max_gap ?? 150
+  const competitiveRatio = competitiveTarget > 0 ? Math.min(1, (competitiveTarget - tightnessScore) / competitiveTarget) : 1.0
+  const competitiveVerdict: Verdict = competitiveRatio >= 0.85 ? 'optimal' : competitiveRatio >= 0.65 ? 'good' : 'limited'
+
+  const opponentVarietyRatio = rounds > 0 ? Math.min(1, uniqueOpponentsSummary.avg / rounds) : 1.0
+  const varietyVerdict: Verdict = opponentVarietyRatio >= 0.8 ? 'optimal' : opponentVarietyRatio >= 0.6 ? 'good' : 'limited'
+
+  const gameEquityRatio = matchesSummary.max > 0 ? matchesSummary.min / matchesSummary.max : 1.0
+  const equityVerdict: Verdict = gameEquityRatio >= 0.85 ? 'optimal' : gameEquityRatio >= 0.7 ? 'good' : 'limited'
+
+  const unavoidableByes = parityForcesBye ? rounds : 0
+  const byesRatio = counts.bye <= unavoidableByes ? 1.0 : (unavoidableByes / counts.bye)
+  const byesVerdict: Verdict = counts.bye === unavoidableByes ? 'optimal' : counts.bye <= unavoidableByes + 1 ? 'good' : 'limited'
+  const byesLimitedBy = counts.bye > unavoidableByes ? 'odd player count' : undefined
+
+  const dimensions: QualityDimension[] = [
+    {
+      key: 'competitive-balance',
+      label: 'Competitive balance',
+      achieved: `${tightnessScore} avg gap`,
+      ratio: Math.max(0, Math.min(1, competitiveRatio)),
+      verdict: competitiveVerdict,
+    },
+    {
+      key: 'opponent-variety',
+      label: 'Opponent variety',
+      achieved: `${uniqueOpponentsSummary.avg.toFixed(1)} unique per player`,
+      ratio: Math.max(0, Math.min(1, opponentVarietyRatio)),
+      verdict: varietyVerdict,
+    },
+    {
+      key: 'game-equity',
+      label: 'Game equity',
+      achieved: `${gameEquityRatio.toFixed(2)} ratio (min/max)`,
+      ratio: Math.max(0, Math.min(1, gameEquityRatio)),
+      verdict: equityVerdict,
+    },
+    {
+      key: 'rest-distribution',
+      label: 'Rest distribution',
+      achieved: `${counts.bye} bye${counts.bye !== 1 ? 's' : ''}${unavoidableByes > 0 ? ` (${unavoidableByes} unavoidable)` : ''}`,
+      ratio: Math.max(0, Math.min(1, byesRatio)),
+      verdict: byesVerdict,
+      limitedBy: byesLimitedBy,
+    },
+    {
+      key: 'stretch-reach',
+      label: 'Stretch reach',
+      achieved: `${achievedStretchCount} of ${eligibleForStretch} players`,
+      ratio: Math.max(0, Math.min(1, stretchReachRatio)),
+      verdict: stretchReachVerdict,
+      limitedBy: stretchReachLimitedBy,
+    },
+  ]
+
+  const ratios = dimensions.map(d => d.ratio)
+  const overallScore = ratios.length > 0 ? Math.round((ratios.reduce((sum, r) => sum + r, 0) / ratios.length) * 100) : 50
+  const overallLabel: 'Strong' | 'Good' | 'Fair' | 'Constrained' =
+    overallScore >= 90 ? 'Strong' : overallScore >= 75 ? 'Good' : overallScore >= 50 ? 'Fair' : 'Constrained'
+
+  const quality: QualityReport = {
+    dimensions,
+    overallScore,
+    overallLabel,
+  }
+
+  // ──── Narrative ────
+  const strengths: string[] = []
+  if (competitiveVerdict === 'optimal') strengths.push('excellent competitive balance')
+  if (varietyVerdict === 'optimal') strengths.push('strong opponent variety')
+  const limitedDimensions = dimensions.filter(d => d.verdict === 'limited')
+  const limitingConstraint = limitedDimensions.length > 0 ? limitedDimensions[0].limitedBy : null
+  let narrativeText = `Fixture quality is **${overallLabel}**. `
+  if (strengths.length > 0) {
+    narrativeText += `Highlights: ${strengths.join(', ')}. `
+  }
+  if (limitedDimensions.length > 0) {
+    const limitedNames = limitedDimensions.map(d => d.label.toLowerCase()).join(', ')
+    narrativeText += `Limited by **${limitingConstraint}**: ${limitedNames} affected.`
+  } else {
+    narrativeText += 'Excellent fixture quality across all dimensions.'
+  }
+  const narrative = narrativeText
 
   return {
     totalSlots,
@@ -363,6 +500,9 @@ export function analyzeFixtureSlots(slots: FixtureSlot[], diagnostics?: SessionD
     byesSummary,
     roleExposureSummary,
     perPlayer: [...perPlayerWithCeiling].sort((a, b) => b.rating - a.rating),
+    constraints,
+    quality,
+    narrative,
   }
 }
 

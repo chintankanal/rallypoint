@@ -2,15 +2,37 @@
   import { useQuery, useMutation } from '@tanstack/react-query'
   import {
     eventsApi, playersApi, matchesApi,
-    type EventRoster, type EventFixtures, type EventFixturePlayer, type EventFixtureSlot,
+    type EventRoster, type EventFixtures, type EventFixtureSlot,
     type PlayerDirectoryItem, type MatchResponse,
   } from '../api/client'
   import { Spinner, ErrorMsg } from './Layout'
   import { SetPointsInput } from './SetPointsInput'
   import FixtureMatrixGrid from './FixtureMatrixGrid'
-  import { buildMatrixModel, getFirstName, getOpponentLabel, classifyCell } from '../lib/fixtures'
+  import { buildMatrixModel, classifyCell } from '../lib/fixtures'
 
   type FixtureState = 'ROSTER_OPEN' | 'FIXTURES_READY' | 'FIXTURE_FROZEN' | 'RESULTS_SUBMITTED' | 'RATINGS_APPLIED' | null
+
+  function getGapBandCategory(slot: any) {
+    const raw = (slot.gap_band ?? slot.match_category ?? slot.round_intent ?? '').toString().trim().toUpperCase().replace(/\s+/g, '_')
+    if (raw === 'COMPETITIVE') return 'competitive'
+    if (raw === 'DEVELOPMENTAL') return 'developmental'
+    if (raw === 'OUT_OF_BAND' || raw.replace(/_/g, '') === 'OUTOFBAND') return 'out_of_band'
+    if (raw === 'ANCHOR') return 'anchor'
+    if (raw === 'STRETCH') return 'stretch'
+    return 'competitive'
+  }
+
+  function getMatchTypeMeta(slot: any) {
+    try {
+      const meta = classifyCell(slot as any, slot.player_a as any, slot.player_b as any)
+      const label = meta.label ?? 'Match'
+      const shortLabel = (label[0] ?? 'M').toUpperCase()
+      const className = label === 'Competitive' ? 'text-blue-300' : label === 'Stretch' ? 'text-purple-300' : label === 'Anchor' ? 'text-amber-300' : label === 'Developmental' ? 'text-gray-400' : label === 'Out of band' ? 'text-orange-300' : 'text-gray-300'
+      return { className, title: label, shortLabel }
+    } catch (e) {
+      return { className: 'text-gray-300', title: 'Match', shortLabel: 'M' }
+    }
+  }
 
   export const ACADEMY_PALETTE = [
     { bg: 'bg-blue-800', text: 'text-blue-100' },
@@ -537,7 +559,8 @@
                     }),
                     cellOf: (slot: any, self: any, opp: any) => {
                       const meta = classifyCell(slot as any, self as any, opp as any)
-                      return { label: meta.label, stripClass: meta.stripClass, category: meta.category }
+                      const opponentStrip = opp ? (colorMap[opp.academy_id]?.bg ?? '') : ''
+                      return { label: meta.label, stripClass: opponentStrip, category: meta.category, tooltip: meta.tooltip }
                     },
                     totalRounds: fixtures.total_rounds,
                     sectionSort: (a, b) => a.label.localeCompare(b.label),
@@ -1004,7 +1027,7 @@
                   const aColor = colorMap[slot.player_a.academy_id] ?? ACADEMY_PALETTE[0]
                   const bColor = colorMap[pb.academy_id] ?? ACADEMY_PALETTE[0]
                   const isCross = slot.player_a.academy_id !== pb.academy_id
-                  const matchTypeMeta = getMatchTypeMeta(slot, slot.player_a.current_rating, pb.current_rating)
+                  const matchTypeMeta = getMatchTypeMeta(slot)
                   return (
                     <div key={slot.slot_id}
                       className="flex items-center gap-2 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2">
@@ -1178,175 +1201,4 @@
     )
   }
 
-  function FixtureMatrix({
-    fixtures,
-    colorMap,
-  }: {
-    fixtures: EventFixtures
-    colorMap: Record<string, { bg: string; text: string }>
-  }) {
-    const [filterAcademyId, setFilterAcademyId] = useState<string | null>(null)
-    const [highlightRound, setHighlightRound] = useState<number | null>(null)
-
-    type Cell = { opponent: EventFixturePlayer | null; is_bye: boolean; category: string }
-    const schedule: Record<string, Record<number, Cell>> = {}
-    const playerById: Record<string, EventFixturePlayer> = {}
-
-      for (const slot of fixtures.slots) {
-      playerById[slot.player_a.player_id] = slot.player_a
-      if (slot.player_b) playerById[slot.player_b.player_id] = slot.player_b
-      const pa = slot.player_a.player_id
-      const pb = slot.player_b?.player_id
-      if (!schedule[pa]) schedule[pa] = {}
-      schedule[pa][slot.round_number] = { opponent: slot.player_b, is_bye: !pb, category: classifyCell(slot as any, slot.player_a as any, slot.player_b as any).label }
-      if (pb) {
-        if (!schedule[pb]) schedule[pb] = {}
-        schedule[pb][slot.round_number] = { opponent: slot.player_a, is_bye: false, category: classifyCell(slot as any, slot.player_b as any, slot.player_a as any).label }
-      }
-    }
-
-    const byAcademy: Record<string, EventFixturePlayer[]> = {}
-    for (const player of Object.values(playerById)) {
-      ;(byAcademy[player.academy_id] ??= []).push(player)
-    }
-    for (const players of Object.values(byAcademy)) {
-      players.sort((a, b) => b.current_rating - a.current_rating)
-      const seen = new Set<string>()
-      const key = Object.keys(byAcademy).find(k => byAcademy[k] === players)!
-      byAcademy[key] = players.filter(p => { if (seen.has(p.player_id)) return false; seen.add(p.player_id); return true })
-    }
-
-    const rounds = Array.from({ length: fixtures.total_rounds }, (_, i) => i + 1)
-    const activeAcademyIds = Object.keys(byAcademy).sort((a, b) => {
-      const nameA = byAcademy[a][0]?.academy_name ?? a
-      const nameB = byAcademy[b][0]?.academy_name ?? b
-      return nameA.localeCompare(nameB)
-    })
-    const firstNameCounts = Object.values(playerById).reduce<Record<string, number>>((acc, player) => {
-      const first = getFirstName(player.name)
-      acc[first] = (acc[first] ?? 0) + 1
-      return acc
-    }, {})
-
-    const rows = activeAcademyIds.flatMap(academyId => {
-      if (filterAcademyId && filterAcademyId !== academyId) return []
-
-      const players = byAcademy[academyId] ?? []
-
-      const headerRow = (
-        <tr key={`${academyId}-header`} className="border-b border-gray-800 last:border-0 bg-gray-950/40">
-          <td colSpan={rounds.length + 2} className="text-xs uppercase tracking-wider font-bold text-gray-400 px-3 py-1.5">
-            <div className="flex items-center gap-2">
-              <span className={`w-1.5 h-3 rounded-sm ${(colorMap[academyId] ?? ACADEMY_PALETTE[0]).bg}`} />
-              {players[0]?.academy_name}
-            </div>
-          </td>
-        </tr>
-      )
-
-      const playerRows = players.map(p => {
-        const playerSchedule = schedule[p.player_id] ?? {}
-        const playerColor = colorMap[academyId] ?? ACADEMY_PALETTE[0]
-        return (
-          <tr key={p.player_id} className="hover:bg-gray-800/20 transition-colors">
-            <td className="text-left px-3 py-1.5 border-b border-gray-800 sticky left-0 bg-gray-900/40 min-w-[150px] z-10">
-              <div className={`font-medium truncate ${playerColor.text}`}>{p.name}</div>
-              <div className="text-[10px] text-gray-500">{p.academy_name}</div>
-            </td>
-            <td className="text-right px-2 py-1.5 border-b border-gray-800 font-mono text-[10px] text-gray-400">{Math.round(p.current_rating)}</td>
-            {rounds.map(r => {
-              const cell = playerSchedule[r]
-              const isBye = cell?.is_bye ?? false
-              const isHighlighted = r === highlightRound
-              const opponentBg = cell?.opponent ? (colorMap[cell.opponent.academy_id]?.bg ?? '') : ''
-              const opponentText = cell?.opponent ? (colorMap[cell.opponent.academy_id]?.text ?? 'text-gray-300') : 'text-gray-300'
-
-              return (
-                <td
-                  key={r}
-                  className={`relative text-center px-1.5 py-1.5 border-b border-gray-800 ${isHighlighted ? 'bg-yellow-900/40' : ''}`}
-                  title={cell?.opponent ? `${cell.opponent.name} (${Math.round(cell.opponent.current_rating)}) — ${cell.category}` : isBye ? 'BYE' : 'No opponent' }
-                >
-                  {isBye ? (
-                    <span className="text-[10px] text-gray-600 font-medium">BYE</span>
-                  ) : cell?.opponent ? (
-                    <div className="relative min-h-[32px]">
-                      <div className={`text-xs font-semibold truncate ${opponentText}`}> 
-                        {getOpponentLabel(cell.opponent, firstNameCounts)}
-                      </div>
-                      <div className="text-[9px] text-gray-500 mt-0.5">
-                        {Math.round(cell.opponent.current_rating)}
-                      </div>
-                      <span className={`absolute bottom-0 left-1 right-1 h-[2px] rounded-sm ${opponentBg}`} />
-                    </div>
-                  ) : (
-                    <span className="text-gray-600">—</span>
-                  )}
-                </td>
-              )
-            })}
-          </tr>
-        )
-      })
-
-      return [headerRow, ...playerRows]
-    })
-
-    return (
-      <div className="space-y-3">
-        <div className="flex gap-1.5 flex-wrap">
-          <button onClick={() => setFilterAcademyId(null)}
-            className={`px-2 py-1 text-xs rounded transition-colors ${!filterAcademyId ? 'bg-white text-gray-900 font-medium' : 'bg-gray-800 text-gray-400 hover:text-white'}`}>
-            All
-          </button>
-          {activeAcademyIds.map(id => {
-            const color = colorMap[id] ?? ACADEMY_PALETTE[0]
-            return (
-              <button key={id} onClick={() => setFilterAcademyId(filterAcademyId === id ? null : id)}
-                className={`px-2 py-1 text-xs rounded transition-colors ${filterAcademyId === id ? `${color.bg} ${color.text} font-medium` : 'bg-gray-800 text-gray-400 hover:text-white'}`}>
-                {byAcademy[id][0]?.academy_name}
-              </button>
-            )
-          })}
-        </div>
-        <div className="flex flex-wrap items-center gap-2 text-[11px]">
-          <span className="text-gray-400 uppercase tracking-wide">Academy legend:</span>
-          {activeAcademyIds.map(id => {
-            const color = colorMap[id] ?? ACADEMY_PALETTE[0]
-            return (
-              <span key={id} className="inline-flex items-center gap-2 rounded-full bg-gray-900/70 px-2 py-1">
-                <span className={`w-2.5 h-2.5 rounded-full ${color.bg}`} />
-                <span className={`text-xs font-semibold ${color.text}`}>{byAcademy[id][0]?.academy_name}</span>
-              </span>
-            )
-          })}
-        </div>
-
-        <div className="overflow-x-auto rounded-lg border border-gray-800">
-          <table className="table-fixed text-xs border-collapse w-full">
-            <colgroup>
-              <col style={{ width: '150px' }} />
-              <col style={{ width: '60px' }} />
-              {rounds.map(r => (
-                <col key={r} style={{ width: '70px' }} />
-              ))}
-            </colgroup>
-            <thead>
-              <tr className="bg-gray-900/80">
-                <th className="text-left px-3 py-2 text-gray-500 border-b border-gray-800 sticky left-0 bg-gray-900 min-w-[150px] z-10">Player</th>
-                <th className="text-right px-2 py-2 text-gray-500 border-b border-gray-800">Rtg</th>
-                {rounds.map(r => (
-                  <th key={r} onClick={() => setHighlightRound(highlightRound === r ? null : r)}
-                    className="text-center px-1.5 py-2 text-gray-600 border-b border-gray-800 cursor-pointer hover:bg-gray-800/50"
-                    title={`Round ${r}`}>
-                    R{r}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>{rows}</tbody>
-          </table>
-        </div>
-      </div>
-    )
-  }
+  

@@ -1,5 +1,6 @@
-import React, { useState } from 'react'
-import { MatrixModel, LegendItem, getFirstName, getOpponentLabel } from '../lib/fixtures'
+import { useState } from 'react'
+import type { MatrixModel, LegendItem, MatrixCell } from '../lib/fixtures'
+import { getFirstName, getOpponentLabel } from '../lib/fixtures'
 
 export default function FixtureMatrixGrid({
   model,
@@ -15,22 +16,58 @@ export default function FixtureMatrixGrid({
   const [filterSectionId, setFilterSectionId] = useState<string | null>(null)
   const [highlightRound, setHighlightRound] = useState<number | null>(null)
 
-  const firstNameCounts = Object.values(model.sections).flatMap(s => s.players).reduce<Record<string, number>>((acc, p) => {
+  const firstNameCounts = Object.values(model.sections).flatMap((s: any) => s.players).reduce<Record<string, number>>((acc, p: any) => {
     const first = getFirstName(p.name)
     acc[first] = (acc[first] ?? 0) + 1
     return acc
   }, {})
 
-  const rows = model.sections.flatMap(section => {
+  const rounds = model.rounds
+
+  // Build a flattened, discriminated rows list that respects filterSectionId
+  const rows: Array<any> = model.sections.flatMap((section: any) => {
     if (filterSectionId && filterSectionId !== section.id) return []
     if (model.sections.length === 1) {
-      // Single-section: render as flat list
-      return section.players.map(p => ({ section, player: p }))
+      return section.players.map((p: any) => ({ kind: 'player', section, player: p }))
     }
-    return [ { header: section }, ...section.players.map(p => ({ section, player: p })) ]
+    return [{ kind: 'header', section }, ...section.players.map((p: any) => ({ kind: 'player', section, player: p }))]
   })
 
-  const rounds = model.rounds
+  const renderPlayerRow = (section: any, p: any) => {
+    const playerId = p.player_id
+    const playerRating = Math.round(p.current_rating)
+    return (
+      <tr key={playerId} className="hover:bg-gray-800/20 transition-colors">
+        <td className="text-left px-3 py-1.5 border-b border-gray-800 sticky left-0 bg-gray-900/40 min-w-[150px] z-10">
+          <div className={`font-medium truncate ${section.accent.text}`}>{p.name}</div>
+          <div className="text-[10px] text-gray-500">{section.label}</div>
+        </td>
+        <td className="text-right px-2 py-1.5 border-b border-gray-800 font-mono text-[10px] text-gray-400">{playerRating}</td>
+        {rounds.map((r: number) => {
+          const cell: MatrixCell | undefined = model.schedule[p.player_id]?.[r]
+          const isBye = cell?.isBye ?? false
+          const isHighlighted = r === highlightRound
+          const shouldDim = dimCategory != null && (isBye || (cell?.category ?? 'competitive') !== dimCategory)
+          return (
+            <td key={r} className={`relative text-center px-1.5 py-1.5 border-b border-gray-800 ${isHighlighted ? 'bg-yellow-900/40' : ''}`}
+              title={cell?.tooltip ?? (isBye ? 'BYE' : 'No opponent')}>
+              {isBye ? (
+                <span className={`text-[10px] text-gray-600 font-medium ${shouldDim ? 'opacity-30' : ''}`}>BYE</span>
+              ) : cell?.opponent ? (
+                <div className={`relative min-h-[32px] ${shouldDim ? 'opacity-30' : ''}`}>
+                  <div className={`text-xs font-semibold truncate text-gray-200`}>{getOpponentLabel(cell.opponent, firstNameCounts)}</div>
+                  <div className="text-[9px] text-gray-500 mt-0.5">{Math.round(cell.opponent.current_rating)}</div>
+                  <span className={`absolute bottom-0 left-1 right-1 h-[2px] rounded-sm ${cell.stripClass}`} />
+                </div>
+              ) : (
+                <span className={`text-gray-600 ${shouldDim ? 'opacity-30' : ''}`}>—</span>
+              )}
+            </td>
+          )
+        })}
+      </tr>
+    )
+  }
 
   return (
     <div className="space-y-3">
@@ -40,7 +77,7 @@ export default function FixtureMatrixGrid({
             className={`px-2 py-1 text-xs rounded transition-colors ${!filterSectionId ? 'bg-white text-gray-900 font-medium' : 'bg-gray-800 text-gray-400 hover:text-white'}`}>
             All
           </button>
-          {model.sections.map(s => (
+          {model.sections.map((s: any) => (
             <button key={s.id} onClick={() => setFilterSectionId(filterSectionId === s.id ? null : s.id)}
               className={`px-2 py-1 text-xs rounded transition-colors ${filterSectionId === s.id ? `${s.accent.bg} ${s.accent.text} font-medium` : 'bg-gray-800 text-gray-400 hover:text-white'}`}>
               {s.label}
@@ -64,7 +101,7 @@ export default function FixtureMatrixGrid({
           <colgroup>
             <col style={{ width: '150px' }} />
             <col style={{ width: '60px' }} />
-            {rounds.map(r => (
+            {rounds.map((r: number) => (
               <col key={r} style={{ width: '70px' }} />
             ))}
           </colgroup>
@@ -72,7 +109,7 @@ export default function FixtureMatrixGrid({
             <tr className="bg-gray-900/80">
               <th className="text-left px-3 py-2 text-gray-500 border-b border-gray-800 sticky left-0 bg-gray-900 min-w-[150px] z-10">Player</th>
               <th className="text-right px-2 py-2 text-gray-500 border-b border-gray-800">Rtg</th>
-              {rounds.map(r => (
+              {rounds.map((r: number) => (
                 <th key={r} onClick={() => setHighlightRound(highlightRound === r ? null : r)}
                   className="text-center px-1.5 py-2 text-gray-600 border-b border-gray-800 cursor-pointer hover:bg-gray-800/50"
                   title={`Round ${r}`}>
@@ -82,45 +119,11 @@ export default function FixtureMatrixGrid({
             </tr>
           </thead>
           <tbody>
-            {model.sections.map(section => {
-              const players = section.players
-              if (model.sections.length === 1) {
-                return players.map(p => (
-                  <tr key={p.player_id} className="hover:bg-gray-800/20 transition-colors">
-                    <td className="text-left px-3 py-1.5 border-b border-gray-800 sticky left-0 bg-gray-900/40 min-w-[150px] z-10">
-                      <div className={`font-medium truncate ${section.accent.text}`}>{p.name}</div>
-                      <div className="text-[10px] text-gray-500">{section.label}</div>
-                    </td>
-                    <td className="text-right px-2 py-1.5 border-b border-gray-800 font-mono text-[10px] text-gray-400">{Math.round(p.current_rating)}</td>
-                    {rounds.map(r => {
-                      const cell = model.schedule[p.player_id]?.[r]
-                      const isBye = cell?.isBye ?? false
-                      const isHighlighted = r === highlightRound
-                      return (
-                        <td key={r} className={`relative text-center px-1.5 py-1.5 border-b border-gray-800 ${isHighlighted ? 'bg-yellow-900/40' : ''}`}
-                          title={cell?.tooltip ?? (isBye ? 'BYE' : 'No opponent')}>
-                          {isBye ? (
-                            <span className="text-[10px] text-gray-600 font-medium">BYE</span>
-                          ) : cell?.opponent ? (
-                            <div className="relative min-h-[32px]">
-                              <div className={`text-xs font-semibold truncate text-gray-200`}>{getOpponentLabel(cell.opponent, firstNameCounts)}</div>
-                              <div className="text-[9px] text-gray-500 mt-0.5">{Math.round(cell.opponent.current_rating)}</div>
-                              <span className={`absolute bottom-0 left-1 right-1 h-[2px] rounded-sm ${cell.stripClass}`} />
-                            </div>
-                          ) : (
-                            <span className="text-gray-600">—</span>
-                          )}
-                        </td>
-                      )
-                    })}
-                  </tr>
-                ))
-              }
-
-              // Multi-section: render header + players
-              return (
-                <React.Fragment key={section.id}>
-                  <tr key={`${section.id}-header`} className="border-b border-gray-800 last:border-0 bg-gray-950/40">
+            {rows.map((row) => {
+              if (row.kind === 'header') {
+                const section = row.section
+                return (
+                  <tr key={`header-${section.id}`} className="border-b border-gray-800 last:border-0 bg-gray-950/40">
                     <td colSpan={rounds.length + 2} className="text-xs uppercase tracking-wider font-bold text-gray-400 px-3 py-1.5">
                       <div className="flex items-center gap-2">
                         <span className={`w-1.5 h-3 rounded-sm ${section.accent.bg}`} />
@@ -128,38 +131,9 @@ export default function FixtureMatrixGrid({
                       </div>
                     </td>
                   </tr>
-                  {players.map(p => (
-                    <tr key={p.player_id} className="hover:bg-gray-800/20 transition-colors">
-                      <td className="text-left px-3 py-1.5 border-b border-gray-800 sticky left-0 bg-gray-900/40 min-w-[150px] z-10">
-                        <div className={`font-medium truncate ${section.accent.text}`}>{p.name}</div>
-                        <div className="text-[10px] text-gray-500">{section.label}</div>
-                      </td>
-                      <td className="text-right px-2 py-1.5 border-b border-gray-800 font-mono text-[10px] text-gray-400">{Math.round(p.current_rating)}</td>
-                      {rounds.map(r => {
-                        const cell = model.schedule[p.player_id]?.[r]
-                        const isBye = cell?.isBye ?? false
-                        const isHighlighted = r === highlightRound
-                        return (
-                          <td key={r} className={`relative text-center px-1.5 py-1.5 border-b border-gray-800 ${isHighlighted ? 'bg-yellow-900/40' : ''}`}
-                            title={cell?.tooltip ?? (isBye ? 'BYE' : 'No opponent')}>
-                            {isBye ? (
-                              <span className="text-[10px] text-gray-600 font-medium">BYE</span>
-                            ) : cell?.opponent ? (
-                              <div className="relative min-h-[32px]">
-                                <div className={`text-xs font-semibold truncate text-gray-200`}>{getOpponentLabel(cell.opponent, firstNameCounts)}</div>
-                                <div className="text-[9px] text-gray-500 mt-0.5">{Math.round(cell.opponent.current_rating)}</div>
-                                <span className={`absolute bottom-0 left-1 right-1 h-[2px] rounded-sm ${cell.stripClass}`} />
-                              </div>
-                            ) : (
-                              <span className="text-gray-600">—</span>
-                            )}
-                          </td>
-                        )
-                      })}
-                    </tr>
-                  ))}
-                </React.Fragment>
-              )
+                )
+              }
+              return renderPlayerRow(row.section, row.player)
             })}
           </tbody>
         </table>

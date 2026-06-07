@@ -139,7 +139,7 @@ export function buildMatrixModel<P extends MatrixPlayer>(
   opts: {
     sectionOf: (p: P) => string
     sectionMeta: (sectionId: string, players: P[]) => { label: string; accent: Accent }
-    cellOf: (slot: ClassifiableSlot<P>, self: P, opp: P | null) => { label: string; stripClass: string; category?: string }
+    cellOf: (slot: ClassifiableSlot<P>, self: P, opp: P | null) => { label: string; stripClass: string; category?: string; tooltip?: string }
     totalRounds?: number
     sectionSort?: (a: MatrixSection, b: MatrixSection) => number
   }
@@ -160,7 +160,7 @@ export function buildMatrixModel<P extends MatrixPlayer>(
       isBye: !pb,
       label: paMeta.label,
       stripClass: paMeta.stripClass,
-      tooltip: paMeta.label,
+      tooltip: (paMeta as any).tooltip ?? paMeta.label,
       category: (paMeta as any).category ?? 'competitive',
     }
 
@@ -172,7 +172,7 @@ export function buildMatrixModel<P extends MatrixPlayer>(
         isBye: false,
         label: pbMeta.label,
         stripClass: pbMeta.stripClass,
-        tooltip: pbMeta.label,
+        tooltip: (pbMeta as any).tooltip ?? pbMeta.label,
         category: (pbMeta as any).category ?? 'competitive',
       }
     }

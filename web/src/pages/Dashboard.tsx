@@ -793,7 +793,7 @@ function SessionsTab({ academyId }: { academyId: string }) {
               {fixturesQ.data && fixturesQ.data.slots.length > 0 && (() => {
                 const model = buildMatrixModel(fixturesQ.data.slots as any, {
                   sectionOf: (p: any) => p.tier ?? 'UNKNOWN',
-                  sectionMeta: (id: string, players: any[]) => ({
+                  sectionMeta: (id: string, _players: any[]) => ({
                     label: (TIER_META[id]?.label ?? id),
                     accent: (TIER_META[id]?.accent ?? { bg: 'bg-gray-700', text: 'text-gray-200' }),
                   }),
@@ -802,7 +802,7 @@ function SessionsTab({ academyId }: { academyId: string }) {
                     return { label: meta.label, stripClass: meta.stripClass, category: meta.category }
                   },
                   sectionSort: (a, b) => (TIER_META[b.id]?.rank ?? 0) - (TIER_META[a.id]?.rank ?? 0),
-                  totalRounds: fixturesQ.data.total_rounds,
+                  // totalRounds omitted for sessions; buildMatrixModel derives rounds from schedule
                 })
 
                 return (

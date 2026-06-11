@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  disputesApi, configApi, seasonsApi, eventsApi, academiesApi,
+  disputesApi, configApi, seasonsApi, eventsApi, academiesApi, usersApi,
   type Season, type EventListItem, type AcademyListItem,
 } from '../api/client'
 
 import { Layout, Spinner, ErrorMsg, ProtectedRoute } from '../components/Layout'
 import { EventDetailPanel } from '../components/EventDetailPanel'
 
-type Tab = 'seasons' | 'events' | 'academies' | 'disputes' | 'config'
+type Tab = 'seasons' | 'events' | 'academies' | 'coaches' | 'disputes' | 'config'
 
 export default function Admin() {
   return (
@@ -27,6 +27,7 @@ function AdminInner() {
     ['seasons', 'Seasons'],
     ['events', 'Events'],
     ['academies', 'Academies'],
+    ['coaches', 'Coaches'],
     ['disputes', 'Disputes'],
     ['config', 'Config'],
   ]
@@ -49,6 +50,7 @@ function AdminInner() {
       {tab === 'seasons' && <SeasonsTab />}
       {tab === 'events' && <EventsTab />}
       {tab === 'academies' && <AcademiesTab />}
+      {tab === 'coaches' && <CoachesTab />}
       {tab === 'disputes' && <DisputeQueue />}
       {tab === 'config' && <ConfigEditor />}
     </div>
@@ -589,6 +591,7 @@ function DisputeQueue() {
       {q.data?.items.length === 0 && <p className="text-gray-500 text-sm">No disputes found.</p>}
       <div className="space-y-3">
         {q.data?.items.map(d => {
+          // eslint-disable-next-line react-hooks/purity
           const hoursLeft = Math.max(0, (new Date(d.resolution_deadline).getTime() - Date.now()) / 3600000)
           return (
             <div key={d.dispute_id} className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
@@ -682,7 +685,197 @@ function ConfigEditor() {
   )
 }
 
+// ── Coaches ───────────────────────────────────────────────────────────────────
+
+function CoachesTab() {
+  const qc = useQueryClient()
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState({ name: '', email: '', phone: '', academy_id: '' })
+  const [error, setError] = useState<string | null>(null)
+  const [createdCoach, setCreatedCoach] = useState<{ email: string; temporaryPassword: string } | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  const coachesQ = useQuery({
+    queryKey: ['coaches-list'],
+    queryFn: () => usersApi.list({ role: 'COACH' }),
+  })
+
+  const academiesQ = useQuery({
+    queryKey: ['academies-list'],
+    queryFn: () => academiesApi.list(),
+  })
+
+  const createMut = useMutation({
+    mutationFn: () => usersApi.create({
+      name: form.name,
+      email: form.email,
+      phone: form.phone || undefined,
+      role: 'COACH',
+      academy_id: form.academy_id,
+    }),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['coaches-list'] })
+      setCreatedCoach({ email: data.email, temporaryPassword: data.temporary_password })
+      setForm({ name: '', email: '', phone: '', academy_id: '' })
+      setError(null)
+    },
+    onError: (e: Error) => {
+      setError(e.message)
+    },
+  })
+
+  const isValidEmail = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  }
+
+  const isSubmitDisabled = !form.name.trim() || !isValidEmail(form.email) || !form.academy_id
+
+  const copyToClipboard = () => {
+    if (createdCoach) {
+      navigator.clipboard.writeText(createdCoach.temporaryPassword)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
+  const getAcademyLabel = (a: AcademyListItem) => {
+    const detail = a as unknown as { location?: string }
+    if (detail.location && a.city) {
+      return `${a.name} — ${detail.location}, ${a.city}`
+    }
+    return `${a.name} (${a.city})`
+  }
+
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-semibold text-white">Coaches</h3>
+        <button onClick={() => { setShowForm(!showForm); setCreatedCoach(null); setError(null); }}
+          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">
+          {showForm ? 'Cancel' : '+ New Coach'}
+        </button>
+      </div>
+
+      {createdCoach && (
+        <div className="bg-green-900/40 border border-green-500/50 rounded-xl p-5 text-green-200 space-y-2">
+          <div className="font-semibold text-white">Coach created successfully!</div>
+          <div>
+            One-time password for <strong>{createdCoach.email}</strong>:{' '}
+            <code className="bg-gray-900 text-green-400 px-2 py-1 rounded font-mono text-sm ml-1 select-all">
+              {createdCoach.temporaryPassword}
+            </code>
+            <button onClick={copyToClipboard}
+              className="ml-3 px-3 py-1 bg-green-700 hover:bg-green-600 text-white text-xs font-semibold rounded transition-colors">
+              {copied ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+          <div className="text-xs text-green-300/80">
+            Share this password securely. The coach should change it after their first login.
+          </div>
+        </div>
+      )}
+
+      {showForm && (
+        <div className="bg-gray-900 border border-gray-700 rounded-xl p-5 space-y-4 max-w-lg">
+          {error && <ErrorMsg message={error} />}
+
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Name</label>
+            <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              placeholder="e.g. John Doe" className={inputCls} />
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Email</label>
+            <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+              placeholder="e.g. john@example.com" className={inputCls} />
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Phone <span className="text-gray-500">(optional)</span></label>
+            <input type="text" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+              placeholder="e.g. +91 98765 43210" className={inputCls} />
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Academy</label>
+            <select value={form.academy_id} onChange={e => setForm(f => ({ ...f, academy_id: e.target.value }))}
+              className={selectCls}>
+              <option value="">Select an academy</option>
+              {academiesQ.data?.items.map((a: AcademyListItem) => (
+                <option key={a.academy_id} value={a.academy_id}>
+                  {getAcademyLabel(a)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Role</label>
+            <div className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-400 text-sm">
+              COACH
+            </div>
+          </div>
+
+          <button onClick={() => createMut.mutate()} disabled={createMut.isPending || isSubmitDisabled}
+            className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg disabled:opacity-50 transition-colors">
+            {createMut.isPending ? 'Creating…' : 'Create Coach'}
+          </button>
+        </div>
+      )}
+
+      {coachesQ.isLoading ? (
+        <Spinner />
+      ) : coachesQ.error ? (
+        <ErrorMsg message={(coachesQ.error as Error).message} />
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-gray-800">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-900 text-gray-400 text-left">
+                <th className="px-4 py-3">Name</th>
+                <th className="px-4 py-3">Email</th>
+                <th className="px-4 py-3">Academy</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Created</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-800">
+              {coachesQ.data?.map(coach => (
+                <tr key={coach.user_id} className="hover:bg-gray-900/50 transition-colors">
+                  <td className="px-4 py-3 font-medium text-white">{coach.name}</td>
+                  <td className="px-4 py-3 text-gray-400">{coach.email}</td>
+                  <td className="px-4 py-3 text-gray-400">{coach.academy_name ?? '—'}</td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-block text-xs px-2 py-0.5 rounded font-medium ${
+                      coach.is_active ? 'bg-green-800 text-green-100' : 'bg-red-800/80 text-red-100'
+                    }`}>
+                      {coach.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-gray-400">
+                    {new Date(coach.created_at).toLocaleDateString()}
+                  </td>
+                </tr>
+              ))}
+              {!coachesQ.data?.length && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                    No coaches yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Shared styles ─────────────────────────────────────────────────────────────
 
 const inputCls = 'w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 placeholder-gray-600'
 const selectCls = 'w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500'
+

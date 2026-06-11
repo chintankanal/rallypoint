@@ -19,3 +19,12 @@ class UserResponse(BaseModel):
     academy_id: str | None
     is_active: bool
     created_at: datetime
+
+
+class UserCreateResponse(UserResponse):
+    temporary_password: str
+
+
+class UserListItem(UserResponse):
+    academy_name: str | None = None
+

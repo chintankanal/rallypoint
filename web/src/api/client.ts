@@ -107,6 +107,42 @@ export const academiesApi = {
     request<AcademyStats>(`/academies/${id}/stats`),
 }
 
+// ── Users ────────────────────────────────────────────────────────────────────
+
+export interface UserCreated {
+  user_id: string
+  name: string
+  email: string
+  role: string
+  academy_id: string | null
+  is_active: boolean
+  created_at: string
+  temporary_password: string
+}
+
+export interface CoachListItem {
+  user_id: string
+  name: string
+  email: string
+  role: string
+  academy_id: string | null
+  is_active: boolean
+  created_at: string
+  academy_name: string | null
+}
+
+export const usersApi = {
+  create: (body: { name: string; email: string; phone?: string; role: 'COACH'; academy_id: string }) =>
+    request<UserCreated>('/users', { method: 'POST', body: JSON.stringify(body) }),
+  list: (params?: { role?: string; academy_id?: string }) => {
+    const q = new URLSearchParams()
+    if (params?.role) q.set('role', params.role)
+    if (params?.academy_id) q.set('academy_id', params.academy_id)
+    const qs = q.toString() ? `?${q.toString()}` : ''
+    return request<CoachListItem[]>(`/users${qs}`)
+  },
+}
+
 export interface ASIPoint {
   history_id: string
   asi_value: number | null

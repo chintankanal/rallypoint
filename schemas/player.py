@@ -22,8 +22,8 @@ class PlayerCreate(BaseModel):
     def validate_age(cls, v: date) -> date:
         today = date.today()
         age = today.year - v.year - ((today.month, today.day) < (v.month, v.day))
-        if age < 6 or age > 18:
-            raise ValueError("Player must be between 6 and 18 years old")
+        if age < 6:
+            raise ValueError("Player must be at least 6 years old")
         return v
 
     @model_validator(mode="after")

@@ -78,6 +78,7 @@ class AgeGroup(str, Enum):
     U13 = "U13"
     U15 = "U15"
     U17 = "U17"
+    OPEN = "OPEN"
 
 
 class AcademyChangeReason(str, Enum):

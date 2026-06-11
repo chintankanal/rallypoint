@@ -55,6 +55,7 @@ export default function Leaderboard() {
             <option value="U13">U13</option>
             <option value="U15">U15</option>
             <option value="U17">U17</option>
+            <option value="OPEN">Open</option>
           </select>
         </div>
 

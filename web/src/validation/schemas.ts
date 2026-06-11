@@ -117,9 +117,6 @@ function validatePlayerAge(dateOfBirth: string | Date): { valid: boolean; error?
   if (age < 6) {
     return { valid: false, error: 'Player must be at least 6 years old' }
   }
-  if (age > 18) {
-    return { valid: false, error: 'Player must not be older than 18 years' }
-  }
 
   return { valid: true }
 }

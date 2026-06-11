@@ -63,7 +63,7 @@ _IS_PROVISIONAL_SQL = _get_is_provisional_sql()
 _AGE_JAN1_SQL = _get_age_jan1_sql()
 _AGE_GROUP_SQL = _get_age_group_sql()
 
-VALID_AGE_GROUPS = {"U11", "U13", "U15", "U17"}
+VALID_AGE_GROUPS = {"U11", "U13", "U15", "U17", "OPEN"}
 
 
 def global_leaderboard(tier: str | None, limit: int, offset: int) -> dict:

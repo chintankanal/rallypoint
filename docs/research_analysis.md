@@ -1,6 +1,6 @@
 # Research Analysis: EloR vs. JLRS
 
-This document compares the Junior League Rating System (JLRS) with the research paper [**"Elo-based Rating Systems for Large-Scale Matchmaking"** (Liu et al., WWW '21)](https://cs.stanford.edu/people/paulliu/files/www-2021-elor.pdf).
+This document compares the Joint League Rating System (JLRS) with the research paper [**"Elo-based Rating Systems for Large-Scale Matchmaking"** (Liu et al., WWW '21)](https://cs.stanford.edu/people/paulliu/files/www-2021-elor.pdf).
 
 ## Part 1: What the "EloR" Paper Does
 The paper addresses a fundamental weakness in traditional Elo: it is often too slow to converge and struggles with "cold start" problems in large-scale networks where players only play a tiny fraction of the total pool.
@@ -18,7 +18,7 @@ While both systems are rooted in the Elo formula, they are designed for very dif
 
 | Feature | EloR (Stanford/WWW '21) | JLRS (Your System) |
 | :--- | :--- | :--- |
-| **Primary Goal** | Accuracy at Scale. Finding the "true" skill of millions of players as quickly as possible. | Developmental Tracking. Providing a fair, context-aware growth metric for junior athletes. |
+| **Primary Goal** | Accuracy at Scale. Finding the "true" skill of millions of players as quickly as possible. | Developmental Tracking. Providing a fair, context-aware growth metric for league participants. |
 | **Match Outcome** | Typically binary (Win/Loss) or probability-based. | Granular (Margin of Victory). Specifically maps set scores (3-0 vs 3-2) to the rating delta. |
 | **Handling Bias** | Focuses on Network Sparsity (players not playing enough diverse opponents). | Focuses on Local Strength Bias (Academy Strength Index - ASI). |
 | **Incentives** | Designed for "fair matches" (Matchmaking). | Designed for "developmental leaps" (Age Bonus and Tiering). |

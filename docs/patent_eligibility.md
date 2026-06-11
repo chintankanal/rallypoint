@@ -1,6 +1,6 @@
 # Patent Eligibility Analysis: JLRS
 
-Determining whether the Junior League Rating System (JLRS) is patentable is a complex question that sits at the intersection of software engineering and intellectual property law.
+Determining whether the Joint League Rating System (JLRS) is patentable is a complex question that sits at the intersection of software engineering and intellectual property law.
 
 As an AI, I cannot provide legal advice, but I can analyze the system's architecture and logic against standard patentability criteria (such as those used by the USPTO or EPO).
 

@@ -2,7 +2,7 @@
 
 ## Context
 
-The Junior League Rating System (JLRS) is a continuous, match-driven rating platform for junior table tennis players across training academies. It replaces episodic official rankings with a real-time Elo-based system that captures every match — within academies (daily training sessions) and across them (monthly league meets and tournaments).
+The Joint League Rating System (JLRS) is a continuous, match-driven rating platform for players across training academies and leagues. It replaces episodic official rankings with a real-time Elo-based system that captures every match — within academies (daily training sessions) and across them (monthly league meets and tournaments).
 
 All design documents, data model, API contract, edge case catalog, fixture algorithm, and PostgreSQL DDL (24 files in `sql/`) are complete. This plan covers only the implementation.
 

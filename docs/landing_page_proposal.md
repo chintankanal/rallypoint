@@ -1,10 +1,10 @@
 # Proposal: JLRS Landing Page Redesign
 
 ## 1. Executive Summary
-The Junior League Rating System (JLRS) currently defaults to a leaderboard view. While functional for returning users, it lacks context for new visitors. This proposal outlines the transition from a "Data-First" approach to a "Value-First" approach by implementing a professional landing page that explains the rating system, benefits, and call-to-actions (CTAs) before diving into the statistics.
+The Joint League Rating System (JLRS) currently defaults to a leaderboard view. While functional for returning users, it lacks context for new visitors. This proposal outlines the transition from a "Data-First" approach to a "Value-First" approach by implementing a professional landing page that explains the rating system, benefits, and call-to-actions (CTAs) before diving into the statistics.
 
 ## 2. Target Audience
-*   **Junior Athletes:** Looking to track their progress and see where they stand.
+*   **League participants:** Looking to track their progress and see where they stand.
 *   **Parents:** Seeking a fair, transparent way to understand their child's competitive level.
 *   **Coaches/Academies:** Using the system to seed tournaments and evaluate training effectiveness.
 *   **Organizers:** Looking for a reliable tool to manage league fairness.

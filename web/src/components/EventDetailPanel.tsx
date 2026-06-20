@@ -86,6 +86,7 @@
     const [lockError, setLockError] = useState<string | null>(null)
     const [applyingRatings, setApplyingRatings] = useState(false)
     const [applyError, setApplyError] = useState<string | null>(null)
+    const [markingUnplayed, setMarkingUnplayed] = useState(false)
     const [resultSlot, setResultSlot] = useState<EventFixtureSlot | null>(null)
 
     const eventQ = useQuery({ queryKey: ['event-detail', eventId], queryFn: () => eventsApi.get(eventId) })
@@ -168,6 +169,23 @@
       }
       catch (e) { setApplyError((e as Error).message) }
       finally { setApplyingRatings(false) }
+    }
+
+    const handleMarkUnplayed = async (slot: EventFixtureSlot, unplayed: boolean) => {
+      if (unplayed && !window.confirm('Mark as not played? It won\'t affect either player\'s rating.')) {
+        return
+      }
+      setMarkingUnplayed(true)
+      try {
+        await eventsApi.markSlotUnplayed(eventId, slot.slot_id, unplayed)
+        await loadFixtures()
+      }
+      catch (e) {
+        setApplyError((e as Error).message)
+      }
+      finally {
+        setMarkingUnplayed(false)
+      }
     }
 
     // 1. Identify active academies involved in the current event roster or fixtures
@@ -576,6 +594,8 @@
                   fixtures={fixtures}
                   colorMap={colorMap}
                   onEnterResult={setResultSlot}
+                  onMarkUnplayed={handleMarkUnplayed}
+                  markingUnplayed={markingUnplayed}
                   canManage={canManage}
                 />
               </div>
@@ -978,10 +998,12 @@
     )
   }
 
-  function SlotResultList({ fixtures, colorMap, onEnterResult, canManage }: {
+  function SlotResultList({ fixtures, colorMap, onEnterResult, onMarkUnplayed, markingUnplayed, canManage }: {
     fixtures: EventFixtures
     colorMap: Record<string, { bg: string; text: string }>
     onEnterResult: (slot: EventFixtureSlot) => void
+    onMarkUnplayed: ((slot: EventFixtureSlot, unplayed: boolean) => void)
+    markingUnplayed: boolean
     canManage: boolean
   }) {
     const byRound = fixtures.slots.reduce<Record<number, EventFixtureSlot[]>>((acc, s) => {
@@ -1047,19 +1069,35 @@
                         <span className="text-[10px] text-gray-500">({Math.round(pb.current_rating)})</span>
                         {isCross && <span className={`text-[10px] px-1 rounded shrink-0 ${bColor.bg} ${bColor.text}`}>{pb.academy_name}</span>}
                       </div>
-                      <div className="shrink-0 ml-auto">
+                      <div className="shrink-0 ml-auto flex items-center gap-2">
                         {slot.status === 'SCHEDULED' && canManage && (
-                          <button onClick={() => onEnterResult(slot)}
-                            className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded-lg transition-colors">
-                            Enter Result
-                          </button>
+                          <>
+                            <button onClick={() => onEnterResult(slot)}
+                              className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded-lg transition-colors">
+                              Enter Result
+                            </button>
+                            <button onClick={() => onMarkUnplayed(slot, true)}
+                              disabled={markingUnplayed}
+                              className="px-2.5 py-1 bg-gray-700 hover:bg-gray-600 text-white text-xs font-medium rounded-lg transition-colors">
+                              Mark no-show
+                            </button>
+                          </>
                         )}
                         {slot.status === 'SCHEDULED' && !canManage && (
                           <span className="text-xs text-yellow-400">Result Pending</span>
                         )}
                         {slot.status === 'PLAYED' && slot.match_id && <PlayedResultDisplay matchId={slot.match_id} />}
                         {slot.status === 'UNPLAYED' && (
-                          <span className="text-xs text-gray-500">Unplayed</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-500">Unplayed</span>
+                            {canManage && (
+                              <button onClick={() => onMarkUnplayed(slot, false)}
+                                disabled={markingUnplayed}
+                                className="px-2.5 py-1 bg-gray-700 hover:bg-gray-600 text-white text-xs font-medium rounded-lg transition-colors">
+                                Undo
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>

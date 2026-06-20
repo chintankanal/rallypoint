@@ -422,6 +422,11 @@ export const eventsApi = {
   getFixtureStatus: (id: string) => request<FixtureStatus>(`/events/${id}/fixtures/status`),
   lockFixtures: (id: string) => request<{ fixture_state: string }>(`/events/${id}/fixtures/lock`, { method: 'POST' }),
   applyRatings: (id: string) => request<{ fixture_state: string; matches_processed: number }>(`/events/${id}/apply-ratings`, { method: 'POST' }),
+  markSlotUnplayed: (eventId: string, slotId: string, unplayed: boolean) =>
+    request<{ slot_id: string; status: string }>(
+      `/events/${eventId}/fixture-slots/${slotId}/mark-unplayed`,
+      { method: 'POST', body: JSON.stringify({ unplayed }) },
+    ),
 }
 
 // ── Event player roster ───────────────────────────────────────────────────────
@@ -684,6 +689,11 @@ export const sessionsApi = {
       tier_changes: { player_id: string; tier_before: string; tier_after: string }[]
       already_up_to_date: boolean
     }>(`/sessions/${sessionId}/apply-ratings`, { method: 'POST' }),
+  markSlotUnplayed: (sessionId: string, slotId: string, unplayed: boolean) =>
+    request<{ slot_id: string; status: string }>(
+      `/sessions/${sessionId}/fixtures/${slotId}/mark-unplayed`,
+      { method: 'POST', body: JSON.stringify({ unplayed }) },
+    ),
 }
 
 // ── Disputes ──────────────────────────────────────────────────────────────────

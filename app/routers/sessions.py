@@ -10,6 +10,7 @@ from app.dependencies.auth import get_current_user, require_roles
 from schemas.session import (
     FixtureSlotResponse,
     GenerateFixturesRequest,
+    MarkSlotUnplayedRequest,
     SessionCreate,
     SessionDiagnostics,
     SessionFixturesResponse,
@@ -489,6 +490,45 @@ def get_session_fixtures(session_id: str, _: dict = _ANY):
         diagnostics=diagnostics,
         quality=quality,
     )
+
+
+@router.post("/sessions/{session_id}/fixtures/{slot_id}/mark-unplayed")
+def mark_session_slot_unplayed(
+    session_id: str,
+    slot_id: str,
+    body: MarkSlotUnplayedRequest,
+    current_user: dict = _ADMIN_COACH,
+):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT session_id FROM session WHERE session_id = %s", (session_id,))
+            if not cur.fetchone():
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+
+            cur.execute(
+                "SELECT status, match_id FROM fixture_slot WHERE slot_id = %s AND session_id = %s",
+                (slot_id, session_id),
+            )
+            slot = cur.fetchone()
+            if not slot:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fixture slot not found")
+            if slot["match_id"] is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Cannot mark no-show: fixture slot already has a match result. Clear the result first.",
+                )
+            if slot["status"] == "BYE":
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cannot mark a BYE slot as unplayed.")
+            if slot["status"] == "PLAYED":
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cannot mark a played slot as unplayed. Clear the result first.")
+
+            new_status = "UNPLAYED" if body.unplayed else "SCHEDULED"
+            cur.execute(
+                "UPDATE fixture_slot SET status = %s WHERE slot_id = %s AND session_id = %s AND match_id IS NULL",
+                (new_status, slot_id, session_id),
+            )
+
+    return {"slot_id": slot_id, "status": new_status}
 
 
 @router.post("/sessions/{session_id}/apply-ratings")

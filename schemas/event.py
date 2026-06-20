@@ -145,6 +145,10 @@ class GenerateEventFixturesRequest(BaseModel):
         return v
 
 
+class MarkSlotUnplayedRequest(BaseModel):
+    unplayed: bool
+
+
 class EventFixturePlayer(BaseModel):
     player_id: str
     name: str

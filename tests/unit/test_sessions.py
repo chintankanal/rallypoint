@@ -3,8 +3,10 @@ from datetime import date, datetime
 from unittest.mock import MagicMock
 
 import pytest
+from fastapi import HTTPException
 
-from app.routers.sessions import generate_session_fixtures
+from app.routers.sessions import apply_session_ratings, generate_session_fixtures, mark_session_slot_unplayed
+from schemas.session import MarkSlotUnplayedRequest
 
 
 @pytest.fixture
@@ -123,3 +125,65 @@ def test_generate_session_fixtures_same_day_rotation_offset_uses_created_at(monk
         "AND (s.session_date, s.created_at) < (%s, %s)" in sql for sql, _ in executed
     )
     assert any(params == ("event-1", session_row["session_date"], session_row["created_at"]) for _, params in executed)
+
+
+def test_mark_session_slot_unplayed_sets_unplayed(monkeypatch, mock_conn):
+    mock_conn.fetchone.side_effect = [
+        {"session_id": "session-1"},
+        {"status": "SCHEDULED", "match_id": None},
+    ]
+    response = mark_session_slot_unplayed(
+        "session-1",
+        "slot-1",
+        MarkSlotUnplayedRequest(unplayed=True),
+        current_user={"role": "ADMIN", "user_id": "user-1"},
+    )
+
+    assert response == {"slot_id": "slot-1", "status": "UNPLAYED"}
+
+
+def test_mark_session_slot_unplayed_undo(monkeypatch, mock_conn):
+    mock_conn.fetchone.side_effect = [
+        {"session_id": "session-1"},
+        {"status": "UNPLAYED", "match_id": None},
+    ]
+    response = mark_session_slot_unplayed(
+        "session-1",
+        "slot-2",
+        MarkSlotUnplayedRequest(unplayed=False),
+        current_user={"role": "ADMIN", "user_id": "user-1"},
+    )
+
+    assert response == {"slot_id": "slot-2", "status": "SCHEDULED"}
+
+
+def test_mark_session_slot_unplayed_reject_played(monkeypatch, mock_conn):
+    mock_conn.fetchone.side_effect = [
+        {"session_id": "session-1"},
+        {"status": "PLAYED", "match_id": None},
+    ]
+    with pytest.raises(HTTPException) as excinfo:
+        mark_session_slot_unplayed(
+            "session-1",
+            "slot-3",
+            MarkSlotUnplayedRequest(unplayed=True),
+            current_user={"role": "ADMIN", "user_id": "user-1"},
+        )
+
+    assert excinfo.value.status_code == 409
+
+
+def test_apply_session_ratings_ignores_unplayed_slots(monkeypatch, mock_conn):
+    mock_conn.fetchone.side_effect = [
+        {"session_id": "session-1", "scheduling_mode": "INTRA_ACADEMY"},
+    ]
+    mock_conn.fetchall.return_value = []
+    monkeypatch.setattr("app.services.rating_engine.apply_ratings_batch", lambda conn, ids: [])
+
+    result = apply_session_ratings(
+        "session-1",
+        current_user={"role": "ADMIN", "user_id": "user-1"},
+    )
+
+    assert result["matches_rated"] == 0
+    assert result["already_up_to_date"] is True

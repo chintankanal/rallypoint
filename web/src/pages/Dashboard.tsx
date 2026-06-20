@@ -358,9 +358,18 @@ function SessionsTab({ academyId }: { academyId: string }) {
     onError: (e: Error) => setError(e.message),
   })
 
-  // Auto-complete session when all non-BYE slots are played (handles both live and retroactive cases)
+  const markSlotUnplayedMut = useMutation({
+    mutationFn: async ({ sessionId, slotId, unplayed }: { sessionId: string; slotId: string; unplayed: boolean }) =>
+      sessionsApi.markSlotUnplayed(sessionId, slotId, unplayed),
+    onSuccess: () => {
+      if (sessionId) qc.invalidateQueries({ queryKey: ['fixtures', sessionId] })
+    },
+    onError: (e: Error) => setError(e.message),
+  })
+
+  // Auto-complete session when all non-BYE slots are played or marked unplayed (handles both live and retroactive cases)
   const allSlotsPlayed = !!fixturesQ.data?.slots.length &&
-    fixturesQ.data.slots.filter(s => s.status !== 'BYE').every(s => s.status === 'PLAYED')
+    fixturesQ.data.slots.filter(s => s.status !== 'BYE').every(s => s.status === 'PLAYED' || s.status === 'UNPLAYED')
 
   useEffect(() => {
     if (
@@ -919,11 +928,34 @@ function SessionsTab({ academyId }: { academyId: string }) {
                               <div className="flex flex-col items-start justify-between gap-3 sm:items-end">
                                 <span className="inline-flex rounded-full border border-slate-700 bg-slate-950/80 px-3 py-1 text-xs text-gray-300">Table {slot.table_number}</span>
                                 {slot.player_b && slot.status === 'SCHEDULED' && (
-                                  <button
-                                    onClick={() => setResultSlot(slot)}
-                                    className="rounded-full bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-500">
-                                    Enter Result
-                                  </button>
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={() => setResultSlot(slot)}
+                                      className="rounded-full bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-500">
+                                      Enter Result
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        if (window.confirm('Mark as not played? It won\'t affect either player\'s rating.')) {
+                                          markSlotUnplayedMut.mutate({ sessionId: sessionId!, slotId: slot.slot_id, unplayed: true })
+                                        }
+                                      }}
+                                      disabled={markSlotUnplayedMut.isPending}
+                                      className="rounded-full bg-gray-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-gray-600">
+                                      Mark no-show
+                                    </button>
+                                  </div>
+                                )}
+                                {slot.status === 'UNPLAYED' && (
+                                  <div className="flex gap-2 items-center">
+                                    <span className="text-xs text-gray-400">Unplayed</span>
+                                    <button
+                                      onClick={() => markSlotUnplayedMut.mutate({ sessionId: sessionId!, slotId: slot.slot_id, unplayed: false })}
+                                      disabled={markSlotUnplayedMut.isPending}
+                                      className="rounded-full bg-gray-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-gray-600">
+                                      Undo
+                                    </button>
+                                  </div>
                                 )}
                               </div>
                             </div>

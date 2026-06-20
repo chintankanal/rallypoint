@@ -62,6 +62,10 @@ class GenerateFixturesRequest(BaseModel):
         return v
 
 
+class MarkSlotUnplayedRequest(BaseModel):
+    unplayed: bool
+
+
 class FixtureSlotResponse(BaseModel):
     slot_id: str
     round_number: int

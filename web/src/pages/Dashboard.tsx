@@ -1691,6 +1691,9 @@ function MatchesTab({ academyId }: { academyId: string }) {
                 const match = matchById.get(cell.match_id)
                 if (match) openEditor(match)
               }}
+              onCellDelete={(cell) => {
+                if (cell.match_id) setDeleteMatchId(cell.match_id)
+              }}
             />
           </div>
         </div>

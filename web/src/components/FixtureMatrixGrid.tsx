@@ -8,12 +8,14 @@ export default function FixtureMatrixGrid({
   sectionFilter = true,
   dimCategory = null,
   onCellClick,
+  onCellDelete,
 }: {
   model: MatrixModel
   legend: LegendItem[]
   sectionFilter?: boolean
   dimCategory?: string | null
   onCellClick?: (cell: MatrixCell) => void
+  onCellDelete?: (cell: MatrixCell) => void
 }) {
   const [filterSectionId, setFilterSectionId] = useState<string | null>(null)
   const [highlightRound, setHighlightRound] = useState<number | null>(null)
@@ -52,7 +54,7 @@ export default function FixtureMatrixGrid({
           const cellCategory = isBye ? 'bye' : (cell?.category ?? 'competitive')
           const shouldDim = dimCategory != null && cellCategory !== dimCategory
           return (
-            <td key={r} className={`relative text-center px-1.5 py-1.5 border-b border-gray-800 ${isHighlighted ? 'bg-yellow-900/40' : ''} ${cell?.match_id ? 'cursor-pointer hover:bg-gray-800/70' : ''}`}
+            <td key={r} className={`relative text-center px-1.5 py-1.5 border-b border-gray-800 ${isHighlighted ? 'bg-yellow-900/40' : ''} ${cell?.match_id ? 'cursor-pointer hover:bg-gray-800/70 group' : ''}`}
               title={cell?.tooltip ?? (isBye ? 'BYE' : 'No opponent')}
               onClick={() => cell?.match_id && onCellClick?.(cell)}>
               {isBye ? (
@@ -62,6 +64,16 @@ export default function FixtureMatrixGrid({
                   <div className={`text-xs font-semibold truncate text-gray-200`}>{getOpponentLabel(cell.opponent, firstNameCounts)}</div>
                   <div className="text-[9px] text-gray-500 mt-0.5">{Math.round(cell.opponent.current_rating)}</div>
                   <span className={`absolute bottom-0 left-1 right-1 h-[2px] rounded-sm ${cell.stripClass}`} />
+                  {cell.match_id && (
+                    <button
+                      type="button"
+                      onClick={e => { e.stopPropagation(); onCellDelete?.(cell) }}
+                      className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-600 hover:bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-xs font-bold"
+                      title="Delete match"
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
               ) : (
                 <span className={`text-gray-600 ${shouldDim ? 'opacity-30' : ''}`}>—</span>

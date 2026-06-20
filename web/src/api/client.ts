@@ -570,6 +570,7 @@ export const matchesApi = {
   remove: (id: string, body?: { reason?: string }) =>
     request<void>(`/matches/${id}`, { method: 'DELETE', body: body ? JSON.stringify(body) : undefined }),
   forSession: (sessionId: string) => request<MatchResponse[]>(`/matches/session/${sessionId}`),
+  forEvent: (eventId: string) => request<MatchResponse[]>(`/matches/event/${eventId}`),
   pending: () => request<MatchResponse[]>('/matches/pending'),
 }
 

@@ -7,11 +7,13 @@ export default function FixtureMatrixGrid({
   legend,
   sectionFilter = true,
   dimCategory = null,
+  onCellClick,
 }: {
   model: MatrixModel
   legend: LegendItem[]
   sectionFilter?: boolean
   dimCategory?: string | null
+  onCellClick?: (cell: MatrixCell) => void
 }) {
   const [filterSectionId, setFilterSectionId] = useState<string | null>(null)
   const [highlightRound, setHighlightRound] = useState<number | null>(null)
@@ -50,8 +52,9 @@ export default function FixtureMatrixGrid({
           const cellCategory = isBye ? 'bye' : (cell?.category ?? 'competitive')
           const shouldDim = dimCategory != null && cellCategory !== dimCategory
           return (
-            <td key={r} className={`relative text-center px-1.5 py-1.5 border-b border-gray-800 ${isHighlighted ? 'bg-yellow-900/40' : ''}`}
-              title={cell?.tooltip ?? (isBye ? 'BYE' : 'No opponent')}>
+            <td key={r} className={`relative text-center px-1.5 py-1.5 border-b border-gray-800 ${isHighlighted ? 'bg-yellow-900/40' : ''} ${cell?.match_id ? 'cursor-pointer hover:bg-gray-800/70' : ''}`}
+              title={cell?.tooltip ?? (isBye ? 'BYE' : 'No opponent')}
+              onClick={() => cell?.match_id && onCellClick?.(cell)}>
               {isBye ? (
                 <span className={`text-[10px] text-gray-600 font-medium ${shouldDim ? 'opacity-30' : ''}`}>BYE</span>
               ) : cell?.opponent ? (

@@ -1421,11 +1421,20 @@ function MatchesTab({ academyId }: { academyId: string }) {
     queryFn: () => sessionsApi.list(eventId),
     enabled: !!eventId,
   })
-  const matchesQ = useQuery({
+  const eventMatchesQ = useQuery({
+    queryKey: ['event-matches', eventId],
+    queryFn: () => matchesApi.forEvent(eventId),
+    enabled: !!eventId,
+  })
+  const sessionMatchesQ = useQuery({
     queryKey: ['session-matches', sessionId],
     queryFn: () => matchesApi.forSession(sessionId!),
     enabled: !!sessionId,
   })
+
+  const matches = sessionId ? (sessionMatchesQ.data ?? []) : (eventMatchesQ.data ?? [])
+  const matchesLoading = sessionId ? sessionMatchesQ.isLoading : eventMatchesQ.isLoading
+  const matchesError = sessionId ? sessionMatchesQ.error : eventMatchesQ.error
 
   const visibleEvents = eventsQ.data?.items.filter(ev => {
     if (ev.host_academy_id === academyId) return true
@@ -1457,7 +1466,6 @@ function MatchesTab({ academyId }: { academyId: string }) {
   })
 
   const sessionOptions = sessionsQ.data ?? []
-  const matches = matchesQ.data ?? []
   const [showIssuesOnly, setShowIssuesOnly] = useState(false)
 
   const REQUIRED_MATCH_WINNER_SETS: Record<string, number> = {
@@ -1507,7 +1515,39 @@ function MatchesTab({ academyId }: { academyId: string }) {
     match => duplicateMatchIds.has(match.match_id) || scoreIssueMatchIds.has(match.match_id),
   )
 
+  const matchModeLabel = sessionId ? 'Session Matches' : 'Event Matches'
+  const emptyMessage = sessionId
+    ? 'No matches have been recorded for this session yet.'
+    : 'No matches have been recorded for this event yet. Ad-hoc event submissions are included when no session is selected.'
+  const matchById = new Map(matches.map(match => [match.match_id, match]))
+
   const displayedMatches = showIssuesOnly ? issueMatches : matches
+
+  const matchSlots = displayedMatches.map((match, idx) => ({
+    round_number: idx + 1,
+    status: match.confirmation_status,
+    player_a: match.player_a,
+    player_b: match.player_b,
+    round_intent: null,
+    gap_band: null,
+    match_category: null,
+    player_a_role: null,
+    player_b_role: null,
+    match_id: match.match_id,
+    score: `${match.sets_won_a}-${match.sets_won_b}`,
+    issue: duplicateMatchIds.has(match.match_id) || scoreIssueMatchIds.has(match.match_id),
+    tooltip: `${match.player_a.name} ${match.sets_won_a}-${match.sets_won_b} ${match.player_b.name} • ${match.confirmation_status}`,
+  }))
+
+  const matrixModel = buildMatrixModel(matchSlots as any, {
+    sectionOf: () => 'players',
+    sectionMeta: () => ({ label: 'Players', accent: { bg: 'bg-slate-700', text: 'text-slate-100' } }),
+    cellOf: (slot: any) => {
+      const label = slot.score
+      const stripClass = slot.issue ? 'bg-amber-500' : 'bg-blue-500'
+      return { label, stripClass, tooltip: slot.tooltip, match_id: slot.match_id }
+    },
+  })
 
   function openEditor(match: MatchResponse) {
     if (match.ratings_applied_at) {
@@ -1565,16 +1605,16 @@ function MatchesTab({ academyId }: { academyId: string }) {
         </div>
       </div>
 
-      {sessionId && (
+      {eventId && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-white">Session Matches</h3>
-              <p className="text-xs text-gray-400">Review submitted matches for this session and make corrections as needed.</p>
+              <h3 className="text-lg font-semibold text-white">{matchModeLabel}</h3>
+              <p className="text-xs text-gray-400">Review submitted matches for this event and make corrections as needed.{!sessionId ? ' Ad-hoc event submissions are included when no session is selected.' : ''}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs text-gray-400">
-                {matchesQ.isLoading ? 'Loading matches…' : `${displayedMatches.length} match${displayedMatches.length !== 1 ? 'es' : ''}`}
+                {matchesLoading ? 'Loading matches…' : `${displayedMatches.length} match${displayedMatches.length !== 1 ? 'es' : ''}`}
               </span>
               <button type="button" onClick={() => setShowIssuesOnly(value => !value)}
                 className="px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-xs text-gray-300 hover:bg-gray-700 hover:text-white">
@@ -1583,7 +1623,7 @@ function MatchesTab({ academyId }: { academyId: string }) {
             </div>
           </div>
 
-          {matchesQ.isError && <ErrorMsg message={(matchesQ.error as Error).message} />}
+          {matchesError && <ErrorMsg message={(matchesError as Error).message} />}
 
           {matches.length > 0 && (
             <div className="grid gap-3 md:grid-cols-3">
@@ -1602,9 +1642,9 @@ function MatchesTab({ academyId }: { academyId: string }) {
             </div>
           )}
 
-          {matches.length === 0 && !matchesQ.isLoading && (
+          {matches.length === 0 && !matchesLoading && (
             <div className="bg-gray-800 rounded-xl p-4 text-sm text-gray-400">
-              No matches have been recorded for this session yet.
+              {emptyMessage}
             </div>
           )}
 
@@ -1637,125 +1677,98 @@ function MatchesTab({ academyId }: { academyId: string }) {
             </div>
           )}
 
-          <div className="space-y-3">
-            {displayedMatches.map(match => {
-              const isDuplicate = duplicateMatchIds.has(match.match_id)
-              const hasScoreIssue = scoreIssueMatchIds.has(match.match_id)
-              return (
-                <div key={match.match_id} className={`bg-gray-800 border rounded-xl p-4 ${isDuplicate || hasScoreIssue ? 'border-yellow-600' : 'border-gray-700'}`}>
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <div className="text-sm text-gray-400">{match.match_date}</div>
-                      <div className="text-white font-semibold">
-                        {match.player_a.name} {match.sets_won_a} - {match.sets_won_b} {match.player_b.name}
-                      </div>
-                      <div className="text-xs text-gray-400 mt-1">Status: {match.confirmation_status}</div>
-                      {(isDuplicate || hasScoreIssue) && (
-                        <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold">
-                          {isDuplicate && <span className="inline-flex items-center rounded-full bg-yellow-800 px-2 py-1 text-amber-100">Duplicate</span>}
-                          {hasScoreIssue && <span className="inline-flex items-center rounded-full bg-yellow-800 px-2 py-1 text-amber-100">Score issue</span>}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-2 items-center">
-                      {!match.ratings_applied_at ? (
-                        <>
-                          <button type="button" onClick={() => openEditor(match)}
-                            className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-sm font-semibold text-white">
-                            Edit
-                          </button>
-                          <button type="button" onClick={() => setDeleteMatchId(match.match_id)}
-                            className="px-3 py-2 rounded-lg border border-red-600 text-sm font-semibold text-red-300 hover:border-red-500 hover:text-white">
-                            Delete
-                          </button>
-                        </>
-                      ) : (
-                        <span className="inline-flex items-center rounded-full bg-gray-800 border border-gray-700 px-3 py-1 text-xs font-semibold text-amber-300">
-                          Rated — changes disallowed
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
+          <div className="space-y-4">
+            <FixtureMatrixGrid
+              model={matrixModel}
+              legend={[
+                { label: 'Normal match', bg: 'bg-blue-500' },
+                { label: 'Issue match', bg: 'bg-amber-500' },
+              ]}
+              sectionFilter={false}
+              dimCategory={null}
+              onCellClick={(cell) => {
+                if (!cell.match_id) return
+                const match = matchById.get(cell.match_id)
+                if (match) openEditor(match)
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {selectedMatch && (
+        <div className="bg-gray-900 border border-gray-700 rounded-xl p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm text-gray-400">Editing match</div>
+              <div className="text-white font-semibold">{selectedMatch.player_a.name} vs {selectedMatch.player_b.name}</div>
+            </div>
+            <button type="button" onClick={() => setSelectedMatch(null)}
+              className="text-xs text-gray-400 hover:text-white">Cancel</button>
           </div>
 
-          {selectedMatch && (
-            <div className="bg-gray-900 border border-gray-700 rounded-xl p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm text-gray-400">Editing match</div>
-                  <div className="text-white font-semibold">{selectedMatch.player_a.name} vs {selectedMatch.player_b.name}</div>
-                </div>
-                <button type="button" onClick={() => setSelectedMatch(null)}
-                  className="text-xs text-gray-400 hover:text-white">Cancel</button>
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Player A sets</label>
+              <input type="number" min={0} value={form.sets_won_a}
+                onChange={e => setForm(f => ({ ...f, sets_won_a: e.target.value }))}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Player B sets</label>
+              <input type="number" min={0} value={form.sets_won_b}
+                onChange={e => setForm(f => ({ ...f, sets_won_b: e.target.value }))}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Match date</label>
+              <input type="date" value={form.match_date}
+                onChange={e => setForm(f => ({ ...f, match_date: e.target.value }))}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
+            </div>
+          </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
-                <div>
-                  <label className="block text-sm text-gray-400 mb-1">Player A sets</label>
-                  <input type="number" min={0} value={form.sets_won_a}
-                    onChange={e => setForm(f => ({ ...f, sets_won_a: e.target.value }))}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-400 mb-1">Player B sets</label>
-                  <input type="number" min={0} value={form.sets_won_b}
-                    onChange={e => setForm(f => ({ ...f, sets_won_b: e.target.value }))}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-400 mb-1">Match date</label>
-                  <input type="date" value={form.match_date}
-                    onChange={e => setForm(f => ({ ...f, match_date: e.target.value }))}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
-                </div>
-              </div>
+          <div className="flex flex-wrap gap-2 mt-4">
+            <button type="button" onClick={handleUpdate}
+              className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-sm font-semibold text-white disabled:opacity-50"
+              disabled={updateMatchMut.isPending}>
+              {updateMatchMut.isPending ? 'Saving…' : 'Save changes'}
+            </button>
+            <button type="button" onClick={() => setSelectedMatch(null)}
+              className="px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-300 hover:border-gray-500">
+              Close
+            </button>
+          </div>
+        </div>
+      )}
 
-              <div className="flex flex-wrap gap-2 mt-4">
-                <button type="button" onClick={handleUpdate}
-                  className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-sm font-semibold text-white disabled:opacity-50"
-                  disabled={updateMatchMut.isPending}>
-                  {updateMatchMut.isPending ? 'Saving…' : 'Save changes'}
-                </button>
-                <button type="button" onClick={() => setSelectedMatch(null)}
-                  className="px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-300 hover:border-gray-500">
-                  Close
-                </button>
+      {deleteMatchId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8">
+          <div className="w-full max-w-md bg-gray-900 border border-gray-700 rounded-2xl p-6 space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold text-white">Confirm delete</h3>
+              <p className="text-sm text-gray-400 mt-2">This will permanently remove the match result from the session. Ratings and fixture state may need to be recomputed separately.</p>
+            </div>
+
+            <div className="space-y-3 text-sm text-gray-200">
+              <div className="bg-gray-800 rounded-xl p-3">
+                <div className="font-semibold text-white">Match ID</div>
+                <div className="text-xs text-gray-400 break-all">{deleteMatchId}</div>
               </div>
             </div>
-          )}
 
-          {deleteMatchId && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8">
-              <div className="w-full max-w-md bg-gray-900 border border-gray-700 rounded-2xl p-6 space-y-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-white">Confirm delete</h3>
-                  <p className="text-sm text-gray-400 mt-2">This will permanently remove the match result from the session. Ratings and fixture state may need to be recomputed separately.</p>
-                </div>
-
-                <div className="space-y-3 text-sm text-gray-200">
-                  <div className="bg-gray-800 rounded-xl p-3">
-                    <div className="font-semibold text-white">Match ID</div>
-                    <div className="text-xs text-gray-400 break-all">{deleteMatchId}</div>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-3 justify-end pt-2">
-                  <button type="button" onClick={() => setDeleteMatchId(null)}
-                    className="px-4 py-2 rounded-lg border border-gray-700 text-gray-300 hover:border-gray-500 text-sm">
-                    Cancel
-                  </button>
-                  <button type="button" onClick={() => deleteMatchMut.mutate(deleteMatchId)}
-                    className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-sm font-semibold text-white disabled:opacity-50"
-                    disabled={deleteMatchMut.isPending}>
-                    {deleteMatchMut.isPending ? 'Deleting…' : 'Delete match'}
-                  </button>
-                </div>
-              </div>
+            <div className="flex flex-wrap gap-3 justify-end pt-2">
+              <button type="button" onClick={() => setDeleteMatchId(null)}
+                className="px-4 py-2 rounded-lg border border-gray-700 text-gray-300 hover:border-gray-500 text-sm">
+                Cancel
+              </button>
+              <button type="button" onClick={() => deleteMatchMut.mutate(deleteMatchId)}
+                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-sm font-semibold text-white disabled:opacity-50"
+                disabled={deleteMatchMut.isPending}>
+                {deleteMatchMut.isPending ? 'Deleting…' : 'Delete match'}
+              </button>
             </div>
-          )}
+          </div>
         </div>
       )}
     </div>

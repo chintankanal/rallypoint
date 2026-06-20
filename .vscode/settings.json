@@ -1,0 +1,12 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^cd c:\\\\rallypoint; python -c \"from pathlib import Path; p=Path\\('web/src/pages/Dashboard\\.tsx'\\); lines=p\\.read_text\\(encoding='utf-8'\\)\\.splitlines\\(\\);\nfor i in range\\(1560, 1790\\):\n    if i < len\\(lines\\):\n        print\\(f'\\{i\\+1:4\\}: \\{lines\\[i\\]\\}'\\)\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^cd c:\\\\rallypoint; python -c \"from pathlib import Path; p=Path\\('web/src/pages/Dashboard\\.tsx'\\); lines=p\\.read_text\\(encoding='utf-8'\\)\\.splitlines\\(\\);\nfor i in range\\(1700, 1790\\):\n    if i < len\\(lines\\):\n        print\\(f'\\{i\\+1:4\\}: \\{lines\\[i\\]\\}'\\)\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

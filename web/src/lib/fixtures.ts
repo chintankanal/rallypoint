@@ -17,6 +17,7 @@ export interface MatrixCell {
   stripClass: string
   tooltip: string
   category: string
+  match_id?: string
 }
 
 export interface MatrixSection {

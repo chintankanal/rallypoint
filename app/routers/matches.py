@@ -106,6 +106,26 @@ def list_session_matches(session_id: str, current_user: dict = _ADMIN_COACH):
     return matches
 
 
+@router.get("/event/{event_id}", response_model=List[MatchResponse])
+def list_event_matches(event_id: str, current_user: dict = _ADMIN_COACH):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT m.match_id, e.scheduling_mode "
+                "FROM match m JOIN event e ON e.event_id = m.event_id "
+                "WHERE m.event_id = %s "
+                "ORDER BY m.match_date DESC, m.match_timestamp DESC",
+                (event_id,),
+            )
+            rows = cur.fetchall()
+            matches = [
+                MatchResponse(**match_service._fetch_match(cur, row["match_id"], row["scheduling_mode"]))
+                for row in rows
+            ]
+
+    return matches
+
+
 @router.post("/{match_id}/confirm", response_model=MatchResponse)
 def confirm_match(match_id: UUID, body: ConfirmMatchRequest, current_user: dict = _ANY_USER):
     if current_user["role"] == "PLAYER" and not current_user.get("player_id"):

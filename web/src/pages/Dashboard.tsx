@@ -1458,6 +1458,56 @@ function MatchesTab({ academyId }: { academyId: string }) {
 
   const sessionOptions = sessionsQ.data ?? []
   const matches = matchesQ.data ?? []
+  const [showIssuesOnly, setShowIssuesOnly] = useState(false)
+
+  const REQUIRED_MATCH_WINNER_SETS: Record<string, number> = {
+    BEST_OF_3: 2,
+    BEST_OF_5: 3,
+    BEST_OF_7: 4,
+  }
+
+  function normalizeMatchPair(match: MatchResponse) {
+    const players = [match.player_a.name, match.player_b.name].sort()
+    return `${players[0]}|${players[1]}|${match.match_date}`
+  }
+
+  function isScoreProblem(match: MatchResponse) {
+    const required = REQUIRED_MATCH_WINNER_SETS[match.match_format] ?? 0
+    const winnerSets = Math.max(match.sets_won_a, match.sets_won_b)
+    const loserSets = Math.min(match.sets_won_a, match.sets_won_b)
+
+    if (match.is_retirement) {
+      return winnerSets < 1 || winnerSets < loserSets
+    }
+
+    if (winnerSets !== required) return true
+    if (loserSets >= required) return true
+    if (match.sets_won_a === match.sets_won_b) return true
+    return false
+  }
+
+  const duplicateMatchIds = new Set(
+    Object.values(
+      matches.reduce<Record<string, MatchResponse[]>>((acc, match) => {
+        const key = normalizeMatchPair(match)
+        acc[key] = acc[key] ? [...acc[key], match] : [match]
+        return acc
+      }, {}),
+    )
+      .filter(group => group.length > 1)
+      .flat()
+      .map(match => match.match_id),
+  )
+
+  const scoreIssueMatchIds = new Set(
+    matches.filter(isScoreProblem).map(match => match.match_id),
+  )
+
+  const issueMatches = matches.filter(
+    match => duplicateMatchIds.has(match.match_id) || scoreIssueMatchIds.has(match.match_id),
+  )
+
+  const displayedMatches = showIssuesOnly ? issueMatches : matches
 
   function openEditor(match: MatchResponse) {
     if (match.ratings_applied_at) {
@@ -1517,17 +1567,40 @@ function MatchesTab({ academyId }: { academyId: string }) {
 
       {sessionId && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-4">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h3 className="text-lg font-semibold text-white">Session Matches</h3>
               <p className="text-xs text-gray-400">Review submitted matches for this session and make corrections as needed.</p>
             </div>
-            <span className="text-xs text-gray-400">
-              {matchesQ.isLoading ? 'Loading matches…' : `${matches.length} match${matches.length !== 1 ? 'es' : ''}`}
-            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-gray-400">
+                {matchesQ.isLoading ? 'Loading matches…' : `${displayedMatches.length} match${displayedMatches.length !== 1 ? 'es' : ''}`}
+              </span>
+              <button type="button" onClick={() => setShowIssuesOnly(value => !value)}
+                className="px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-xs text-gray-300 hover:bg-gray-700 hover:text-white">
+                {showIssuesOnly ? 'Show all matches' : 'Show only issues'}
+              </button>
+            </div>
           </div>
 
           {matchesQ.isError && <ErrorMsg message={(matchesQ.error as Error).message} />}
+
+          {matches.length > 0 && (
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
+                <div className="text-xs text-gray-400">Total matches</div>
+                <div className="mt-2 text-2xl font-semibold text-white">{matches.length}</div>
+              </div>
+              <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
+                <div className="text-xs text-gray-400">Duplicate submissions</div>
+                <div className="mt-2 text-2xl font-semibold text-white">{duplicateMatchIds.size}</div>
+              </div>
+              <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
+                <div className="text-xs text-gray-400">Invalid scores</div>
+                <div className="mt-2 text-2xl font-semibold text-white">{scoreIssueMatchIds.size}</div>
+              </div>
+            </div>
+          )}
 
           {matches.length === 0 && !matchesQ.isLoading && (
             <div className="bg-gray-800 rounded-xl p-4 text-sm text-gray-400">
@@ -1535,38 +1608,77 @@ function MatchesTab({ academyId }: { academyId: string }) {
             </div>
           )}
 
-          <div className="space-y-3">
-            {matches.map(match => (
-              <div key={match.match_id} className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <div className="text-sm text-gray-400">{match.match_date}</div>
-                    <div className="text-white font-semibold">
-                      {match.player_a.name} {match.sets_won_a} - {match.sets_won_b} {match.player_b.name}
+          {issueMatches.length > 0 && !showIssuesOnly && (
+            <div className="bg-yellow-950 border border-yellow-800 rounded-xl p-4">
+              <div className="text-sm font-semibold text-amber-200">Match issues detected</div>
+              <div className="mt-3 space-y-2 text-sm text-gray-200">
+                {issueMatches.slice(0, 3).map(match => (
+                  <div key={match.match_id} className="rounded-xl bg-gray-900 border border-yellow-800 p-3">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <div className="font-semibold text-white">{match.player_a.name} vs {match.player_b.name}</div>
+                        <div className="text-xs text-gray-400">{match.match_date} · {match.sets_won_a} - {match.sets_won_b}</div>
+                      </div>
+                      <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                        {duplicateMatchIds.has(match.match_id) && (
+                          <span className="inline-flex items-center rounded-full bg-yellow-800 px-2 py-1 text-amber-100">Duplicate</span>
+                        )}
+                        {scoreIssueMatchIds.has(match.match_id) && (
+                          <span className="inline-flex items-center rounded-full bg-yellow-800 px-2 py-1 text-amber-100">Score issue</span>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-400 mt-1">Status: {match.confirmation_status}</div>
                   </div>
-                  <div className="flex flex-wrap gap-2 items-center">
-                    {!match.ratings_applied_at ? (
-                      <>
-                        <button type="button" onClick={() => openEditor(match)}
-                          className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-sm font-semibold text-white">
-                          Edit
-                        </button>
-                        <button type="button" onClick={() => setDeleteMatchId(match.match_id)}
-                          className="px-3 py-2 rounded-lg border border-red-600 text-sm font-semibold text-red-300 hover:border-red-500 hover:text-white">
-                          Delete
-                        </button>
-                      </>
-                    ) : (
-                      <span className="inline-flex items-center rounded-full bg-gray-800 border border-gray-700 px-3 py-1 text-xs font-semibold text-amber-300">
-                        Rated — changes disallowed
-                      </span>
-                    )}
+                ))}
+                {issueMatches.length > 3 && (
+                  <div className="text-xs text-gray-300">And {issueMatches.length - 3} more issue match{issueMatches.length - 3 !== 1 ? 'es' : ''}.</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {displayedMatches.map(match => {
+              const isDuplicate = duplicateMatchIds.has(match.match_id)
+              const hasScoreIssue = scoreIssueMatchIds.has(match.match_id)
+              return (
+                <div key={match.match_id} className={`bg-gray-800 border rounded-xl p-4 ${isDuplicate || hasScoreIssue ? 'border-yellow-600' : 'border-gray-700'}`}>
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <div className="text-sm text-gray-400">{match.match_date}</div>
+                      <div className="text-white font-semibold">
+                        {match.player_a.name} {match.sets_won_a} - {match.sets_won_b} {match.player_b.name}
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1">Status: {match.confirmation_status}</div>
+                      {(isDuplicate || hasScoreIssue) && (
+                        <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold">
+                          {isDuplicate && <span className="inline-flex items-center rounded-full bg-yellow-800 px-2 py-1 text-amber-100">Duplicate</span>}
+                          {hasScoreIssue && <span className="inline-flex items-center rounded-full bg-yellow-800 px-2 py-1 text-amber-100">Score issue</span>}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-2 items-center">
+                      {!match.ratings_applied_at ? (
+                        <>
+                          <button type="button" onClick={() => openEditor(match)}
+                            className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-sm font-semibold text-white">
+                            Edit
+                          </button>
+                          <button type="button" onClick={() => setDeleteMatchId(match.match_id)}
+                            className="px-3 py-2 rounded-lg border border-red-600 text-sm font-semibold text-red-300 hover:border-red-500 hover:text-white">
+                            Delete
+                          </button>
+                        </>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full bg-gray-800 border border-gray-700 px-3 py-1 text-xs font-semibold text-amber-300">
+                          Rated — changes disallowed
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
           {selectedMatch && (

@@ -68,7 +68,7 @@ export default function FixtureMatrixGrid({
                     <button
                       type="button"
                       onClick={e => { e.stopPropagation(); onCellDelete?.(cell) }}
-                      className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-600 hover:bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-xs font-bold"
+                      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-600 hover:bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-xs font-bold z-10"
                       title="Delete match"
                     >
                       ×

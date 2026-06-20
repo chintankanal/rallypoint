@@ -173,6 +173,7 @@ export function buildMatrixModel<P extends MatrixPlayer>(
       stripClass: paMeta.stripClass,
       tooltip: (paMeta as any).tooltip ?? paMeta.label,
       category: (paMeta as any).category ?? 'competitive',
+      match_id: (paMeta as any).match_id,
     }
 
     if (pb) {
@@ -185,6 +186,7 @@ export function buildMatrixModel<P extends MatrixPlayer>(
         stripClass: pbMeta.stripClass,
         tooltip: (pbMeta as any).tooltip ?? pbMeta.label,
         category: (pbMeta as any).category ?? 'competitive',
+        match_id: (pbMeta as any).match_id,
       }
     }
   }

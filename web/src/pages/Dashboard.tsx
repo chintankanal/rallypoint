@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   matchesApi, playersApi, academiesApi, eventsApi, sessionsApi,
-  type PlayerSearchResult, type LeaderboardEntry, type SessionSummary, type FixtureSlot, type FixturesResponse,
+  type MatchResponse, type PlayerSearchResult, type LeaderboardEntry, type SessionSummary, type FixtureSlot, type FixturesResponse,
 } from '../api/client'
 import FixtureMatrixGrid from '../components/FixtureMatrixGrid'
 import { buildMatrixModel, classifyCell, TIER_META, GAP_BAND_LEGEND, MATCH_CAT_BADGE } from '../lib/fixtures'
@@ -48,7 +48,7 @@ export default function Dashboard() {
   )
 }
 
-type Tab = 'roster' | 'events' | 'sessions' | 'submit' | 'register-player'
+type Tab = 'roster' | 'events' | 'sessions' | 'submit' | 'matches' | 'register-player'
 
 function DashboardInner() {
   const { user } = useAuth()
@@ -63,6 +63,7 @@ function DashboardInner() {
           ['roster', 'Roster'],
           ['events', 'My Events'],
           ['sessions', 'Sessions & Fixtures'],
+          ['matches', 'Manage Matches'],
           ['submit', 'Submit Match'],
           ['register-player', 'Register Player'],
         ] as [Tab, string][]).map(([t, label]) => (
@@ -78,6 +79,7 @@ function DashboardInner() {
       {tab === 'roster' && user?.academy_id && <RosterTab academyId={user.academy_id} />}
       {tab === 'events' && user?.academy_id && <EventsTab academyId={user.academy_id} />}
       {tab === 'sessions' && user?.academy_id && <SessionsTab academyId={user.academy_id} />}
+      {tab === 'matches' && user?.academy_id && <MatchesTab academyId={user.academy_id} />}
       {tab === 'submit' && user?.academy_id && <SubmitMatchTab academyId={user.academy_id} />}
       {tab === 'register-player' && user?.academy_id && <RegisterPlayerTab academyId={user.academy_id} />}
     </div>
@@ -1399,6 +1401,251 @@ function SubmitMatchTab({ academyId }: { academyId: string }) {
         className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg transition-colors disabled:opacity-50">
         {mutation.isPending ? 'Submitting…' : 'Submit Match'}
       </button>
+    </div>
+  )
+}
+
+function MatchesTab({ academyId }: { academyId: string }) {
+  const [eventId, setEventId] = useState('')
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [selectedMatch, setSelectedMatch] = useState<MatchResponse | null>(null)
+  const [deleteMatchId, setDeleteMatchId] = useState<string | null>(null)
+  const [form, setForm] = useState({ sets_won_a: '', sets_won_b: '', match_date: '' })
+  const [apiError, setApiError] = useState<string | null>(null)
+
+  const qc = useQueryClient()
+
+  const eventsQ = useQuery({ queryKey: ['events'], queryFn: () => eventsApi.list() })
+  const sessionsQ = useQuery({
+    queryKey: ['sessions', eventId],
+    queryFn: () => sessionsApi.list(eventId),
+    enabled: !!eventId,
+  })
+  const matchesQ = useQuery({
+    queryKey: ['session-matches', sessionId],
+    queryFn: () => matchesApi.forSession(sessionId!),
+    enabled: !!sessionId,
+  })
+
+  const visibleEvents = eventsQ.data?.items.filter(ev => {
+    if (ev.host_academy_id === academyId) return true
+    if (Array.isArray((ev as any).participating_academies) && (ev as any).participating_academies.some((a: any) => a.academy_id === academyId)) return true
+    if (Array.isArray((ev as any).participating_academy_ids) && (ev as any).participating_academy_ids.includes(academyId)) return true
+    if (Array.isArray((ev as any).participatingAcademies) && (ev as any).participatingAcademies.some((a: any) => a.academy_id === academyId)) return true
+    return ev.scheduling_mode === 'INTRA_ACADEMY' && (!Array.isArray((ev as any).participating_academies) || (ev as any).participating_academies.length === 0)
+  }) ?? []
+
+  const updateMatchMut = useMutation({
+    mutationFn: async (body: { sets_won_a: number; sets_won_b: number; match_date: string }) =>
+      matchesApi.update(selectedMatch!.match_id, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['session-matches', sessionId] })
+      setSelectedMatch(null)
+      setApiError(null)
+    },
+    onError: (error: Error) => setApiError(error.message),
+  })
+
+  const deleteMatchMut = useMutation({
+    mutationFn: async (id: string) => matchesApi.remove(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['session-matches', sessionId] })
+      setApiError(null)
+      setDeleteMatchId(null)
+    },
+    onError: (error: Error) => setApiError(error.message),
+  })
+
+  const sessionOptions = sessionsQ.data ?? []
+  const matches = matchesQ.data ?? []
+
+  function openEditor(match: MatchResponse) {
+    if (match.ratings_applied_at) {
+      setApiError('Rated matches cannot be edited')
+      return
+    }
+    setSelectedMatch(match)
+    setForm({
+      sets_won_a: String(match.sets_won_a),
+      sets_won_b: String(match.sets_won_b),
+      match_date: match.match_date,
+    })
+    setApiError(null)
+  }
+
+  function handleUpdate() {
+    if (!selectedMatch) return
+    updateMatchMut.mutate({
+      sets_won_a: Number(form.sets_won_a),
+      sets_won_b: Number(form.sets_won_b),
+      match_date: form.match_date,
+    })
+  }
+
+  if (eventsQ.isLoading) return <Spinner />
+  if (eventsQ.error) return <ErrorMsg message={(eventsQ.error as Error).message} />
+
+  return (
+    <div className="space-y-5">
+      {apiError && <ErrorMsg message={apiError} />}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm text-gray-400 mb-1">Event</label>
+          <select value={eventId} onChange={e => { setEventId(e.target.value); setSessionId(null); setSelectedMatch(null) }}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm">
+            <option value="">Select event…</option>
+            {visibleEvents.map(ev => (
+              <option key={ev.event_id} value={ev.event_id}>{ev.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm text-gray-400 mb-1">Session</label>
+          <select value={sessionId ?? ''} onChange={e => { setSessionId(e.target.value || null); setSelectedMatch(null) }}
+            disabled={!eventId}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm">
+            <option value="">Select session…</option>
+            {sessionOptions.map(session => (
+              <option key={session.session_id} value={session.session_id}>
+                {session.session_date} · {session.match_format.replace(/_/g, ' ')}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {sessionId && (
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold text-white">Session Matches</h3>
+              <p className="text-xs text-gray-400">Review submitted matches for this session and make corrections as needed.</p>
+            </div>
+            <span className="text-xs text-gray-400">
+              {matchesQ.isLoading ? 'Loading matches…' : `${matches.length} match${matches.length !== 1 ? 'es' : ''}`}
+            </span>
+          </div>
+
+          {matchesQ.isError && <ErrorMsg message={(matchesQ.error as Error).message} />}
+
+          {matches.length === 0 && !matchesQ.isLoading && (
+            <div className="bg-gray-800 rounded-xl p-4 text-sm text-gray-400">
+              No matches have been recorded for this session yet.
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {matches.map(match => (
+              <div key={match.match_id} className="bg-gray-800 border border-gray-700 rounded-xl p-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <div className="text-sm text-gray-400">{match.match_date}</div>
+                    <div className="text-white font-semibold">
+                      {match.player_a.name} {match.sets_won_a} - {match.sets_won_b} {match.player_b.name}
+                    </div>
+                    <div className="text-xs text-gray-400 mt-1">Status: {match.confirmation_status}</div>
+                  </div>
+                  <div className="flex flex-wrap gap-2 items-center">
+                    {!match.ratings_applied_at ? (
+                      <>
+                        <button type="button" onClick={() => openEditor(match)}
+                          className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-sm font-semibold text-white">
+                          Edit
+                        </button>
+                        <button type="button" onClick={() => setDeleteMatchId(match.match_id)}
+                          className="px-3 py-2 rounded-lg border border-red-600 text-sm font-semibold text-red-300 hover:border-red-500 hover:text-white">
+                          Delete
+                        </button>
+                      </>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full bg-gray-800 border border-gray-700 px-3 py-1 text-xs font-semibold text-amber-300">
+                        Rated — changes disallowed
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {selectedMatch && (
+            <div className="bg-gray-900 border border-gray-700 rounded-xl p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm text-gray-400">Editing match</div>
+                  <div className="text-white font-semibold">{selectedMatch.player_a.name} vs {selectedMatch.player_b.name}</div>
+                </div>
+                <button type="button" onClick={() => setSelectedMatch(null)}
+                  className="text-xs text-gray-400 hover:text-white">Cancel</button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Player A sets</label>
+                  <input type="number" min={0} value={form.sets_won_a}
+                    onChange={e => setForm(f => ({ ...f, sets_won_a: e.target.value }))}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Player B sets</label>
+                  <input type="number" min={0} value={form.sets_won_b}
+                    onChange={e => setForm(f => ({ ...f, sets_won_b: e.target.value }))}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Match date</label>
+                  <input type="date" value={form.match_date}
+                    onChange={e => setForm(f => ({ ...f, match_date: e.target.value }))}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 mt-4">
+                <button type="button" onClick={handleUpdate}
+                  className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-sm font-semibold text-white disabled:opacity-50"
+                  disabled={updateMatchMut.isPending}>
+                  {updateMatchMut.isPending ? 'Saving…' : 'Save changes'}
+                </button>
+                <button type="button" onClick={() => setSelectedMatch(null)}
+                  className="px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-300 hover:border-gray-500">
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
+
+          {deleteMatchId && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8">
+              <div className="w-full max-w-md bg-gray-900 border border-gray-700 rounded-2xl p-6 space-y-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Confirm delete</h3>
+                  <p className="text-sm text-gray-400 mt-2">This will permanently remove the match result from the session. Ratings and fixture state may need to be recomputed separately.</p>
+                </div>
+
+                <div className="space-y-3 text-sm text-gray-200">
+                  <div className="bg-gray-800 rounded-xl p-3">
+                    <div className="font-semibold text-white">Match ID</div>
+                    <div className="text-xs text-gray-400 break-all">{deleteMatchId}</div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-3 justify-end pt-2">
+                  <button type="button" onClick={() => setDeleteMatchId(null)}
+                    className="px-4 py-2 rounded-lg border border-gray-700 text-gray-300 hover:border-gray-500 text-sm">
+                    Cancel
+                  </button>
+                  <button type="button" onClick={() => deleteMatchMut.mutate(deleteMatchId)}
+                    className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-sm font-semibold text-white disabled:opacity-50"
+                    disabled={deleteMatchMut.isPending}>
+                    {deleteMatchMut.isPending ? 'Deleting…' : 'Delete match'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -1,17 +1,25 @@
 import psycopg2.errors
 from typing import List
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, status
 
 from app.database import get_connection
 from app.dependencies.auth import get_current_user, require_roles
 from app.services import match_service
-from schemas.match import ConfirmMatchRequest, MatchResponse, MatchSubmit, VoidMatchRequest
+from schemas.match import (
+    ConfirmMatchRequest,
+    MatchDeleteRequest,
+    MatchResponse,
+    MatchSubmit,
+    MatchUpdate,
+    VoidMatchRequest,
+)
 
 router = APIRouter(prefix="/matches", tags=["matches"])
 
 _ANY_USER = Depends(get_current_user)
 _ADMIN_REFEREE = Depends(require_roles("ADMIN", "REFEREE"))
+_ADMIN_COACH = Depends(require_roles("ADMIN", "COACH"))
 
 
 @router.post("", response_model=MatchResponse, status_code=status.HTTP_201_CREATED)
@@ -78,6 +86,26 @@ def get_match(match_id: UUID, _: dict = _ANY_USER):
     return MatchResponse(**row)
 
 
+@router.get("/session/{session_id}", response_model=List[MatchResponse])
+def list_session_matches(session_id: str, current_user: dict = _ADMIN_COACH):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT m.match_id, e.scheduling_mode "
+                "FROM match m JOIN event e ON e.event_id = m.event_id "
+                "WHERE m.session_id = %s "
+                "ORDER BY m.match_date DESC, m.match_timestamp DESC",
+                (session_id,),
+            )
+            rows = cur.fetchall()
+            matches = [
+                MatchResponse(**match_service._fetch_match(cur, row["match_id"], row["scheduling_mode"]))
+                for row in rows
+            ]
+
+    return matches
+
+
 @router.post("/{match_id}/confirm", response_model=MatchResponse)
 def confirm_match(match_id: UUID, body: ConfirmMatchRequest, current_user: dict = _ANY_USER):
     if current_user["role"] == "PLAYER" and not current_user.get("player_id"):
@@ -111,6 +139,26 @@ def confirm_match(match_id: UUID, body: ConfirmMatchRequest, current_user: dict 
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     return MatchResponse(**row)
+
+
+@router.patch("/{match_id}", response_model=MatchResponse)
+def update_match(match_id: UUID, body: MatchUpdate, current_user: dict = _ADMIN_COACH):
+    try:
+        with get_connection() as conn:
+            row = match_service.update_match(conn, str(match_id), body, current_user["user_id"])
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    return MatchResponse(**row)
+
+
+@router.delete("/{match_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_match(match_id: UUID, body: MatchDeleteRequest | None = Body(default=None), current_user: dict = _ADMIN_COACH):
+    try:
+        with get_connection() as conn:
+            match_service.delete_match(conn, str(match_id), current_user["user_id"], body.reason if body else None)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
 
 @router.post("/{match_id}/void", response_model=MatchResponse)

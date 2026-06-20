@@ -357,6 +357,158 @@ def submit_match(conn, body, submitted_by_user_id: str, caller_role: str = "") -
         return _fetch_match(cur, match_id, event["scheduling_mode"])
 
 
+def update_match(conn, match_id: str, body, acting_user_id: str) -> dict:
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT match_id, event_id, session_id, fixture_slot_id, player_a_id, player_b_id, "
+            "match_format, is_retirement, confirmation_status, ratings_applied_at, "
+            "sets_won_a, sets_won_b, sets_won_a_actual, sets_won_b_actual "
+            "FROM match WHERE match_id = %s",
+            (match_id,),
+        )
+        match = cur.fetchone()
+        if not match:
+            raise ValueError("Match not found")
+        if match["confirmation_status"] == "VOIDED":
+            raise ValueError("Cannot edit a voided match")
+        if match["ratings_applied_at"] is not None:
+            raise ValueError("Cannot edit a match after ratings have been applied")
+
+        is_retirement = body.is_retirement if body.is_retirement is not None else match["is_retirement"]
+        sets_won_a = body.sets_won_a if body.sets_won_a is not None else match["sets_won_a"]
+        sets_won_b = body.sets_won_b if body.sets_won_b is not None else match["sets_won_b"]
+        sets_won_a_actual = body.sets_won_a_actual if body.sets_won_a_actual is not None else match["sets_won_a_actual"]
+        sets_won_b_actual = body.sets_won_b_actual if body.sets_won_b_actual is not None else match["sets_won_b_actual"]
+
+        if sets_won_a < 0 or sets_won_b < 0:
+            raise ValueError("Match scores cannot be negative")
+
+        if not is_retirement:
+            required = _REQUIRED_WINNER_SETS.get(match["match_format"], 0)
+            winner_sets = max(sets_won_a, sets_won_b)
+            loser_sets = min(sets_won_a, sets_won_b)
+            if winner_sets != required:
+                raise ValueError(
+                    f"{match['match_format']} match winner must have exactly {required} sets; got {sets_won_a}-{sets_won_b}"
+                )
+            if loser_sets >= required:
+                raise ValueError(
+                    f"Loser cannot have {loser_sets} sets in a {match['match_format']} match"
+                )
+        else:
+            if max(sets_won_a, sets_won_b) < 1:
+                raise ValueError("Retirement matches must include at least one set score")
+
+        cur.execute(
+            "SELECT player_id, current_rating FROM player WHERE player_id = %s",
+            (match["player_a_id"],),
+        )
+        player_a = cur.fetchone()
+        cur.execute(
+            "SELECT player_id, current_rating FROM player WHERE player_id = %s",
+            (match["player_b_id"],),
+        )
+        player_b = cur.fetchone()
+
+        if not player_a or not player_b:
+            raise ValueError("Players for this match are not available")
+
+        gap_band = None
+        if match["fixture_slot_id"]:
+            cur.execute(
+                "SELECT gap_band FROM fixture_slot WHERE slot_id = %s",
+                (match["fixture_slot_id"],),
+            )
+            slot = cur.fetchone()
+            gap_band = slot["gap_band"] if slot else None
+
+        rating_eligible, not_eligible_reason = _check_eligibility(
+            float(player_a["current_rating"]),
+            float(player_b["current_rating"]),
+            sets_won_a,
+            sets_won_b,
+            is_retirement,
+            match["match_format"],
+            gap_band,
+        )
+
+        winner_id = match["player_a_id"] if sets_won_a > sets_won_b else match["player_b_id"]
+        update_fields = [
+            ("sets_won_a", sets_won_a),
+            ("sets_won_b", sets_won_b),
+            ("sets_won_a_actual", sets_won_a_actual),
+            ("sets_won_b_actual", sets_won_b_actual),
+            ("is_retirement", is_retirement),
+            ("winner_id", winner_id),
+            ("rating_eligible", rating_eligible),
+            ("not_eligible_reason", not_eligible_reason),
+            ("updated_at", datetime.now(timezone.utc)),
+        ]
+        if body.match_date is not None:
+            update_fields.append(("match_date", body.match_date))
+            update_fields.append(("confirmation_deadline", end_of_day_ist(body.match_date)))
+
+        assignments = ", ".join(f"{field} = %s" for field, _ in update_fields)
+        values = [value for _, value in update_fields] + [match_id]
+        cur.execute(
+            f"UPDATE match SET {assignments} WHERE match_id = %s",
+            tuple(values),
+        )
+
+        if getattr(body, "set_scores", None) is not None:
+            store_set_scores(conn, match_id, body.set_scores)
+
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT scheduling_mode FROM event WHERE event_id = %s",
+            (match["event_id"],),
+        )
+        event = cur.fetchone()
+        return _fetch_match(cur, match_id, event["scheduling_mode"])
+
+
+def delete_match(conn, match_id: str, acting_user_id: str, reason: str | None = None) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT match_id, confirmation_status, ratings_applied_at, session_id, fixture_slot_id, event_id "
+            "FROM match WHERE match_id = %s",
+            (match_id,),
+        )
+        match = cur.fetchone()
+        if not match:
+            raise ValueError("Match not found")
+        if match["confirmation_status"] == "VOIDED":
+            raise ValueError("Cannot delete a voided match")
+        if match["ratings_applied_at"] is not None:
+            raise ValueError("Cannot delete a match after ratings have been applied")
+
+        if match["fixture_slot_id"]:
+            cur.execute(
+                "UPDATE fixture_slot SET status = 'SCHEDULED', match_id = NULL WHERE slot_id = %s",
+                (match["fixture_slot_id"],),
+            )
+
+        cur.execute("DELETE FROM match WHERE match_id = %s", (match_id,))
+
+        if match["session_id"]:
+            cur.execute(
+                "SELECT status FROM session WHERE session_id = %s",
+                (match["session_id"],),
+            )
+            session = cur.fetchone()
+            if session and session["status"] == "COMPLETED":
+                cur.execute(
+                    "SELECT COUNT(*) AS played FROM fixture_slot WHERE session_id = %s AND status = 'PLAYED'",
+                    (match["session_id"],),
+                )
+                played = cur.fetchone()["played"]
+                new_status = "SCHEDULED" if played == 0 else "IN_PROGRESS"
+                cur.execute(
+                    "UPDATE session SET status = %s, updated_at = NOW() WHERE session_id = %s",
+                    (new_status, match["session_id"]),
+                )
+
+
 def confirm_match(conn, match_id: str, confirmed: bool, dispute_reason: str | None,
                   acting_user_id: str) -> dict:
     with conn.cursor() as cur:

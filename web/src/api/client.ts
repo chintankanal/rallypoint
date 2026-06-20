@@ -547,6 +547,7 @@ export interface MatchResponse {
   confirmation_status: string
   confirmation_deadline: string
   match_date: string
+  ratings_applied_at: string | null
   set_scores?: SetScore[] | null
 }
 
@@ -559,7 +560,18 @@ export const matchesApi = {
   }) => request<MatchResponse>('/matches', { method: 'POST', body: JSON.stringify(body) }),
   get: (id: string) => request<MatchResponse>(`/matches/${id}`),
   confirm: (id: string, body: { confirmed: boolean; dispute_reason?: string }) =>
-    request<MatchResponse>(`/matches/${id}/confirm`, { method: 'POST', body: JSON.stringify(body) }),  pending: () => request<MatchResponse[]>('/matches/pending'),}
+    request<MatchResponse>(`/matches/${id}/confirm`, { method: 'POST', body: JSON.stringify(body) }),
+  update: (id: string, body: {
+    sets_won_a?: number; sets_won_b?: number
+    sets_won_a_actual?: number; sets_won_b_actual?: number
+    is_retirement?: boolean; match_date?: string
+    set_scores?: Array<{ points_a: number; points_b: number }> | null
+  }) => request<MatchResponse>(`/matches/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  remove: (id: string, body?: { reason?: string }) =>
+    request<void>(`/matches/${id}`, { method: 'DELETE', body: body ? JSON.stringify(body) : undefined }),
+  forSession: (sessionId: string) => request<MatchResponse[]>(`/matches/session/${sessionId}`),
+  pending: () => request<MatchResponse[]>('/matches/pending'),
+}
 
 // ── Sessions & Fixtures ───────────────────────────────────────────────────────
 

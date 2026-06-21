@@ -1409,7 +1409,10 @@ function MatchesTab({ academyId }: { academyId: string }) {
   const [eventId, setEventId] = useState('')
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [selectedMatch, setSelectedMatch] = useState<MatchResponse | null>(null)
+  const [viewMatch, setViewMatch] = useState<MatchResponse | null>(null)
   const [deleteMatchId, setDeleteMatchId] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'matrix' | 'list'>('matrix')
+  const [filter, setFilter] = useState<'all' | 'unrated' | 'issues' | 'adhoc'>('all')
   const [form, setForm] = useState({ sets_won_a: '', sets_won_b: '', match_date: '' })
   const [apiError, setApiError] = useState<string | null>(null)
 
@@ -1476,7 +1479,6 @@ function MatchesTab({ academyId }: { academyId: string }) {
   })
 
   const sessionOptions = sessionsQ.data ?? []
-  const [showIssuesOnly, setShowIssuesOnly] = useState(false)
 
   const REQUIRED_MATCH_WINNER_SETS: Record<string, number> = {
     BEST_OF_3: 2,
@@ -1521,6 +1523,22 @@ function MatchesTab({ academyId }: { academyId: string }) {
     matches.filter(isScoreProblem).map(match => match.match_id),
   )
 
+  type MatchStatus = 'rated' | 'issue' | 'pending' | 'unrated'
+
+  function matchStatus(m: MatchResponse): MatchStatus {
+    if (m.ratings_applied_at) return 'rated'
+    if (duplicateMatchIds.has(m.match_id) || scoreIssueMatchIds.has(m.match_id) || !m.rating_eligible) return 'issue'
+    if (m.confirmation_status === 'PENDING') return 'pending'
+    return 'unrated'
+  }
+
+  const STATUS_META: Record<MatchStatus, { label: string; dot: string; badge: string }> = {
+    rated:   { label: 'Rated',   dot: 'bg-emerald-500', badge: 'bg-emerald-900/40 text-emerald-200 border-emerald-700/50' },
+    unrated: { label: 'Unrated', dot: 'bg-amber-500',   badge: 'bg-amber-900/40 text-amber-200 border-amber-700/50' },
+    pending: { label: 'Pending', dot: 'bg-slate-400',   badge: 'bg-slate-800 text-slate-300 border-slate-600/50' },
+    issue:   { label: 'Issue',   dot: 'bg-red-500',     badge: 'bg-red-900/40 text-red-200 border-red-700/50' },
+  }
+
   const issueMatches = matches.filter(
     match => duplicateMatchIds.has(match.match_id) || scoreIssueMatchIds.has(match.match_id),
   )
@@ -1534,16 +1552,23 @@ function MatchesTab({ academyId }: { academyId: string }) {
   ).length
 
   const matchModeLabel = sessionId ? 'Session Matches' : 'Event Matches'
+  const isAdhoc = (m: MatchResponse) => !m.fixture_slot_id
+  const displayedMatches =
+    filter === 'issues'
+      ? issueMatches
+      : filter === 'unrated'
+        ? matches.filter(m => matchStatus(m) === 'unrated')
+        : filter === 'adhoc'
+          ? matches.filter(isAdhoc)
+          : matches
   const emptyMessage = sessionId
     ? 'No matches have been recorded for this session yet.'
     : 'No matches have been recorded for this event yet. Ad-hoc event submissions are included when no session is selected.'
   const matchById = new Map(matches.map(match => [match.match_id, match]))
 
-  const displayedMatches = showIssuesOnly ? issueMatches : matches
-
   const matchSlots = displayedMatches.map((match, idx) => ({
     round_number: idx + 1,
-    status: match.confirmation_status,
+    status: matchStatus(match),
     player_a: match.player_a,
     player_b: match.player_b,
     round_intent: null,
@@ -1563,7 +1588,7 @@ function MatchesTab({ academyId }: { academyId: string }) {
     cellOf: (slot: any) => {
       const label = slot.score
       const stripClass = slot.issue ? 'bg-amber-500' : 'bg-blue-500'
-      return { label, stripClass, tooltip: slot.tooltip, match_id: slot.match_id }
+      return { label, stripClass, tooltip: slot.tooltip, match_id: slot.match_id, status: slot.status }
     },
   })
 
@@ -1630,14 +1655,28 @@ function MatchesTab({ academyId }: { academyId: string }) {
               <h3 className="text-lg font-semibold text-white">{matchModeLabel}</h3>
               <p className="text-xs text-gray-400">Review submitted matches for this event and make corrections as needed.{!sessionId ? ' Ad-hoc event submissions are included when no session is selected.' : ''}</p>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs text-gray-400">
-                {matchesLoading ? 'Loading matches…' : `${displayedMatches.length} match${displayedMatches.length !== 1 ? 'es' : ''}`}
-              </span>
-              <button type="button" onClick={() => setShowIssuesOnly(value => !value)}
-                className="px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-xs text-gray-300 hover:bg-gray-700 hover:text-white">
-                {showIssuesOnly ? 'Show all matches' : 'Show only issues'}
-              </button>
+            <div className="flex flex-col gap-3 sm:items-center sm:flex-row sm:justify-between">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-gray-400">{matchesLoading ? 'Loading matches…' : `${displayedMatches.length} match${displayedMatches.length !== 1 ? 'es' : ''}`}</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  {(['all', 'unrated', 'issues', 'adhoc'] as const).map(value => (
+                    <button key={value} type="button" onClick={() => setFilter(value)}
+                      className={`px-3 py-2 rounded-lg text-xs font-semibold ${filter === value ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white'}`}>
+                      {value === 'all' ? 'All' : value === 'unrated' ? 'Unrated' : value === 'issues' ? 'Issues' : 'Ad-hoc'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" onClick={() => setViewMode('matrix')}
+                  className={`px-3 py-2 rounded-lg text-xs font-semibold ${viewMode === 'matrix' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white'}`}>
+                  Matrix
+                </button>
+                <button type="button" onClick={() => setViewMode('list')}
+                  className={`px-3 py-2 rounded-lg text-xs font-semibold ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white'}`}>
+                  List
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1696,7 +1735,7 @@ function MatchesTab({ academyId }: { academyId: string }) {
             </div>
           )}
 
-          {issueMatches.length > 0 && !showIssuesOnly && (
+          {issueMatches.length > 0 && filter !== 'issues' && (
             <div className="bg-yellow-950 border border-yellow-800 rounded-xl p-4">
               <div className="text-sm font-semibold text-amber-200">Match issues detected</div>
               <div className="mt-3 space-y-2 text-sm text-gray-200">
@@ -1726,23 +1765,77 @@ function MatchesTab({ academyId }: { academyId: string }) {
           )}
 
           <div className="space-y-4">
-            <FixtureMatrixGrid
-              model={matrixModel}
-              legend={[
-                { label: 'Normal match', bg: 'bg-blue-500' },
-                { label: 'Issue match', bg: 'bg-amber-500' },
-              ]}
-              sectionFilter={false}
-              dimCategory={null}
-              onCellClick={(cell) => {
-                if (!cell.match_id) return
-                const match = matchById.get(cell.match_id)
-                if (match) openEditor(match)
-              }}
-              onCellDelete={(cell) => {
-                if (cell.match_id) setDeleteMatchId(cell.match_id)
-              }}
-            />
+            {viewMode === 'matrix' ? (
+              <FixtureMatrixGrid
+                model={matrixModel}
+                legend={[
+                  { label: 'Normal match', bg: 'bg-blue-500' },
+                  { label: 'Issue match', bg: 'bg-amber-500' },
+                ]}
+                sectionFilter={false}
+                dimCategory={null}
+                onCellAction={(action, cell) => {
+                  if (!cell.match_id) return
+                  const match = matchById.get(cell.match_id)
+                  if (!match) return
+                  if (action === 'edit') openEditor(match)
+                  else if (action === 'delete') setDeleteMatchId(cell.match_id)
+                  else if (action === 'view') setViewMatch(match)
+                }}
+              />
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-gray-800">
+                <table className="min-w-full text-sm text-left text-gray-200 border-collapse">
+                  <thead>
+                    <tr className="bg-gray-900/90 text-xs uppercase tracking-wide text-gray-400">
+                      <th className="px-3 py-2 border-b border-gray-800">Players</th>
+                      <th className="px-3 py-2 border-b border-gray-800">Result</th>
+                      <th className="px-3 py-2 border-b border-gray-800">Type</th>
+                      <th className="px-3 py-2 border-b border-gray-800">Status</th>
+                      <th className="px-3 py-2 border-b border-gray-800">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayedMatches.map(match => {
+                      const status = matchStatus(match)
+                      const statusMeta = STATUS_META[status]
+                      return (
+                        <tr key={match.match_id} className="border-b border-gray-800 hover:bg-gray-800/40">
+                          <td className="px-3 py-3 font-medium text-white">
+                            {match.player_a.name} vs {match.player_b.name}
+                          </td>
+                          <td className="px-3 py-3 text-gray-300">{match.sets_won_a}-{match.sets_won_b}</td>
+                          <td className="px-3 py-3 text-gray-300">{isAdhoc(match) ? 'Ad-hoc' : 'Session'}</td>
+                          <td className="px-3 py-3">
+                            <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${statusMeta.badge}`}>
+                              <span className={`w-2.5 h-2.5 rounded-full ${statusMeta.dot}`} />
+                              {statusMeta.label}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 space-x-2">
+                            <button type="button" onClick={() => setViewMatch(match)}
+                              className="px-2 py-1 rounded-lg bg-slate-800 text-xs font-semibold text-white hover:bg-slate-700">
+                              View
+                            </button>
+                            <button type="button" onClick={() => openEditor(match)}
+                              disabled={status === 'rated'}
+                              className={`px-2 py-1 rounded-lg text-xs font-semibold ${status === 'rated' ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-500'}`}>
+                              Edit
+                            </button>
+                            {status !== 'rated' && (
+                              <button type="button" onClick={() => setDeleteMatchId(match.match_id)}
+                                className="px-2 py-1 rounded-lg bg-red-600 text-xs font-semibold text-white hover:bg-red-500">
+                                Delete
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1817,6 +1910,62 @@ function MatchesTab({ academyId }: { academyId: string }) {
                 className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-sm font-semibold text-white disabled:opacity-50"
                 disabled={deleteMatchMut.isPending}>
                 {deleteMatchMut.isPending ? 'Deleting…' : 'Delete match'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {viewMatch && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8">
+          <div className="w-full max-w-md bg-gray-900 border border-gray-700 rounded-2xl p-6 space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold text-white">Match details</h3>
+                <p className="text-sm text-gray-400 mt-1">Read-only overview of this match result.</p>
+              </div>
+              <button type="button" onClick={() => setViewMatch(null)}
+                className="text-gray-400 hover:text-white text-sm">Close</button>
+            </div>
+            <div className="space-y-3 text-sm text-gray-200">
+              <div>
+                <div className="text-xs text-gray-400">Players</div>
+                <div className="mt-1 text-white font-semibold">{viewMatch.player_a.name} vs {viewMatch.player_b.name}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-400">Score</div>
+                <div className="mt-1 text-white">{viewMatch.sets_won_a}-{viewMatch.sets_won_b}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-400">Date</div>
+                <div className="mt-1 text-white">{viewMatch.match_date}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-400">Type</div>
+                <div className="mt-1 text-white">{isAdhoc(viewMatch) ? 'Ad-hoc' : 'Session'}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-400">Status</div>
+                <div className={`mt-1 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${STATUS_META[matchStatus(viewMatch)].badge}`}>
+                  <span className={`w-2.5 h-2.5 rounded-full ${STATUS_META[matchStatus(viewMatch)].dot}`} />
+                  {STATUS_META[matchStatus(viewMatch)].label}
+                </div>
+              </div>
+              {viewMatch.not_eligible_reason && (
+                <div>
+                  <div className="text-xs text-gray-400">Not eligible reason</div>
+                  <div className="mt-1 text-white">{viewMatch.not_eligible_reason}</div>
+                </div>
+              )}
+              <div>
+                <div className="text-xs text-gray-400">Confirmation</div>
+                <div className="mt-1 text-white">{viewMatch.confirmation_status}</div>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <button type="button" onClick={() => setViewMatch(null)}
+                className="px-4 py-2 rounded-lg border border-gray-700 text-gray-300 hover:border-gray-500 text-sm">
+                Close
               </button>
             </div>
           </div>

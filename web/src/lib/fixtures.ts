@@ -18,6 +18,7 @@ export interface MatrixCell {
   tooltip: string
   category: string
   match_id?: string
+  status?: string
 }
 
 export interface MatrixSection {
@@ -174,6 +175,7 @@ export function buildMatrixModel<P extends MatrixPlayer>(
       tooltip: (paMeta as any).tooltip ?? paMeta.label,
       category: (paMeta as any).category ?? 'competitive',
       match_id: (paMeta as any).match_id,
+      status: (paMeta as any).status,
     }
 
     if (pb) {
@@ -187,6 +189,7 @@ export function buildMatrixModel<P extends MatrixPlayer>(
         tooltip: (pbMeta as any).tooltip ?? pbMeta.label,
         category: (pbMeta as any).category ?? 'competitive',
         match_id: (pbMeta as any).match_id,
+        status: (pbMeta as any).status,
       }
     }
   }

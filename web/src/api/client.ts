@@ -548,6 +548,8 @@ export interface MatchResponse {
   confirmation_deadline: string
   match_date: string
   ratings_applied_at: string | null
+  session_id?: string | null
+  fixture_slot_id?: string | null
   set_scores?: SetScore[] | null
 }
 

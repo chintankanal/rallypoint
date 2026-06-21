@@ -8,14 +8,14 @@ export default function FixtureMatrixGrid({
   sectionFilter = true,
   dimCategory = null,
   onCellClick,
-  onCellDelete,
+  onCellAction,
 }: {
   model: MatrixModel
   legend: LegendItem[]
   sectionFilter?: boolean
   dimCategory?: string | null
   onCellClick?: (cell: MatrixCell) => void
-  onCellDelete?: (cell: MatrixCell) => void
+  onCellAction?: (action: 'view' | 'edit' | 'delete', cell: MatrixCell) => void
 }) {
   const [filterSectionId, setFilterSectionId] = useState<string | null>(null)
   const [highlightRound, setHighlightRound] = useState<number | null>(null)
@@ -37,6 +37,8 @@ export default function FixtureMatrixGrid({
     return [{ kind: 'header', section }, ...section.players.map((p: any) => ({ kind: 'player', section, player: p }))]
   })
 
+  const [menuCellKey, setMenuCellKey] = useState<string | null>(null)
+
   const renderPlayerRow = (section: any, p: any) => {
     const playerId = p.player_id
     const playerRating = Math.round(p.current_rating)
@@ -53,10 +55,28 @@ export default function FixtureMatrixGrid({
           const isHighlighted = r === highlightRound
           const cellCategory = isBye ? 'bye' : (cell?.category ?? 'competitive')
           const shouldDim = dimCategory != null && cellCategory !== dimCategory
+          const key = `${p.player_id}-${r}`
+          const menuOpen = menuCellKey === key
+          const statusDotClass = cell?.status === 'rated'
+            ? 'bg-emerald-500'
+            : cell?.status === 'unrated'
+              ? 'bg-amber-500'
+              : cell?.status === 'pending'
+                ? 'bg-slate-400'
+                : cell?.status === 'issue'
+                  ? 'bg-red-500'
+                  : 'bg-blue-500'
           return (
             <td key={r} className={`relative text-center px-1.5 py-1.5 border-b border-gray-800 ${isHighlighted ? 'bg-yellow-900/40' : ''} ${cell?.match_id ? 'cursor-pointer hover:bg-gray-800/70 group' : ''}`}
               title={cell?.tooltip ?? (isBye ? 'BYE' : 'No opponent')}
-              onClick={() => cell?.match_id && onCellClick?.(cell)}>
+              onClick={() => {
+                if (!cell?.match_id) return
+                if (onCellAction) {
+                  setMenuCellKey(key === menuCellKey ? null : key)
+                } else {
+                  onCellClick?.(cell)
+                }
+              }}>
               {isBye ? (
                 <span className={`text-[10px] text-gray-600 font-medium ${shouldDim ? 'opacity-30' : ''}`}>BYE</span>
               ) : cell?.opponent ? (
@@ -65,14 +85,31 @@ export default function FixtureMatrixGrid({
                   <div className="text-[9px] text-gray-500 mt-0.5">{Math.round(cell.opponent.current_rating)}</div>
                   <span className={`absolute bottom-0 left-1 right-1 h-[2px] rounded-sm ${cell.stripClass}`} />
                   {cell.match_id && (
-                    <button
-                      type="button"
-                      onClick={e => { e.stopPropagation(); onCellDelete?.(cell) }}
-                      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-600 hover:bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-xs font-bold z-10"
-                      title="Delete match"
-                    >
-                      ×
-                    </button>
+                    <span
+                      className={`absolute top-1 left-1 w-2 h-2 rounded-full ${statusDotClass}`}
+                      title={cell.status ? `${cell.status.charAt(0).toUpperCase() + cell.status.slice(1)} match` : 'Match'}
+                    />
+                  )}
+                  {onCellAction && cell.match_id && menuOpen && (
+                    <div className="absolute z-20 right-1 top-8 w-28 rounded-lg border border-gray-700 bg-gray-900 shadow-lg text-xs">
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); setMenuCellKey(null); onCellAction('view', cell) }}
+                        className="block w-full text-left px-3 py-1.5 hover:bg-gray-800"
+                      >View</button>
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); setMenuCellKey(null); onCellAction('edit', cell) }}
+                        className="block w-full text-left px-3 py-1.5 hover:bg-gray-800"
+                        disabled={cell.status === 'rated'}
+                      >Edit</button>
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); setMenuCellKey(null); onCellAction('delete', cell) }}
+                        className="block w-full text-left px-3 py-1.5 hover:bg-gray-800"
+                        disabled={cell.status === 'rated'}
+                      >Delete</button>
+                    </div>
                   )}
                 </div>
               ) : (

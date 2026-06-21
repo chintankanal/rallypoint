@@ -614,21 +614,20 @@ def void_match(conn, match_id: str, void_reason: str, acting_user_id: str) -> di
 
 def store_set_scores(conn, match_id: str, set_scores: list) -> None:
     """
-    Insert or update per-set point scores into match_set_score table.
+    Replace per-set point scores for a match in match_set_score.
     Expects `set_scores` as an iterable of objects/dicts with `points_a` and `points_b`.
     """
     with conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM match_set_score WHERE match_id = %s",
+            (match_id,),
+        )
         for set_num, score in enumerate(set_scores, start=1):
             # score may be a pydantic model or dict-like
             points_a = getattr(score, "points_a", None) if not isinstance(score, dict) else score.get("points_a")
             points_b = getattr(score, "points_b", None) if not isinstance(score, dict) else score.get("points_b")
             cur.execute(
-                """
-                INSERT INTO match_set_score (match_id, set_number, points_a, points_b)
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT (match_id, set_number)
-                DO UPDATE SET points_a = EXCLUDED.points_a, points_b = EXCLUDED.points_b
-                """,
+                "INSERT INTO match_set_score (match_id, set_number, points_a, points_b) VALUES (%s, %s, %s, %s)",
                 (match_id, set_num, points_a, points_b),
             )
 

@@ -1414,6 +1414,7 @@ function MatchesTab({ academyId }: { academyId: string }) {
   const [viewMode, setViewMode] = useState<'matrix' | 'list'>('matrix')
   const [filter, setFilter] = useState<'all' | 'unrated' | 'issues' | 'adhoc'>('all')
   const [form, setForm] = useState({ sets_won_a: '', sets_won_b: '', match_date: '' })
+  const [editSetScores, setEditSetScores] = useState<Array<{ points_a: number; points_b: number }> | null>(null)
   const [apiError, setApiError] = useState<string | null>(null)
 
   const qc = useQueryClient()
@@ -1458,11 +1459,12 @@ function MatchesTab({ academyId }: { academyId: string }) {
   }) ?? []
 
   const updateMatchMut = useMutation({
-    mutationFn: async (body: { sets_won_a: number; sets_won_b: number; match_date: string }) =>
+    mutationFn: async (body: { sets_won_a: number; sets_won_b: number; match_date: string; set_scores?: Array<{ points_a: number; points_b: number }> | null }) =>
       matchesApi.update(selectedMatch!.match_id, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['session-matches', sessionId] })
       setSelectedMatch(null)
+      setEditSetScores(null)
       setApiError(null)
     },
     onError: (error: Error) => setApiError(error.message),
@@ -1610,6 +1612,13 @@ function MatchesTab({ academyId }: { academyId: string }) {
       sets_won_b: String(match.sets_won_b),
       match_date: match.match_date,
     })
+    setEditSetScores(
+      match.set_scores
+        ? [...match.set_scores]
+            .sort((a, b) => (a.set_number ?? 0) - (b.set_number ?? 0))
+            .map((s) => ({ points_a: s.points_a, points_b: s.points_b }))
+        : null
+    )
     setApiError(null)
   }
 
@@ -1619,6 +1628,7 @@ function MatchesTab({ academyId }: { academyId: string }) {
       sets_won_a: Number(form.sets_won_a),
       sets_won_b: Number(form.sets_won_b),
       match_date: form.match_date,
+      set_scores: editSetScores,
     })
   }
 
@@ -1857,7 +1867,7 @@ function MatchesTab({ academyId }: { academyId: string }) {
               <div className="text-sm text-gray-400">Editing match</div>
               <div className="text-white font-semibold">{selectedMatch.player_a.name} vs {selectedMatch.player_b.name}</div>
             </div>
-            <button type="button" onClick={() => setSelectedMatch(null)}
+            <button type="button" onClick={() => { setSelectedMatch(null); setEditSetScores(null) }}
               className="text-xs text-gray-400 hover:text-white">Cancel</button>
           </div>
 
@@ -1882,13 +1892,24 @@ function MatchesTab({ academyId }: { academyId: string }) {
             </div>
           </div>
 
+          {form.sets_won_a !== '' && form.sets_won_b !== '' && selectedMatch && (
+            <SetPointsInput
+              matchFormat={selectedMatch.match_format as 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7'}
+              setsWonA={Number(form.sets_won_a) || 0}
+              setsWonB={Number(form.sets_won_b) || 0}
+              isRetirement={selectedMatch.is_retirement}
+              initialScores={editSetScores}
+              onSetScoresChange={setEditSetScores}
+            />
+          )}
+
           <div className="flex flex-wrap gap-2 mt-4">
             <button type="button" onClick={handleUpdate}
               className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-sm font-semibold text-white disabled:opacity-50"
               disabled={updateMatchMut.isPending}>
               {updateMatchMut.isPending ? 'Saving…' : 'Save changes'}
             </button>
-            <button type="button" onClick={() => setSelectedMatch(null)}
+            <button type="button" onClick={() => { setSelectedMatch(null); setEditSetScores(null) }}
               className="px-4 py-2 rounded-lg border border-gray-700 text-sm text-gray-300 hover:border-gray-500">
               Close
             </button>
@@ -1899,9 +1920,13 @@ function MatchesTab({ academyId }: { academyId: string }) {
       {deleteMatchId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8">
           <div className="w-full max-w-md bg-gray-900 border border-gray-700 rounded-2xl p-6 space-y-4">
-            <div>
-              <h3 className="text-lg font-semibold text-white">Confirm delete</h3>
-              <p className="text-sm text-gray-400 mt-2">This will permanently remove the match result from the session. Ratings and fixture state may need to be recomputed separately.</p>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold text-white">Confirm delete</h3>
+                <p className="text-sm text-gray-400 mt-1">This will permanently remove the match result from the session. Ratings and fixture state may need to be recomputed separately.</p>
+              </div>
+              <button type="button" onClick={() => setDeleteMatchId(null)}
+                className="text-gray-400 hover:text-white text-sm">Close</button>
             </div>
 
             <div className="space-y-3 text-sm text-gray-200">

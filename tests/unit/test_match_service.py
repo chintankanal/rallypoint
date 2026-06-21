@@ -1,9 +1,11 @@
 """Unit tests for match eligibility, canonical ordering, and deadline logic."""
 from datetime import date, timezone
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 
-from app.services.match_service import _canonical_order, _check_eligibility
+from app.services.match_service import _canonical_order, _check_eligibility, store_set_scores, update_match
 from app.utils.timezone import end_of_day_ist
 
 
@@ -158,3 +160,130 @@ def test_confirm_request_valid_dispute():
 
     r = ConfirmMatchRequest(confirmed=False, dispute_reason="Score was wrong")
     assert r.dispute_reason == "Score was wrong"
+
+
+def _make_mock_conn():
+    mock_cur = MagicMock()
+    mock_conn = MagicMock()
+    mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+    mock_conn.cursor.return_value.__exit__.return_value = False
+    return mock_conn, mock_cur
+
+
+def test_store_set_scores_replaces_existing_rows():
+    mock_conn, mock_cur = _make_mock_conn()
+    store_set_scores(mock_conn, "match-123", [
+        {"points_a": 11, "points_b": 9},
+        {"points_a": 11, "points_b": 7},
+    ])
+
+    assert mock_cur.execute.call_args_list[0] == (
+        ("DELETE FROM match_set_score WHERE match_id = %s", ("match-123",)),
+    )
+    assert mock_cur.execute.call_args_list[1] == (
+        ("INSERT INTO match_set_score (match_id, set_number, points_a, points_b) VALUES (%s, %s, %s, %s)", ("match-123", 1, 11, 9)),
+    )
+    assert mock_cur.execute.call_args_list[2] == (
+        ("INSERT INTO match_set_score (match_id, set_number, points_a, points_b) VALUES (%s, %s, %s, %s)", ("match-123", 2, 11, 7)),
+    )
+
+
+def test_update_match_calls_store_set_scores_when_set_scores_present(monkeypatch):
+    mock_conn, mock_cur = _make_mock_conn()
+
+    saved = {}
+    def fake_store_set_scores(conn, match_id, set_scores):
+        saved["args"] = (conn, match_id, set_scores)
+
+    monkeypatch.setattr("app.services.match_service.store_set_scores", fake_store_set_scores)
+    monkeypatch.setattr("app.services.match_service._fetch_match", lambda cur, match_id, scheduling_mode: {"match_id": match_id})
+
+    mock_cur.fetchone.side_effect = [
+        {
+            "match_id": "match-123",
+            "event_id": "event-456",
+            "session_id": None,
+            "fixture_slot_id": None,
+            "player_a_id": "player-a",
+            "player_b_id": "player-b",
+            "match_format": "BEST_OF_3",
+            "is_retirement": False,
+            "confirmation_status": "CONFIRMED",
+            "ratings_applied_at": None,
+            "sets_won_a": 2,
+            "sets_won_b": 1,
+            "sets_won_a_actual": 2,
+            "sets_won_b_actual": 1,
+        },
+        {"player_id": "player-a", "current_rating": 1200},
+        {"player_id": "player-b", "current_rating": 1180},
+        {"scheduling_mode": "INTRA_ACADEMY"},
+    ]
+    mock_cur.fetchall.return_value = []
+
+    body = SimpleNamespace(
+        set_scores=[{"points_a": 11, "points_b": 9}, {"points_a": 11, "points_b": 7}],
+        sets_won_a=2,
+        sets_won_b=1,
+        match_date=date(2025, 1, 1),
+        is_retirement=None,
+        sets_won_a_actual=None,
+        sets_won_b_actual=None,
+    )
+
+    result = update_match(mock_conn, "match-123", body, "user-1")
+
+    assert saved["args"][0] is mock_conn
+    assert saved["args"][1] == "match-123"
+    assert saved["args"][2] == body.set_scores
+    assert result == {"match_id": "match-123"}
+
+
+def test_update_match_does_not_call_store_set_scores_when_set_scores_is_none(monkeypatch):
+    mock_conn, mock_cur = _make_mock_conn()
+
+    called = False
+    def fake_store_set_scores(conn, match_id, set_scores):
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr("app.services.match_service.store_set_scores", fake_store_set_scores)
+    monkeypatch.setattr("app.services.match_service._fetch_match", lambda cur, match_id, scheduling_mode: {"match_id": match_id})
+
+    mock_cur.fetchone.side_effect = [
+        {
+            "match_id": "match-123",
+            "event_id": "event-456",
+            "session_id": None,
+            "fixture_slot_id": None,
+            "player_a_id": "player-a",
+            "player_b_id": "player-b",
+            "match_format": "BEST_OF_3",
+            "is_retirement": False,
+            "confirmation_status": "CONFIRMED",
+            "ratings_applied_at": None,
+            "sets_won_a": 2,
+            "sets_won_b": 1,
+            "sets_won_a_actual": 2,
+            "sets_won_b_actual": 1,
+        },
+        {"player_id": "player-a", "current_rating": 1200},
+        {"player_id": "player-b", "current_rating": 1180},
+        {"scheduling_mode": "INTRA_ACADEMY"},
+    ]
+    mock_cur.fetchall.return_value = []
+
+    body = SimpleNamespace(
+        set_scores=None,
+        sets_won_a=2,
+        sets_won_b=1,
+        match_date=date(2025, 1, 1),
+        is_retirement=None,
+        sets_won_a_actual=None,
+        sets_won_b_actual=None,
+    )
+
+    result = update_match(mock_conn, "match-123", body, "user-1")
+
+    assert called is False
+    assert result == {"match_id": "match-123"}

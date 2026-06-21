@@ -6,6 +6,7 @@ interface SetPointsInputProps {
   setsWonB: number
   onSetScoresChange: (scores: Array<{ points_a: number; points_b: number }> | null) => void
   isRetirement: boolean
+  initialScores?: Array<{ points_a: number; points_b: number }> | null
 }
 
 interface LocalSetScore {
@@ -33,6 +34,7 @@ export const SetPointsInput: React.FC<SetPointsInputProps> = ({
   setsWonB,
   onSetScoresChange,
   isRetirement,
+  initialScores,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false)
   const [setScores, setSetScores] = useState<LocalSetScore[]>([])
@@ -66,14 +68,29 @@ export const SetPointsInput: React.FC<SetPointsInputProps> = ({
     )
   }
 
-  // Initialize empty scores whenever sets change
+  // Initialize empty scores whenever sets change, or seed from provided initialScores.
   useEffect(() => {
-    const initialScores: LocalSetScore[] = Array(totalSets)
-      .fill(null)
-      .map(() => ({ points_a: '', points_b: '' }))
-    setSetScores(initialScores)
+    if (initialScores && initialScores.length > 0) {
+      const seededScores: LocalSetScore[] = Array(totalSets)
+        .fill(null)
+        .map((_, idx) => {
+          const score = initialScores[idx]
+          return {
+            points_a: score ? String(score.points_a) : '',
+            points_b: score ? String(score.points_b) : '',
+          }
+        })
+      setSetScores(seededScores)
+      setIsExpanded(true)
+    } else {
+      const emptyScores: LocalSetScore[] = Array(totalSets)
+        .fill(null)
+        .map(() => ({ points_a: '', points_b: '' }))
+      setSetScores(emptyScores)
+      setIsExpanded(false)
+    }
     setErrors([])
-  }, [matchFormat, setsWonA, setsWonB])
+  }, [matchFormat, setsWonA, setsWonB, initialScores])
 
   /**
    * Validate a single set score according to table tennis rules.

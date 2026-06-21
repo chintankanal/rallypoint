@@ -685,3 +685,37 @@ def _fetch_match(cur, match_id: str, scheduling_mode: str) -> dict:
     except Exception:
         row["set_scores"] = None
     return row
+
+
+def auto_confirm_event_matches(conn, event_id: str) -> tuple[list[str], int]:
+    """Auto-confirm pending eligible event matches and return eligible unrated match IDs."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE match
+            SET confirmation_status = 'AUTO_CONFIRMED',
+                confirmed_at = NOW(),
+                updated_at = NOW()
+            WHERE event_id = %s
+              AND confirmation_status = 'PENDING'
+              AND rating_eligible = TRUE
+              AND ratings_applied_at IS NULL
+            RETURNING match_id::text
+            """,
+            (event_id,),
+        )
+        auto_confirmed = len(cur.fetchall())
+
+        cur.execute(
+            """
+            SELECT match_id::text FROM match
+            WHERE event_id = %s
+              AND confirmation_status IN ('CONFIRMED', 'AUTO_CONFIRMED')
+              AND rating_eligible = TRUE
+              AND ratings_applied_at IS NULL
+            """,
+            (event_id,),
+        )
+        match_ids = [r["match_id"] for r in cur.fetchall()]
+
+    return match_ids, auto_confirmed

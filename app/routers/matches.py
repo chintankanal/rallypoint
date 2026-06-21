@@ -126,6 +126,53 @@ def list_event_matches(event_id: str, current_user: dict = _ADMIN_COACH):
     return matches
 
 
+@router.post("/event/{event_id}/apply-ratings")
+def apply_event_matches_ratings(event_id: str, current_user: dict = _ADMIN_COACH):
+    from app.services.rating_engine import apply_ratings_batch
+    from app.services.webhook_service import fire
+
+    user_id = current_user["user_id"]
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT scheduling_mode FROM event WHERE event_id = %s",
+                (event_id,),
+            )
+            ev = cur.fetchone()
+            if not ev:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+            if ev["scheduling_mode"] != "INTRA_ACADEMY":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Use the league apply-ratings flow for inter-academy events",
+                )
+
+        match_ids, auto_confirmed_count = match_service.auto_confirm_event_matches(conn, event_id)
+
+        if not match_ids:
+            return {
+                "event_id": event_id,
+                "matches_rated": 0,
+                "matches_auto_confirmed": auto_confirmed_count,
+                "tier_changes": [],
+                "already_up_to_date": True,
+            }
+
+        tier_changes = apply_ratings_batch(conn, match_ids)
+
+    for tc in tier_changes:
+        fire("player.tier_changed", tc)
+
+    return {
+        "event_id": event_id,
+        "matches_rated": len(match_ids),
+        "matches_auto_confirmed": auto_confirmed_count,
+        "tier_changes": tier_changes,
+        "already_up_to_date": False,
+    }
+
+
 @router.post("/{match_id}/confirm", response_model=MatchResponse)
 def confirm_match(match_id: UUID, body: ConfirmMatchRequest, current_user: dict = _ANY_USER):
     if current_user["role"] == "PLAYER" and not current_user.get("player_id"):

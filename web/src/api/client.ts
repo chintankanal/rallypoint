@@ -571,6 +571,13 @@ export const matchesApi = {
     request<void>(`/matches/${id}`, { method: 'DELETE', body: body ? JSON.stringify(body) : undefined }),
   forSession: (sessionId: string) => request<MatchResponse[]>(`/matches/session/${sessionId}`),
   forEvent: (eventId: string) => request<MatchResponse[]>(`/matches/event/${eventId}`),
+  applyEventRatings: (eventId: string) => request<{
+    event_id: string
+    matches_rated: number
+    matches_auto_confirmed: number
+    tier_changes: { player_id: string; tier_before: string; tier_after: string }[]
+    already_up_to_date: boolean
+  }>(`/matches/event/${eventId}/apply-ratings`, { method: 'POST' }),
   pending: () => request<MatchResponse[]>('/matches/pending'),
 }
 

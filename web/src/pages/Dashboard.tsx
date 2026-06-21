@@ -1436,6 +1436,16 @@ function MatchesTab({ academyId }: { academyId: string }) {
   const matchesLoading = sessionId ? sessionMatchesQ.isLoading : eventMatchesQ.isLoading
   const matchesError = sessionId ? sessionMatchesQ.error : eventMatchesQ.error
 
+  const applyEventRatingsMut = useMutation({
+    mutationFn: (eventId: string) => matchesApi.applyEventRatings(eventId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['academy-leaderboard', academyId] })
+      qc.invalidateQueries({ queryKey: ['event-matches', eventId] })
+      setApiError(null)
+    },
+    onError: (e: Error) => setApiError(e.message),
+  })
+
   const visibleEvents = eventsQ.data?.items.filter(ev => {
     if (ev.host_academy_id === academyId) return true
     if (Array.isArray((ev as any).participating_academies) && (ev as any).participating_academies.some((a: any) => a.academy_id === academyId)) return true
@@ -1514,6 +1524,14 @@ function MatchesTab({ academyId }: { academyId: string }) {
   const issueMatches = matches.filter(
     match => duplicateMatchIds.has(match.match_id) || scoreIssueMatchIds.has(match.match_id),
   )
+
+  const ratedCount = matches.filter(m => !!m.ratings_applied_at).length
+  const unratedEligibleCount = matches.filter(m => m.rating_eligible && !m.ratings_applied_at).length
+  const pendingCount = matches.filter(m => m.confirmation_status === 'PENDING').length
+  const issueCount = issueMatches.length
+  const pendingEligibleCount = matches.filter(
+    m => m.confirmation_status === 'PENDING' && m.rating_eligible && !m.ratings_applied_at,
+  ).length
 
   const matchModeLabel = sessionId ? 'Session Matches' : 'Event Matches'
   const emptyMessage = sessionId
@@ -1626,19 +1644,49 @@ function MatchesTab({ academyId }: { academyId: string }) {
           {matchesError && <ErrorMsg message={(matchesError as Error).message} />}
 
           {matches.length > 0 && (
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-5">
               <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
                 <div className="text-xs text-gray-400">Total matches</div>
                 <div className="mt-2 text-2xl font-semibold text-white">{matches.length}</div>
               </div>
               <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-                <div className="text-xs text-gray-400">Duplicate submissions</div>
-                <div className="mt-2 text-2xl font-semibold text-white">{duplicateMatchIds.size}</div>
+                <div className="text-xs text-gray-400">Rated</div>
+                <div className="mt-2 text-2xl font-semibold text-white">{ratedCount}</div>
               </div>
               <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-                <div className="text-xs text-gray-400">Invalid scores</div>
-                <div className="mt-2 text-2xl font-semibold text-white">{scoreIssueMatchIds.size}</div>
+                <div className="text-xs text-gray-400">Unrated eligible</div>
+                <div className="mt-2 text-2xl font-semibold text-white">{unratedEligibleCount}</div>
               </div>
+              <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
+                <div className="text-xs text-gray-400">Pending</div>
+                <div className="mt-2 text-2xl font-semibold text-white">{pendingCount}</div>
+              </div>
+              <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
+                <div className="text-xs text-gray-400">Issues</div>
+                <div className="mt-2 text-2xl font-semibold text-white">{issueCount}</div>
+              </div>
+            </div>
+          )}
+          {!sessionId && matches.length > 0 && (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-xs text-gray-400">Issues include non-eligible matches and duplicate/invalid submissions.</div>
+              <button
+                type="button"
+                disabled={applyEventRatingsMut.isPending || unratedEligibleCount === 0}
+                onClick={() => {
+                  const eligibleCount = unratedEligibleCount
+                  const pendingCountForConfirm = pendingEligibleCount
+                  if (!window.confirm(
+                    `Rate ${eligibleCount} match${eligibleCount !== 1 ? 'es' : ''} for this event? ${pendingCountForConfirm} pending submission${pendingCountForConfirm !== 1 ? 's' : ''} will be auto-confirmed.`
+                  )) {
+                    return
+                  }
+                  applyEventRatingsMut.mutate(eventId)
+                }}
+                className="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-sm font-semibold disabled:opacity-50"
+              >
+                {applyEventRatingsMut.isPending ? 'Applying…' : '⚡ Apply Ratings'}
+              </button>
             </div>
           )}
 

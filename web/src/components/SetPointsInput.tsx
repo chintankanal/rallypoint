@@ -90,7 +90,7 @@ export const SetPointsInput: React.FC<SetPointsInputProps> = ({
       setIsExpanded(false)
     }
     setErrors([])
-  }, [matchFormat, setsWonA, setsWonB, initialScores])
+  }, [matchFormat, setsWonA, setsWonB])
 
   /**
    * Validate a single set score according to table tennis rules.
@@ -161,6 +161,12 @@ export const SetPointsInput: React.FC<SetPointsInputProps> = ({
     if (errors.length > 0) {
       setErrors([])
     }
+
+    const nonEmptyScores = newScores
+      .filter(score => !isScoreEmpty(score))
+      .map(parseScore)
+
+    onSetScoresChange(nonEmptyScores.length > 0 ? nonEmptyScores : null)
   }
 
   /**

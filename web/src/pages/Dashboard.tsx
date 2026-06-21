@@ -1463,6 +1463,7 @@ function MatchesTab({ academyId }: { academyId: string }) {
       matchesApi.update(selectedMatch!.match_id, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['session-matches', sessionId] })
+      qc.invalidateQueries({ queryKey: ['event-matches', eventId] })
       setSelectedMatch(null)
       setEditSetScores(null)
       setApiError(null)
@@ -1474,6 +1475,7 @@ function MatchesTab({ academyId }: { academyId: string }) {
     mutationFn: async (id: string) => matchesApi.remove(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['session-matches', sessionId] })
+      qc.invalidateQueries({ queryKey: ['event-matches', eventId] })
       setApiError(null)
       setDeleteMatchId(null)
     },
@@ -1894,6 +1896,7 @@ function MatchesTab({ academyId }: { academyId: string }) {
 
           {form.sets_won_a !== '' && form.sets_won_b !== '' && selectedMatch && (
             <SetPointsInput
+              key={selectedMatch.match_id}
               matchFormat={selectedMatch.match_format as 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7'}
               setsWonA={Number(form.sets_won_a) || 0}
               setsWonB={Number(form.sets_won_b) || 0}
@@ -1979,6 +1982,18 @@ function MatchesTab({ academyId }: { academyId: string }) {
                 <div className="text-xs text-gray-400">Type</div>
                 <div className="mt-1 text-white">{isAdhoc(viewMatch) ? 'Ad-hoc' : 'Session'}</div>
               </div>
+              {viewMatch.set_scores?.length ? (
+                <div>
+                  <div className="text-xs text-gray-400">Per-set scores</div>
+                  <div className="mt-1 text-white space-y-1">
+                    {viewMatch.set_scores.map((score, idx) => (
+                      <div key={idx}>
+                        Set {score.set_number ?? idx + 1}: {score.points_a}-{score.points_b}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               <div>
                 <div className="text-xs text-gray-400">Status</div>
                 <div className={`mt-1 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${STATUS_META[matchStatus(viewMatch)].badge}`}>

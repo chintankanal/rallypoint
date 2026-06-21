@@ -1582,12 +1582,19 @@ function MatchesTab({ academyId }: { academyId: string }) {
     tooltip: `${match.player_a.name} ${match.sets_won_a}-${match.sets_won_b} ${match.player_b.name} • ${match.confirmation_status}`,
   }))
 
+  const STATUS_STRIP: Record<string, string> = {
+    rated: 'bg-emerald-500',
+    unrated: 'bg-amber-500',
+    pending: 'bg-slate-400',
+    issue: 'bg-red-500',
+  }
+
   const matrixModel = buildMatrixModel(matchSlots as any, {
     sectionOf: () => 'players',
     sectionMeta: () => ({ label: 'Players', accent: { bg: 'bg-slate-700', text: 'text-slate-100' } }),
     cellOf: (slot: any) => {
       const label = slot.score
-      const stripClass = slot.issue ? 'bg-amber-500' : 'bg-blue-500'
+      const stripClass = STATUS_STRIP[slot.status] ?? 'bg-blue-500'
       return { label, stripClass, tooltip: slot.tooltip, match_id: slot.match_id, status: slot.status }
     },
   })
@@ -1769,8 +1776,10 @@ function MatchesTab({ academyId }: { academyId: string }) {
               <FixtureMatrixGrid
                 model={matrixModel}
                 legend={[
-                  { label: 'Normal match', bg: 'bg-blue-500' },
-                  { label: 'Issue match', bg: 'bg-amber-500' },
+                  { label: 'Rated', bg: 'bg-emerald-500' },
+                  { label: 'Unrated', bg: 'bg-amber-500' },
+                  { label: 'Pending', bg: 'bg-slate-400' },
+                  { label: 'Issue', bg: 'bg-red-500' },
                 ]}
                 sectionFilter={false}
                 dimCategory={null}
@@ -1819,15 +1828,16 @@ function MatchesTab({ academyId }: { academyId: string }) {
                             </button>
                             <button type="button" onClick={() => openEditor(match)}
                               disabled={status === 'rated'}
+                              title={status === 'rated' ? "Rated matches can't be edited" : ''}
                               className={`px-2 py-1 rounded-lg text-xs font-semibold ${status === 'rated' ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-500'}`}>
                               Edit
                             </button>
-                            {status !== 'rated' && (
-                              <button type="button" onClick={() => setDeleteMatchId(match.match_id)}
-                                className="px-2 py-1 rounded-lg bg-red-600 text-xs font-semibold text-white hover:bg-red-500">
-                                Delete
-                              </button>
-                            )}
+                            <button type="button" onClick={() => setDeleteMatchId(match.match_id)}
+                              disabled={status === 'rated'}
+                              title={status === 'rated' ? "Rated matches can't be deleted" : ''}
+                              className={`px-2 py-1 rounded-lg text-xs font-semibold ${status === 'rated' ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-500'}`}>
+                              Delete
+                            </button>
                           </td>
                         </tr>
                       )

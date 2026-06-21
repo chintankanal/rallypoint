@@ -81,15 +81,19 @@ export default function FixtureMatrixGrid({
                 <span className={`text-[10px] text-gray-600 font-medium ${shouldDim ? 'opacity-30' : ''}`}>BYE</span>
               ) : cell?.opponent ? (
                 <div className={`relative min-h-[32px] ${shouldDim ? 'opacity-30' : ''}`}>
-                  <div className={`text-xs font-semibold truncate text-gray-200`}>{getOpponentLabel(cell.opponent, firstNameCounts)}</div>
+                  <div className="flex items-center gap-1">
+                    {cell.match_id && (
+                      <span
+                        className={`shrink-0 w-2 h-2 rounded-full ${statusDotClass}`}
+                        title={cell.status ? `${cell.status.charAt(0).toUpperCase() + cell.status.slice(1)} match` : 'Match'}
+                      />
+                    )}
+                    <span className="text-xs font-semibold truncate text-gray-200">
+                      {getOpponentLabel(cell.opponent, firstNameCounts)}
+                    </span>
+                  </div>
                   <div className="text-[9px] text-gray-500 mt-0.5">{Math.round(cell.opponent.current_rating)}</div>
                   <span className={`absolute bottom-0 left-1 right-1 h-[2px] rounded-sm ${cell.stripClass}`} />
-                  {cell.match_id && (
-                    <span
-                      className={`absolute top-1 left-1 w-2 h-2 rounded-full ${statusDotClass}`}
-                      title={cell.status ? `${cell.status.charAt(0).toUpperCase() + cell.status.slice(1)} match` : 'Match'}
-                    />
-                  )}
                   {onCellAction && cell.match_id && menuOpen && (
                     <div className="absolute z-20 right-1 top-8 w-28 rounded-lg border border-gray-700 bg-gray-900 shadow-lg text-xs">
                       <button
@@ -100,14 +104,16 @@ export default function FixtureMatrixGrid({
                       <button
                         type="button"
                         onClick={e => { e.stopPropagation(); setMenuCellKey(null); onCellAction('edit', cell) }}
-                        className="block w-full text-left px-3 py-1.5 hover:bg-gray-800"
+                        className="block w-full text-left px-3 py-1.5 hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={cell.status === 'rated'}
+                        title={cell.status === 'rated' ? "Rated matches can't be edited" : ''}
                       >Edit</button>
                       <button
                         type="button"
                         onClick={e => { e.stopPropagation(); setMenuCellKey(null); onCellAction('delete', cell) }}
-                        className="block w-full text-left px-3 py-1.5 hover:bg-gray-800"
+                        className="block w-full text-left px-3 py-1.5 hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={cell.status === 'rated'}
+                        title={cell.status === 'rated' ? "Rated matches can't be deleted" : ''}
                       >Delete</button>
                     </div>
                   )}
@@ -123,7 +129,13 @@ export default function FixtureMatrixGrid({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 relative">
+      {menuCellKey && (
+        <div
+          className="fixed inset-0 z-10 bg-transparent"
+          onClick={() => setMenuCellKey(null)}
+        />
+      )}
       {sectionFilter && (
         <div className="flex gap-1.5 flex-wrap">
           <button onClick={() => setFilterSectionId(null)}
@@ -155,7 +167,7 @@ export default function FixtureMatrixGrid({
             <col style={{ width: '150px' }} />
             <col style={{ width: '60px' }} />
             {rounds.map((r: number) => (
-              <col key={r} style={{ width: '70px' }} />
+              <col key={r} style={{ width: '84px' }} />
             ))}
           </colgroup>
           <thead>

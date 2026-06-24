@@ -94,7 +94,9 @@ def global_leaderboard(tier: str | None, limit: int, offset: int) -> dict:
                 f"""
                 SELECT
                     ROW_NUMBER() OVER (
-                        ORDER BY a.name ASC NULLS LAST, p.current_rating DESC, {_AGE_JAN1_SQL} ASC NULLS LAST
+                        ORDER BY p.current_rating DESC,
+                                 p.rated_matches_completed DESC,
+                                 p.name ASC
                     ) AS rank,
                     p.player_id::text, p.name, p.current_rating::float,
                     {_TIER_SQL} AS tier,
@@ -109,7 +111,9 @@ def global_leaderboard(tier: str | None, limit: int, offset: int) -> dict:
                 WHERE p.status = 'ACTIVE'
                   AND p.date_of_birth IS NOT NULL
                   {tier_filter}
-                ORDER BY a.name ASC NULLS LAST, p.current_rating DESC, {_AGE_JAN1_SQL} ASC NULLS LAST
+                ORDER BY p.current_rating DESC,
+                         p.rated_matches_completed DESC,
+                         p.name ASC
                 LIMIT %s OFFSET %s
                 """,
                 params_page + [limit, offset],
@@ -135,6 +139,7 @@ def age_group_leaderboard(age_group: str, limit: int, offset: int) -> dict:
                         a.name AS academy_name,
                         {_AGE_JAN1_SQL} AS age_jan1,
                         {_AGE_GROUP_SQL} AS age_grp,
+                        p.rated_matches_completed AS rated_matches,
                         p.gender
                     FROM player p
                     LEFT JOIN academy a ON a.academy_id = p.primary_academy_id
@@ -142,14 +147,20 @@ def age_group_leaderboard(age_group: str, limit: int, offset: int) -> dict:
                 ),
                 filtered AS (
                     SELECT *,
-                        ROW_NUMBER() OVER (ORDER BY academy_name ASC NULLS LAST, current_rating DESC) AS rank,
+                        ROW_NUMBER() OVER (
+                            ORDER BY current_rating DESC,
+                                     rated_matches DESC,
+                                     name ASC
+                        ) AS rank,
                         PERCENT_RANK() OVER (ORDER BY current_rating) AS percentile
                     FROM base
                     WHERE age_grp = %s
                 )
                 SELECT *, COUNT(*) OVER () AS total_count
                 FROM filtered
-                ORDER BY academy_name ASC NULLS LAST, current_rating DESC
+                ORDER BY current_rating DESC,
+                         rated_matches DESC,
+                         name ASC
                 LIMIT %s OFFSET %s
                 """,
                 (age_group, limit, offset),

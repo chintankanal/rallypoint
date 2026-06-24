@@ -94,7 +94,8 @@ def global_leaderboard(tier: str | None, limit: int, offset: int) -> dict:
                 f"""
                 SELECT
                     ROW_NUMBER() OVER (
-                        ORDER BY p.current_rating DESC,
+                        ORDER BY (p.rated_matches_completed = 0) ASC,
+                                 p.current_rating DESC,
                                  p.rated_matches_completed DESC,
                                  p.name ASC
                     ) AS rank,
@@ -111,7 +112,8 @@ def global_leaderboard(tier: str | None, limit: int, offset: int) -> dict:
                 WHERE p.status = 'ACTIVE'
                   AND p.date_of_birth IS NOT NULL
                   {tier_filter}
-                ORDER BY p.current_rating DESC,
+                ORDER BY (p.rated_matches_completed = 0) ASC,
+                         p.current_rating DESC,
                          p.rated_matches_completed DESC,
                          p.name ASC
                 LIMIT %s OFFSET %s
@@ -148,7 +150,8 @@ def age_group_leaderboard(age_group: str, limit: int, offset: int) -> dict:
                 filtered AS (
                     SELECT *,
                         ROW_NUMBER() OVER (
-                            ORDER BY current_rating DESC,
+                            ORDER BY (rated_matches = 0) ASC,
+                                     current_rating DESC,
                                      rated_matches DESC,
                                      name ASC
                         ) AS rank,
@@ -158,7 +161,8 @@ def age_group_leaderboard(age_group: str, limit: int, offset: int) -> dict:
                 )
                 SELECT *, COUNT(*) OVER () AS total_count
                 FROM filtered
-                ORDER BY current_rating DESC,
+                ORDER BY (rated_matches = 0) ASC,
+                         current_rating DESC,
                          rated_matches DESC,
                          name ASC
                 LIMIT %s OFFSET %s

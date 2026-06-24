@@ -88,23 +88,23 @@ export default function Leaderboard() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-900 text-gray-400 text-left">
-                    <th className="px-4 py-3 w-12">#</th>
-                    <th className="px-4 py-3">Player</th>
-                    <th className="px-4 py-3 hidden sm:table-cell">Academy</th>
-                    <th className="px-4 py-3">Rating ↓</th>
-                    <th className="px-4 py-3">Tier</th>
-                    <th className="px-4 py-3 hidden lg:table-cell">Gender</th>
-                    <th className="px-4 py-3 hidden lg:table-cell">Age Cat.</th>
-                    <th className="px-4 py-3 hidden md:table-cell">Matches ↓</th>
-                    <th className="px-4 py-3 hidden md:table-cell">Win %</th>
-                    <th className="px-4 py-3 hidden lg:table-cell">Trend</th>
+                    <th className="px-4 py-3 w-12 whitespace-nowrap">#</th>
+                    <th className="px-4 py-3 whitespace-nowrap">Player</th>
+                    <th className="px-4 py-3 hidden sm:table-cell whitespace-nowrap">Academy</th>
+                    <th className="px-4 py-3 whitespace-nowrap">Rating ↓</th>
+                    <th className="px-4 py-3 whitespace-nowrap">Tier</th>
+                    <th className="px-4 py-3 hidden lg:table-cell whitespace-nowrap">Gender</th>
+                    <th className="px-4 py-3 hidden lg:table-cell whitespace-nowrap">Age Cat.</th>
+                    <th className="px-4 py-3 hidden md:table-cell whitespace-nowrap">Matches ↓</th>
+                    <th className="px-4 py-3 hidden md:table-cell whitespace-nowrap">Win %</th>
+                    <th className="px-4 py-3 hidden lg:table-cell whitespace-nowrap">Trend</th>
                     <th
-                      className="px-4 py-3 hidden lg:table-cell"
+                      className="px-4 py-3 hidden lg:table-cell whitespace-nowrap"
                       title="Average set margin over the player's last 5 rated matches (retirements excluded). Positive = winning convincingly lately (e.g. +1.8); negative = losing close ones (e.g. -0.6)."
                     >
                       Dominance
                     </th>
-                    <th className="px-4 py-3 hidden xl:table-cell">Last Active</th>
+                    <th className="px-4 py-3 hidden xl:table-cell whitespace-nowrap">Last Active</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-800">
@@ -145,7 +145,7 @@ export default function Leaderboard() {
                           <span className="text-gray-500">—</span>
                         ) : row.last_rating_change > 0 ? (
                           <span className="text-emerald-400">
-                            ▲ {Math.round(row.last_rating_change)}
+                            ▲ +{Math.round(row.last_rating_change)}
                           </span>
                         ) : row.last_rating_change < 0 ? (
                           <span className="text-red-400">

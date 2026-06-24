@@ -166,6 +166,10 @@ export interface LeaderboardEntry {
   last_match_date: string | null
   gender: string | null
   age_group: string | null
+  win_pct?: number | null
+  last_rating_change?: number | null
+  dominance?: number | null
+  dominance_sample?: number | null
   claim_code?: string | null
   is_claimed?: boolean | null
 }

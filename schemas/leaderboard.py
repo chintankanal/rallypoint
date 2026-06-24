@@ -14,6 +14,10 @@ class LeaderboardEntry(BaseModel):
     last_match_date: date | None
     gender: str | None = None
     age_group: str | None = None
+    win_pct: float | None = None
+    last_rating_change: float | None = None
+    dominance: float | None = None
+    dominance_sample: int | None = None
     claim_code: str | None = None
     is_claimed: bool | None = None
 

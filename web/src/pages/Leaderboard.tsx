@@ -140,7 +140,7 @@ export default function Leaderboard() {
                       <td className="px-4 py-3 hidden md:table-cell text-gray-400">
                         {row.win_pct != null ? `${row.win_pct}%` : '—'}
                       </td>
-                      <td className="px-4 py-3 hidden lg:table-cell font-mono">
+                      <td className="px-4 py-3 hidden lg:table-cell font-mono whitespace-nowrap">
                         {row.last_rating_change == null ? (
                           <span className="text-gray-500">—</span>
                         ) : row.last_rating_change > 0 ? (
@@ -160,7 +160,11 @@ export default function Leaderboard() {
                         title={
                           row.dominance == null
                             ? 'No rated matches yet'
-                            : `Average set margin over the last ${row.dominance_sample ?? 0} rated match(es), retirements excluded. Positive = winning convincingly lately (e.g. +1.8); negative = losing close ones (e.g. -0.6).`
+                            : row.dominance > 0
+                              ? `Winning by ~${row.dominance.toFixed(1)} sets per match on average (last ${row.dominance_sample ?? 0}).`
+                              : row.dominance < 0
+                                ? `Losing by ~${Math.abs(row.dominance).toFixed(1)} sets per match on average (last ${row.dominance_sample ?? 0}).`
+                                : `Even on average over the last ${row.dominance_sample ?? 0} match(es).`
                         }
                       >
                         {row.dominance == null ? (

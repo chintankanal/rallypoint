@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useRef, type ReactNode } from 'react'
 import type { TokenResponse } from '../api/client'
 
 interface AuthUser {
@@ -15,6 +15,7 @@ interface AuthContextValue {
   token: string | null
   login: (resp: TokenResponse) => void
   logout: () => void
+  recentlyLoggedOut: boolean
   updateUser: (updates: Partial<AuthUser>) => void
 }
 
@@ -41,6 +42,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const stored = parseStored()
   const [user, setUser] = useState<AuthUser | null>(stored?.user ?? null)
   const [token, setToken] = useState<string | null>(stored?.token ?? null)
+  const [recentlyLoggedOut, setRecentlyLoggedOut] = useState(false)
+  const logoutTimer = useRef<number | null>(null)
 
   const login = useCallback((resp: TokenResponse) => {
     const u: AuthUser = {
@@ -62,6 +65,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('jlrs_user')
     setToken(null)
     setUser(null)
+    // Mark a brief window after logout so route guards can avoid racing
+    setRecentlyLoggedOut(true)
+    if (logoutTimer.current) {
+      window.clearTimeout(logoutTimer.current)
+    }
+    // Clear the flag after a short delay
+    logoutTimer.current = window.setTimeout(() => setRecentlyLoggedOut(false), 800)
   }, [])
 
   const updateUser = useCallback((updates: Partial<AuthUser>) => {
@@ -73,7 +83,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
-  return <AuthContext.Provider value={{ user, token, login, logout, updateUser }}>{children}</AuthContext.Provider>
+  return (
+    <AuthContext.Provider value={{ user, token, login, logout, recentlyLoggedOut, updateUser }}>
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
 export function useAuth() {

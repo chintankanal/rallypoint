@@ -101,9 +101,11 @@ export function ProtectedRoute({
   roles?: Array<'ADMIN' | 'COACH' | 'PLAYER' | 'REFEREE' | 'UMPIRE'>
   children: React.ReactNode
 }) {
-  const { user } = useAuth()
+  const { user, recentlyLoggedOut } = useAuth()
 
   if (!user) {
+    // If we've just logged out, allow the logout navigation to / to proceed
+    if (recentlyLoggedOut) return null
     return <Navigate to="/login" replace />
   }
   if (roles && !roles.includes(user.role)) {

@@ -1,4 +1,4 @@
-import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/context'
 
 const TIER_COLORS: Record<string, string> = {
@@ -102,11 +102,9 @@ export function ProtectedRoute({
   children: React.ReactNode
 }) {
   const { user } = useAuth()
-  const navigate = useNavigate()
 
   if (!user) {
-    navigate('/login', { replace: true })
-    return null
+    return <Navigate to="/login" replace />
   }
   if (roles && !roles.includes(user.role)) {
     return (

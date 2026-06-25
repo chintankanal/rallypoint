@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   matchesApi, playersApi, academiesApi, eventsApi, sessionsApi,
@@ -7,7 +8,7 @@ import {
 import FixtureMatrixGrid from '../components/FixtureMatrixGrid'
 import { buildMatrixModel, classifyCell, TIER_META, GAP_BAND_LEGEND, MATCH_CAT_BADGE } from '../lib/fixtures'
 import { analyzeFixtureSlots } from '../lib/fixtureAnalytics'
-import { Layout, TierBadge, CRBar, Spinner, ErrorMsg, ProtectedRoute } from '../components/Layout'
+import { Layout, TierBadge, Spinner, ErrorMsg, ProtectedRoute } from '../components/Layout'
 import { EventDetailPanel } from '../components/EventDetailPanel'
 import { SetPointsInput } from '../components/SetPointsInput'
 import { useAuth } from '../auth/context'
@@ -980,28 +981,10 @@ function SessionsTab({ academyId }: { academyId: string }) {
 
 // ── Roster helpers ────────────────────────────────────────────────────────────
 
-function activityDotClass(lastMatchDate: string | null): string {
-  if (!lastMatchDate) return 'bg-red-600'
-  const days = Math.floor((Date.now() - new Date(lastMatchDate).getTime()) / 86_400_000)
-  if (days <= 7) return 'bg-green-500'
-  if (days <= 21) return 'bg-yellow-500'
-  return 'bg-red-500'
-}
-
-function activityLabel(lastMatchDate: string | null): string {
-  if (!lastMatchDate) return 'Never played'
-  const days = Math.floor((Date.now() - new Date(lastMatchDate).getTime()) / 86_400_000)
-  if (days === 0) return 'Today'
-  if (days === 1) return 'Yesterday'
-  if (days <= 7) return `${days}d ago`
-  return `${Math.round(days / 7)}w ago`
-}
-
 // ── Roster ────────────────────────────────────────────────────────────────────
 
 function RosterTab({ academyId }: { academyId: string }) {
   const { user } = useAuth()
-  const [selectedPlayer, setSelectedPlayer] = useState<LeaderboardEntry | null>(null)
   const [copiedClaimCode, setCopiedClaimCode] = useState<string | null>(null)
   const [showDominanceInfo, setShowDominanceInfo] = useState(false)
 
@@ -1094,12 +1077,12 @@ function RosterTab({ academyId }: { academyId: string }) {
               <tr key={row.player_id} className="hover:bg-gray-900/50 transition-colors">
                 <td className="px-4 py-3 text-gray-500 font-mono sticky left-0 z-10 bg-gray-950">{row.rank}</td>
                 <td className="px-4 py-3 sticky left-12 z-10 bg-gray-950 border-r border-gray-800">
-                  <button
-                    onClick={() => setSelectedPlayer(row)}
-                    className="text-blue-400 hover:text-blue-300 font-medium text-left"
+                  <Link
+                    to={`/player/${row.player_id}`}
+                    className="text-blue-400 hover:text-blue-300 font-medium"
                   >
                     {row.name}
-                  </button>
+                  </Link>
                   {row.is_provisional && <span className="ml-2 text-yellow-500 text-xs">(P)</span>}
                 </td>
                 <td className="px-4 py-3 font-mono font-semibold text-white">{Math.round(row.current_rating)}</td>
@@ -1136,9 +1119,6 @@ function RosterTab({ academyId }: { academyId: string }) {
         </table>
       </div>
 
-      {selectedPlayer && (
-        <PlayerModal player={selectedPlayer} onClose={() => setSelectedPlayer(null)} />
-      )}
     </div>
   )
 }
@@ -2209,264 +2189,6 @@ function ResultEntryModal({
 
 // ── Player modal ─────────────────────────────────────────────────────────────
 
-function PlayerModal({ player, onClose }: { player: LeaderboardEntry; onClose: () => void }) {
-  const [tab, setTab] = useState<'overview' | 'history'>('overview')
-  const [histPage, setHistPage] = useState(0)
-  const PAGE_SIZE = 15
-
-  const statsQ = useQuery({
-    queryKey: ['player-computed', player.player_id],
-    queryFn: () => playersApi.computedStats(player.player_id),
-  })
-  const velocityQ = useQuery({
-    queryKey: ['player-velocity', player.player_id, '1m'],
-    queryFn: () => playersApi.velocity(player.player_id, '1m'),
-  })
-  const recentQ = useQuery({
-    queryKey: ['player-history-recent', player.player_id],
-    queryFn: () => playersApi.ratingHistory(player.player_id, { limit: 5 }),
-  })
-  const histQ = useQuery({
-    queryKey: ['player-history-full', player.player_id, histPage],
-    queryFn: () => playersApi.ratingHistory(player.player_id, { limit: PAGE_SIZE, offset: histPage * PAGE_SIZE }),
-    enabled: tab === 'history',
-  })
-
-  const totalPages = histQ.data ? Math.ceil(histQ.data.total / PAGE_SIZE) : 0
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-4"
-      onClick={onClose}>
-      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-2xl max-h-[88vh] flex flex-col"
-        onClick={e => e.stopPropagation()}>
-
-        {/* Header */}
-        <div className="flex items-start justify-between px-5 pt-5 pb-4 border-b border-gray-800 shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className={`w-2.5 h-2.5 rounded-full shrink-0 mt-1 ${activityDotClass(player.last_match_date)}`} />
-            <div className="min-w-0">
-              <div className="text-white font-bold text-lg leading-tight truncate">{player.name}</div>
-              <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <TierBadge tier={player.tier} />
-                {player.is_provisional && (
-                  <span className="text-xs text-yellow-400 bg-yellow-900/30 border border-yellow-800 px-2 py-0.5 rounded">Provisional</span>
-                )}
-                <span className="text-xs text-gray-500">#{player.rank} · {activityLabel(player.last_match_date)}</span>
-              </div>
-            </div>
-          </div>
-          <div className="flex items-start gap-4 shrink-0 ml-3">
-            <div className="text-right">
-              <div className="text-2xl font-bold font-mono text-white leading-none">{Math.round(player.current_rating)}</div>
-              <div className="text-xs text-gray-500 mt-0.5">rating</div>
-            </div>
-            <button onClick={onClose} className="text-gray-500 hover:text-white text-lg leading-none mt-0.5">✕</button>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex border-b border-gray-800 shrink-0">
-          {(['overview', 'history'] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)}
-              className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
-                tab === t ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-white'
-              }`}>
-              {t === 'overview' ? 'Overview' : 'Match History'}
-            </button>
-          ))}
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-5">
-
-          {/* ── Overview tab ── */}
-          {tab === 'overview' && (
-            <div className="space-y-5">
-
-              {/* CR + meta stats */}
-              {statsQ.isLoading && <Spinner />}
-              {statsQ.data && (
-                <div className="space-y-3">
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs text-gray-400">Confidence Ratio</span>
-                      <span className="text-xs text-gray-500">{Math.round(statsQ.data.confidence_ratio * 100)}%</span>
-                    </div>
-                    <CRBar value={statsQ.data.confidence_ratio} />
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="bg-gray-800 rounded-lg p-3">
-                      <div className="text-xs text-gray-500 mb-1">Rated</div>
-                      <div className="text-white font-semibold font-mono">{player.rated_matches}</div>
-                    </div>
-                    <div className="bg-gray-800 rounded-lg p-3">
-                      <div className="text-xs text-gray-500 mb-1">Age group</div>
-                      <div className="text-white font-semibold text-sm">{statsQ.data.age_group}</div>
-                    </div>
-                    <div className="bg-gray-800 rounded-lg p-3">
-                      <div className="text-xs text-gray-500 mb-1">Inactive</div>
-                      <div className={`font-semibold text-sm font-mono ${
-                        statsQ.data.weeks_inactive != null && statsQ.data.weeks_inactive > 4
-                          ? 'text-red-400' : 'text-white'
-                      }`}>
-                        {statsQ.data.weeks_inactive != null ? `${statsQ.data.weeks_inactive.toFixed(1)}w` : '—'}
-                      </div>
-                    </div>
-                  </div>
-                  {statsQ.data.is_provisional && (
-                    <div className="bg-yellow-900/20 border border-yellow-800/50 rounded-lg px-3 py-2 text-xs text-yellow-300">
-                      Provisional — {statsQ.data.provisional_matches_remaining} more rated match{statsQ.data.provisional_matches_remaining !== 1 ? 'es' : ''} needed to exit
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* 30-day velocity */}
-              {velocityQ.isLoading && !statsQ.isLoading && <Spinner />}
-              {velocityQ.data && (
-                <div>
-                  <div className="text-xs text-gray-500 mb-2 uppercase tracking-wide font-semibold">Last 30 days</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-gray-800 rounded-lg p-3">
-                      <div className="text-xs text-gray-500 mb-1">Rating Δ</div>
-                      <div className={`text-xl font-bold font-mono ${velocityQ.data.rating_change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {velocityQ.data.rating_change >= 0 ? '+' : ''}{Math.round(velocityQ.data.rating_change)}
-                      </div>
-                    </div>
-                    <div className="bg-gray-800 rounded-lg p-3">
-                      <div className="text-xs text-gray-500 mb-1">Win rate</div>
-                      <div className="text-xl font-bold text-white">
-                        {velocityQ.data.matches_played > 0
-                          ? `${Math.round(velocityQ.data.win_rate * 100)}%`
-                          : '—'}
-                      </div>
-                      <div className="text-xs text-gray-600 mt-0.5">{velocityQ.data.matches_played} matches</div>
-                    </div>
-                    <div className="bg-gray-800 rounded-lg p-3">
-                      <div className="text-xs text-gray-500 mb-1">Stretch win rate</div>
-                      <div className="text-xl font-bold text-purple-400">
-                        {velocityQ.data.stretch_win_rate != null
-                          ? `${Math.round(velocityQ.data.stretch_win_rate * 100)}%`
-                          : '—'}
-                      </div>
-                      <div className="text-xs text-gray-600 mt-0.5">{velocityQ.data.stretch_matches} stretch</div>
-                    </div>
-                    <div className="bg-gray-800 rounded-lg p-3">
-                      <div className="text-xs text-gray-500 mb-1">Tier changes</div>
-                      <div className={`text-xl font-bold ${velocityQ.data.tier_changes > 0 ? 'text-yellow-400' : 'text-gray-400'}`}>
-                        {velocityQ.data.tier_changes > 0 ? `+${velocityQ.data.tier_changes}` : velocityQ.data.tier_changes}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Recent form pips */}
-              {recentQ.data && (() => {
-                const played = recentQ.data.items.filter(h => !h.is_rollback)
-                return played.length > 0 ? (
-                  <div>
-                    <div className="text-xs text-gray-500 mb-2 uppercase tracking-wide font-semibold">Recent form</div>
-                    <div className="flex items-end gap-2 flex-wrap">
-                      {played.slice(0, 5).map(h => (
-                        <div key={h.history_id} className="flex flex-col items-center gap-1">
-                          <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold ${
-                            h.result === 'WIN' ? 'bg-green-800 text-green-200' : 'bg-red-900/80 text-red-300'
-                          }`}>
-                            {h.result === 'WIN' ? 'W' : 'L'}
-                          </div>
-                          <div className={`text-xs font-mono font-semibold ${h.delta >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                            {h.delta >= 0 ? '+' : ''}{Math.round(h.delta)}
-                          </div>
-                          <div className="text-xs text-gray-600 text-center leading-tight max-w-[4rem] truncate">
-                            {h.opponent_name?.split(' ')[0] ?? '—'}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-xs text-gray-500">No rated matches yet — apply ratings after sessions.</p>
-                )
-              })()}
-            </div>
-          )}
-
-          {/* ── History tab ── */}
-          {tab === 'history' && (
-            <div className="space-y-3">
-              {histQ.isLoading && <Spinner />}
-              {histQ.data && (
-                <>
-                  {histQ.data.items.length === 0 ? (
-                    <p className="text-gray-500 text-sm text-center py-12">No rated matches yet.</p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="text-gray-500 border-b border-gray-800 text-right">
-                            <th className="text-left pb-2 pr-3 font-medium">Date</th>
-                            <th className="text-left pb-2 pr-3 font-medium">Opponent</th>
-                            <th className="text-left pb-2 pr-3 font-medium">Result</th>
-                            <th className="pb-2 pr-2 font-medium">Before</th>
-                            <th className="pb-2 pr-2 font-medium">After</th>
-                            <th className="pb-2 pr-2 font-medium">Δ</th>
-                            <th className="pb-2 pr-2 font-medium">K-eff</th>
-                            <th className="pb-2 font-medium">Exp.</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-800/40">
-                          {histQ.data.items.map(h => (
-                            <tr key={h.history_id} className={`${h.is_rollback ? 'opacity-35' : 'hover:bg-gray-800/30'}`}>
-                              <td className="py-2 pr-3 text-gray-400 whitespace-nowrap">
-                                {h.match_date?.slice(0, 10) ?? '—'}
-                                {h.is_rollback && <span className="ml-1 text-gray-600 italic">(void)</span>}
-                              </td>
-                              <td className="py-2 pr-3 text-white max-w-[8rem] truncate">{h.opponent_name ?? '—'}</td>
-                              <td className="py-2 pr-3">
-                                <span className={`px-1.5 py-0.5 rounded font-bold ${
-                                  h.result === 'WIN' ? 'bg-green-800/60 text-green-300' : 'bg-red-900/60 text-red-300'
-                                }`}>
-                                  {h.result}
-                                </span>
-                              </td>
-                              <td className="py-2 pr-2 text-right font-mono text-gray-500">{Math.round(h.rating_before)}</td>
-                              <td className="py-2 pr-2 text-right font-mono text-white">{Math.round(h.rating_after)}</td>
-                              <td className={`py-2 pr-2 text-right font-mono font-semibold ${h.delta >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                {h.delta >= 0 ? '+' : ''}{h.delta.toFixed(1)}
-                              </td>
-                              <td className="py-2 pr-2 text-right text-gray-500">{h.k_eff?.toFixed(1) ?? '—'}</td>
-                              <td className="py-2 text-right text-gray-500">{h.expected_score?.toFixed(2) ?? '—'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                  {totalPages > 1 && (
-                    <div className="flex items-center justify-between pt-1">
-                      <button onClick={() => setHistPage(p => Math.max(0, p - 1))} disabled={histPage === 0}
-                        className="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg disabled:opacity-40 transition-colors">
-                        ← Prev
-                      </button>
-                      <span className="text-xs text-gray-500">Page {histPage + 1} of {totalPages}</span>
-                      <button onClick={() => setHistPage(p => Math.min(totalPages - 1, p + 1))} disabled={histPage >= totalPages - 1}
-                        className="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg disabled:opacity-40 transition-colors">
-                        Next →
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── Register player ───────────────────────────────────────────────────────────
 
 const SEEDING_LEVELS = ['UNSEEDED', 'DISTRICT', 'STATE', 'NATIONAL']
 

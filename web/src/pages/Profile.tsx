@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { authApi } from '../api/client'
 import { useAuth } from '../auth/context'
 import { Layout, ProtectedRoute } from '../components/Layout'
 
@@ -55,7 +56,7 @@ function AccountInfo() {
     <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
       <div className="text-sm text-gray-400">Account details</div>
       <Row label="Role" value={user?.role ?? '�'} />
-      <Row label="User ID" value={<span className="font-mono text-xs text-gray-400">{user?.user_id}</span>} />
+      <Row label="Name" value={user?.name ?? '—'} />
       <Row label="Academy" value={
         user?.academy_name
           ? <span className="font-mono text-xs text-gray-400">{user.academy_name}</span>
@@ -83,10 +84,13 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
 function ChangePassword() {
   const [form, setForm] = useState({ current: '', next: '', confirm: '' })
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(ev: React.FormEvent) {
     ev.preventDefault()
+    setSuccess(false)
+    setError(null)
     if (form.next !== form.confirm) {
       setError('New passwords do not match')
       return
@@ -98,7 +102,13 @@ function ChangePassword() {
     setLoading(true)
     setError(null)
     try {
-      throw new Error('Password change via API is not yet available. Contact your administrator.')
+      await authApi.changePassword({
+        current_password: form.current,
+        new_password: form.next,
+      })
+
+      setSuccess(true)
+      setForm({ current: '', next: '', confirm: '' })
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed')
     } finally {
@@ -109,6 +119,11 @@ function ChangePassword() {
   return (
     <form onSubmit={handleSubmit} className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
       {error && <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-lg p-3 text-sm">{error}</div>}
+      {success && (
+        <div className="bg-green-900/40 border border-green-700 text-green-300 rounded-lg p-3 text-sm">
+          Password updated successfully.
+        </div>
+      )}
       {[
         { key: 'current', label: 'Current password' },
         { key: 'next', label: 'New password' },

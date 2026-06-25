@@ -1,7 +1,8 @@
 import structlog
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.database import get_connection
+from app.dependencies.auth import get_current_user
 from app.rate_limit import limiter
 from app.services.auth_service import (
     consume_otp,
@@ -11,7 +12,7 @@ from app.services.auth_service import (
     store_otp,
     verify_password,
 )
-from schemas.auth import LoginRequest, OTPRequest, RegisterRequest, TokenResponse
+from schemas.auth import ChangePasswordRequest, LoginRequest, OTPRequest, RegisterRequest, TokenResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -30,16 +31,17 @@ def login(request: Request, body: LoginRequest):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT u.user_id, u.role, u.academy_id, a.name AS academy_name, u.password_hash, u.is_active, p.player_id "
+                "SELECT u.user_id, u.name, u.role, u.academy_id, a.name AS academy_name, u.password_hash, u.is_active, p.player_id "
                 "FROM users u "
                 "LEFT JOIN academy a ON a.academy_id = u.academy_id "
                 "LEFT JOIN player p ON p.user_id = u.user_id "
-                "WHERE u.email = %s",
-                (body.email,),
+                "WHERE LOWER(u.email) = LOWER(%s)",
+                (body.email.strip(),),
             )
             user = cur.fetchone()
 
             if not user or not user["is_active"]:
+                logger.info("login_failed_user_not_found_or_inactive", email=body.email)
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid credentials",
@@ -53,6 +55,7 @@ def login(request: Request, body: LoginRequest):
                     )
             else:
                 if not verify_password(body.password, user["password_hash"]):
+                    logger.info("login_failed_password_mismatch", email=body.email)
                     raise HTTPException(
                         status_code=status.HTTP_401_UNAUTHORIZED,
                         detail="Invalid credentials",
@@ -65,11 +68,45 @@ def login(request: Request, body: LoginRequest):
         token=token,
         user_id=str(user["user_id"]),
         role=user["role"],
+        name=user["name"],
         academy_id=str(user["academy_id"]) if user["academy_id"] else None,
         academy_name=user["academy_name"],
         player_id=str(user["player_id"]) if user["player_id"] else None,
         expires_at=expires_at,
     )
+
+
+@router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
+def change_password(
+    body: ChangePasswordRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT password_hash FROM users WHERE user_id = %s",
+                (current_user["user_id"],),
+            )
+            row = cur.fetchone()
+
+            if not row or not verify_password(
+                body.current_password,
+                row["password_hash"],
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Current password is incorrect",
+                )
+
+            cur.execute(
+                "UPDATE users SET password_hash = %s WHERE user_id = %s",
+                (
+                    hash_password(body.new_password),
+                    current_user["user_id"],
+                ),
+            )
+
+    return None
 
 
 @router.post("/request-otp", status_code=status.HTTP_202_ACCEPTED)

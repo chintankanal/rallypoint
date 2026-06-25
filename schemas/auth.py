@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class LoginRequest(BaseModel):
@@ -26,7 +26,13 @@ class TokenResponse(BaseModel):
     token: str
     user_id: str
     role: str
+    name: str | None = None
     academy_id: str | None
     academy_name: str | None = None
     player_id: str | None = None
     expires_at: datetime
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(..., min_length=8)

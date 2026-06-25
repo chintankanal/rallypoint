@@ -69,8 +69,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
           {user ? (
             <>
               <span className="text-xs text-gray-400 hidden sm:block">
-                {user.role}
-                {user.academy_id && ` · Academy`}
+                {user.name ?? user.role}
+                {user.academy_name && ` · ${user.academy_name}`}
               </span>
               <button
                 onClick={handleLogout}

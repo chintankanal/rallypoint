@@ -4,6 +4,7 @@ import type { TokenResponse } from '../api/client'
 interface AuthUser {
   user_id: string
   role: 'ADMIN' | 'COACH' | 'PLAYER' | 'REFEREE' | 'UMPIRE'
+  name: string | null
   academy_id: string | null
   academy_name: string | null
   player_id: string | null
@@ -49,6 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const u: AuthUser = {
       user_id: resp.user_id,
       role: resp.role,
+      name: resp.name ?? null,
       academy_id: resp.academy_id,
       academy_name: resp.academy_name ?? null,
       player_id: resp.player_id ?? null,

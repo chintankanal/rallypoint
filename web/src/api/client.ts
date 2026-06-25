@@ -28,6 +28,7 @@ export interface TokenResponse {
   token: string
   user_id: string
   role: 'ADMIN' | 'COACH' | 'PLAYER' | 'REFEREE' | 'UMPIRE'
+  name: string | null
   academy_id: string | null
   academy_name: string | null
   player_id: string | null
@@ -46,6 +47,11 @@ export const authApi = {
     request<{ user_id: string; name: string; email: string; role: string }>(
       '/auth/register', { method: 'POST', body: JSON.stringify(body) }
     ),
+  changePassword: (body: { current_password: string; new_password: string }) =>
+    request<void>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 }
 
 // ── Academies ─────────────────────────────────────────────────────────────────

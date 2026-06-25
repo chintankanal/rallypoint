@@ -12,22 +12,28 @@ export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
   const params = new URLSearchParams(location.search)
-  const next = params.get('next') ?? '/'
   const [screen, setScreen] = useState<Screen>('login')
 
   async function doLogin(body: { email: string; password?: string; otp_code?: string }) {
     const resp = await authApi.login(body)
     login(resp)
-    const destination = next || '/'
-    if (resp.role === 'PLAYER' && !resp.player_id) {
-      if (next && next !== '/') {
-        navigate(destination, { replace: true })
-      } else {
-        navigate('/onboarding', { replace: true })
-      }
-      return
+
+    const nextParam = params.get('next')
+    const explicitNext = nextParam && nextParam !== '/' ? nextParam : null
+
+    let roleHome: string
+
+    if (resp.role === 'PLAYER') {
+      roleHome = resp.player_id ? '/player/dashboard' : '/onboarding'
+    } else if (resp.role === 'COACH') {
+      roleHome = '/dashboard'
+    } else if (resp.role === 'ADMIN') {
+      roleHome = '/admin'
+    } else {
+      roleHome = '/leaderboard'
     }
-    navigate(destination, { replace: true })
+
+    navigate(explicitNext ?? roleHome, { replace: true })
   }
 
   return (
@@ -35,7 +41,7 @@ export default function Login() {
       <div className="w-full max-w-sm">
         <h1 className="text-3xl font-bold text-white mb-1 text-center">JLRS</h1>
         <p className="text-gray-400 text-sm text-center mb-4">Junior League Rating System</p>
-        {next !== '/' && (
+        {params.get('next') !== '/' && (
           <div className="mb-4 rounded-lg border border-blue-700 bg-blue-950/30 p-3 text-sm text-blue-200 text-center">
             After signing in or registering, you will be returned to the claim page and the code you received in email will be prefilled.
           </div>

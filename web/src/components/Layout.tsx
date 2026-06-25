@@ -37,7 +37,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   function handleLogout() {
     logout()
-    navigate('/login')
+    navigate('/')
   }
 
   const navLink = (to: string, label: string) => (

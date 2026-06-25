@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/context'
 import { Layout, ProtectedRoute } from '../components/Layout'
 
@@ -14,6 +15,7 @@ export default function Profile() {
 
 function ProfileInner() {
   const { logout } = useAuth()
+  const navigate = useNavigate()
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -27,7 +29,11 @@ function ProfileInner() {
       </div>
 
       <div className="pt-4 border-t border-gray-800">
-        <button onClick={logout}
+        <button
+          onClick={() => {
+            logout()
+            navigate('/')
+          }}
           className="text-sm text-red-400 hover:text-red-300 transition-colors">
           Sign out of this device
         </button>

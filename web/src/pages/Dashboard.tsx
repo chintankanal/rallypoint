@@ -13,7 +13,7 @@ import { SetPointsInput } from '../components/SetPointsInput'
 import { useAuth } from '../auth/context'
 import { DominanceCell, TrendCell, WinPctCell, lastActive } from '../lib/leaderboardHelpers'
 import { DOMINANCE_HELP } from '../lib/leaderboardCopy'
-import { MatchSubmissionSchema, PlayerRegistrationSchema, getMatchFormatRules, validateEventAsync, validatePlayerNameAsync } from '../validation/schemas'
+import { MatchSubmissionSchema, PlayerRegistrationSchema, getMatchFormatRules, validatePlayerNameAsync } from '../validation/schemas'
 import { useFormValidation } from '../validation/useFormValidation'
 
 function SendClaimButton({ playerId }: { playerId: string }) {
@@ -1237,6 +1237,40 @@ function SubmitMatchTab({ academyId }: { academyId: string }) {
   // Validation hook
   const validation = useFormValidation(MatchSubmissionSchema)
 
+  const eventsQ = useQuery({
+    queryKey: ['events'],
+    queryFn: () => eventsApi.list(),
+  })
+
+  const visibleEvents = eventsQ.data?.items.filter(ev => {
+    if (ev.host_academy_id === academyId) return true
+
+    if (
+      Array.isArray((ev as any).participating_academies) &&
+      (ev as any).participating_academies.some(
+        (a: any) => a.academy_id === academyId
+      )
+    ) return true
+
+    if (
+      Array.isArray((ev as any).participating_academy_ids) &&
+      (ev as any).participating_academy_ids.includes(academyId)
+    ) return true
+
+    if (
+      Array.isArray((ev as any).participatingAcademies) &&
+      (ev as any).participatingAcademies.some(
+        (a: any) => a.academy_id === academyId
+      )
+    ) return true
+
+    return (
+      ev.scheduling_mode === 'INTRA_ACADEMY' &&
+      (!Array.isArray((ev as any).participating_academies) ||
+        (ev as any).participating_academies.length === 0)
+    )
+  }) ?? []
+
   const maxSets: Record<string, number> = { BEST_OF_3: 2, BEST_OF_5: 3, BEST_OF_7: 4 }
 
   const mutation = useMutation({
@@ -1369,33 +1403,50 @@ function SubmitMatchTab({ academyId }: { academyId: string }) {
       </div>
 
       <div>
-        <label className="block text-sm text-gray-400 mb-1">Event ID</label>
-        <div className="relative">
-          <input type="text" value={form.event_id} placeholder="Paste the event UUID"
-            onChange={e => {
-              setForm(f => ({ ...f, event_id: e.target.value }))
-              validation.clearError('event_id')
-            }}
-            onBlur={() => {
-              // Validate event exists when field loses focus
-              if (form.event_id.trim()) {
-                validation.validateFieldAsync('event_id', () => validateEventAsync(form.event_id))
-              }
-            }}
-            className={`w-full bg-gray-800 rounded-lg px-3 py-2 pr-8 text-white text-sm font-mono placeholder-gray-600 ${
-              validation.getError('event_id') 
-                ? 'border-2 border-red-500' 
-                : 'border border-gray-700'
-            }`} />
-          {validation.isValidatingField('event_id') && (
-            <div className="absolute right-2 top-2.5 text-gray-400">
-              <div className="animate-spin text-xs">⟳</div>
-            </div>
-          )}
-        </div>
-        <p className="text-xs text-gray-500 mt-1">Find event IDs in Admin → Events</p>
+        <label className="block text-sm text-gray-400 mb-1">
+          Event
+        </label>
+
+        <select
+          value={form.event_id}
+          onChange={e => {
+            setForm(f => ({
+              ...f,
+              event_id: e.target.value,
+            }))
+
+            validation.clearError('event_id')
+          }}
+          className={`w-full bg-gray-800 rounded-lg px-3 py-2 text-white text-sm ${
+            validation.getError('event_id')
+              ? 'border-2 border-red-500'
+              : 'border border-gray-700'
+          }`}
+        >
+          <option value="">
+            {eventsQ.isLoading
+              ? 'Loading events...'
+              : 'Select an event...'}
+          </option>
+
+          {visibleEvents.map(ev => (
+            <option
+              key={ev.event_id}
+              value={ev.event_id}
+            >
+              {ev.name}
+            </option>
+          ))}
+        </select>
+
+        <p className="text-xs text-gray-500 mt-1">
+          Select the event this ad-hoc match belongs to.
+        </p>
+
         {validation.getError('event_id') && (
-          <p className="text-xs text-red-400 mt-1">{validation.getError('event_id')}</p>
+          <p className="text-xs text-red-400 mt-1">
+            {validation.getError('event_id')}
+          </p>
         )}
       </div>
 

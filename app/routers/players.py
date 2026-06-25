@@ -138,6 +138,7 @@ def update_player(player_id: str, body: PlayerUpdate, current_user: dict = _ADMI
             body,
             current_user.get('academy_id'),
             current_user['role'],
+            updated_by_id=current_user['user_id'],
         )
     except LookupError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Player not found")

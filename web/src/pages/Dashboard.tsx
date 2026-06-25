@@ -1179,9 +1179,9 @@ function RosterTab({ academyId }: { academyId: string }) {
       {editingPlayerId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8"
           onClick={() => { setEditingPlayerId(null); setEditForm(null); setEditError(null) }}>
-          <div className="w-full max-w-2xl bg-gray-900 border border-gray-700 rounded-2xl p-6 space-y-4"
+          <div className="w-full max-w-2xl bg-gray-900 border border-gray-700 rounded-2xl flex flex-col max-h-[90vh] overflow-hidden"
             onClick={e => e.stopPropagation()}>
-            <div className="flex items-start justify-between gap-4">
+            <div className="p-6 pb-4 border-b border-gray-800 flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-lg font-semibold text-white">Edit player record</h3>
                 <p className="text-sm text-gray-400 mt-1">Update roster details for this academy player.</p>
@@ -1191,11 +1191,11 @@ function RosterTab({ academyId }: { academyId: string }) {
             </div>
 
             {editPlayerQ.isLoading ? (
-              <div className="py-12"><Spinner /></div>
+              <div className="p-6"><Spinner /></div>
             ) : editPlayerQ.error ? (
-              <ErrorMsg message={(editPlayerQ.error as Error).message} />
+              <div className="p-6"><ErrorMsg message={(editPlayerQ.error as Error).message} /></div>
             ) : editForm ? (
-              <>
+              <div className="flex-1 overflow-y-auto p-6 space-y-4">
                 {editError && <ErrorMsg message={editError} />}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -1314,37 +1314,43 @@ function RosterTab({ academyId }: { academyId: string }) {
                     Current rating and virtual matches can only be updated before any rated matches are completed.
                   </div>
                 )}
-
-                <div className="flex flex-wrap gap-3 justify-end pt-4">
-                  <button type="button" onClick={() => { setEditingPlayerId(null); setEditForm(null); setEditError(null) }}
-                    className="px-4 py-2 rounded-lg border border-gray-700 text-gray-300 hover:border-gray-500 text-sm">
-                    Cancel
-                  </button>
-                  <button type="button" onClick={() => {
-                      if (!editForm) return
-                      const payload: PlayerUpdate = {
-                        name: editForm.name ?? undefined,
-                        date_of_birth: editForm.date_of_birth ?? undefined,
-                        gender: editForm.gender ?? undefined,
-                        nationality: editForm.nationality === '' ? null : editForm.nationality ?? undefined,
-                        guardian_name: editForm.guardian_name === '' ? null : editForm.guardian_name ?? undefined,
-                        guardian_phone: editForm.guardian_phone === '' ? null : editForm.guardian_phone ?? undefined,
-                        contact_email: editForm.contact_email === '' ? null : editForm.contact_email ?? undefined,
-                        seeding_level: editForm.seeding_level ?? undefined,
-                        seeding_reference: editForm.seeding_reference === '' ? null : editForm.seeding_reference ?? undefined,
-                        current_rating: editForm.current_rating,
-                        virtual_matches: editForm.virtual_matches,
-                      }
-                      updatePlayerMut.mutate(payload)
-                    }}
-                    disabled={updatePlayerMut.isPending}
-                    className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-sm font-semibold text-white disabled:opacity-50"
-                  >
-                    {updatePlayerMut.isPending ? 'Saving…' : 'Save changes'}
-                  </button>
-                </div>
-              </>
+              </div>
             ) : null}
+
+            {editForm && (
+              <div className="p-6 pt-4 border-t border-gray-800 flex justify-end gap-3">
+                <button type="button" onClick={() => { setEditingPlayerId(null); setEditForm(null); setEditError(null) }}
+                  className="px-4 py-2 rounded-lg border border-gray-700 text-gray-300 hover:border-gray-500 text-sm">
+                  Cancel
+                </button>
+                <button type="button" onClick={() => {
+                    if (!editForm) return
+                    const payload: PlayerUpdate = {
+                      name: editForm.name ?? undefined,
+                      date_of_birth: editForm.date_of_birth ?? undefined,
+                      gender: editForm.gender ?? undefined,
+                      nationality: editForm.nationality === '' ? null : editForm.nationality ?? undefined,
+                      guardian_name: editForm.guardian_name === '' ? null : editForm.guardian_name ?? undefined,
+                      guardian_phone: editForm.guardian_phone === '' ? null : editForm.guardian_phone ?? undefined,
+                      contact_email: editForm.contact_email === '' ? null : editForm.contact_email ?? undefined,
+                      seeding_level: editForm.seeding_level ?? undefined,
+                      seeding_reference: editForm.seeding_reference === '' ? null : editForm.seeding_reference ?? undefined,
+                      ...(editPlayerQ.data?.rated_matches_completed === 0
+                        ? {
+                            current_rating: editForm.current_rating,
+                            virtual_matches: editForm.virtual_matches,
+                          }
+                        : {}),
+                    }
+                    updatePlayerMut.mutate(payload)
+                  }}
+                  disabled={updatePlayerMut.isPending}
+                  className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  {updatePlayerMut.isPending ? 'Saving…' : 'Save changes'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

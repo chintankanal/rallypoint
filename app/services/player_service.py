@@ -161,7 +161,13 @@ def get_player(player_id: str) -> dict | None:
             return cur.fetchone()
 
 
-def update_player(player_id: str, body, caller_academy_id: str | None, caller_role: str) -> dict:
+def update_player(
+    player_id: str,
+    body,
+    caller_academy_id: str | None,
+    caller_role: str,
+    updated_by_id: str = "",
+) -> dict:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -195,19 +201,19 @@ def update_player(player_id: str, body, caller_academy_id: str | None, caller_ro
             if body.nationality is not None:
                 updates.append('nationality = %s')
                 params.append(body.nationality)
-            if body.guardian_name is not None:
+            if 'guardian_name' in body.model_fields_set:
                 updates.append('guardian_name = %s')
                 params.append(body.guardian_name)
-            if body.guardian_phone is not None:
+            if 'guardian_phone' in body.model_fields_set:
                 updates.append('guardian_phone = %s')
                 params.append(body.guardian_phone)
-            if body.contact_email is not None:
+            if 'contact_email' in body.model_fields_set:
                 updates.append('contact_email = %s')
                 params.append(body.contact_email)
             if body.seeding_level is not None:
                 updates.append('seeding_level = %s')
                 params.append(body.seeding_level.value)
-            if body.seeding_reference is not None:
+            if 'seeding_reference' in body.model_fields_set:
                 updates.append('seeding_reference = %s')
                 params.append(body.seeding_reference)
             if body.current_rating is not None:
@@ -220,6 +226,8 @@ def update_player(player_id: str, body, caller_academy_id: str | None, caller_ro
             if not updates:
                 raise ValueError('No valid fields provided for player update')
 
+            updates.append('updated_by = %s')
+            params.append(updated_by_id)
             updates.append('updated_at = NOW()')
             params.append(player_id)
             cur.execute(

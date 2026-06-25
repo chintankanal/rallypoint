@@ -12,6 +12,7 @@ import { EventDetailPanel } from '../components/EventDetailPanel'
 import { SetPointsInput } from '../components/SetPointsInput'
 import { useAuth } from '../auth/context'
 import { DominanceCell, TrendCell, WinPctCell, lastActive } from '../lib/leaderboardHelpers'
+import { DOMINANCE_HELP } from '../lib/leaderboardCopy'
 import { MatchSubmissionSchema, PlayerRegistrationSchema, getMatchFormatRules, validateEventAsync, validatePlayerNameAsync } from '../validation/schemas'
 import { useFormValidation } from '../validation/useFormValidation'
 
@@ -1002,6 +1003,7 @@ function RosterTab({ academyId }: { academyId: string }) {
   const { user } = useAuth()
   const [selectedPlayer, setSelectedPlayer] = useState<LeaderboardEntry | null>(null)
   const [copiedClaimCode, setCopiedClaimCode] = useState<string | null>(null)
+  const [showDominanceInfo, setShowDominanceInfo] = useState(false)
 
   const q = useQuery({
     queryKey: ['academy-leaderboard', academyId],
@@ -1048,6 +1050,12 @@ function RosterTab({ academyId }: { academyId: string }) {
         </div>
       )}
 
+      {showDominanceInfo && (
+        <div className="mb-3 rounded-lg border border-gray-700 bg-gray-900 p-3 text-xs text-gray-300">
+          <span className="font-semibold text-gray-100">Dominance:</span>
+          {DOMINANCE_HELP}
+        </div>
+      )}
       <div className="overflow-x-auto rounded-xl border border-gray-800">
         <table className="w-full text-sm">
           <thead>
@@ -1063,9 +1071,19 @@ function RosterTab({ academyId }: { academyId: string }) {
               <th className="px-4 py-3 whitespace-nowrap">Trend</th>
               <th
                 className="px-4 py-3 whitespace-nowrap"
-                title="Average set margin over the player's last 5 rated matches (retirements excluded). Positive = winning convincingly lately (e.g. +1.8); negative = losing close ones (e.g. -0.6)."
+                title={DOMINANCE_HELP}
               >
-                Dominance
+                <span className="inline-flex items-center gap-1">
+                  Dominance
+                  <button
+                    type="button"
+                    aria-label="What is Dominance?"
+                    onClick={() => setShowDominanceInfo(v => !v)}
+                    className="text-gray-500 hover:text-gray-200"
+                  >
+                    ⓘ
+                  </button>
+                </span>
               </th>
               <th className="px-4 py-3 whitespace-nowrap">Last Active</th>
               <th className="px-4 py-3 whitespace-nowrap">Claim code</th>

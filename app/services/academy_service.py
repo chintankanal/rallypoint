@@ -3,6 +3,11 @@ import uuid
 from fastapi import HTTPException, status
 
 from app.database import get_connection
+from app.services.leaderboard_sql import (
+    LEADERBOARD_ENRICHMENT_COLUMNS,
+    LEADERBOARD_ENRICHMENT_JOINS,
+    LEADERBOARD_ORDER_BY,
+)
 from app.utils.rating_math import _load_config
 
 
@@ -193,14 +198,16 @@ def academy_leaderboard(
                     p.last_match_date,
                     p.gender,
                     {_AGE_GROUP_SQL} AS age_group,
+                    {LEADERBOARD_ENRICHMENT_COLUMNS},
                     p.claim_code,
                     p.is_claimed
                 FROM player p
                 LEFT JOIN academy a ON a.academy_id = p.primary_academy_id
+                {LEADERBOARD_ENRICHMENT_JOINS}
                 WHERE p.primary_academy_id = %s
                   AND p.status = 'ACTIVE'
                   {tier_filter}
-                ORDER BY p.current_rating DESC
+                ORDER BY {LEADERBOARD_ORDER_BY}
                 LIMIT %s OFFSET %s
                 """,
                 params_page + [limit, offset],

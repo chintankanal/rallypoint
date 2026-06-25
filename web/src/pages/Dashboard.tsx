@@ -11,6 +11,7 @@ import { Layout, TierBadge, CRBar, Spinner, ErrorMsg, ProtectedRoute } from '../
 import { EventDetailPanel } from '../components/EventDetailPanel'
 import { SetPointsInput } from '../components/SetPointsInput'
 import { useAuth } from '../auth/context'
+import { DominanceCell, TrendCell, WinPctCell, lastActive } from '../lib/leaderboardHelpers'
 import { MatchSubmissionSchema, PlayerRegistrationSchema, getMatchFormatRules, validateEventAsync, validatePlayerNameAsync } from '../validation/schemas'
 import { useFormValidation } from '../validation/useFormValidation'
 
@@ -1051,32 +1052,50 @@ function RosterTab({ academyId }: { academyId: string }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-900 text-gray-400 text-left">
-              <th className="px-4 py-3 w-10">#</th>
-              <th className="px-4 py-3">Player</th>
-              <th className="px-4 py-3">Rating</th>
-              <th className="px-4 py-3">Tier</th>
-              <th className="px-4 py-3 hidden lg:table-cell">Claim code</th>
-              <th className="px-4 py-3 hidden lg:table-cell">Gender</th>
-              <th className="px-4 py-3 hidden lg:table-cell">Age Cat.</th>
-              <th className="px-4 py-3 hidden md:table-cell">Matches</th>
-              <th className="px-4 py-3 hidden md:table-cell">Activity</th>
+              <th className="px-4 py-3 w-12 whitespace-nowrap sticky left-0 z-20 bg-gray-900">#</th>
+              <th className="px-4 py-3 whitespace-nowrap sticky left-12 z-20 bg-gray-900 border-r border-gray-800">Player</th>
+              <th className="px-4 py-3 whitespace-nowrap">Rating</th>
+              <th className="px-4 py-3 whitespace-nowrap">Tier</th>
+              <th className="px-4 py-3 whitespace-nowrap">Gender</th>
+              <th className="px-4 py-3 whitespace-nowrap">Age Cat.</th>
+              <th className="px-4 py-3 whitespace-nowrap">Matches</th>
+              <th className="px-4 py-3 whitespace-nowrap">Win %</th>
+              <th className="px-4 py-3 whitespace-nowrap">Trend</th>
+              <th
+                className="px-4 py-3 whitespace-nowrap"
+                title="Average set margin over the player's last 5 rated matches (retirements excluded). Positive = winning convincingly lately (e.g. +1.8); negative = losing close ones (e.g. -0.6)."
+              >
+                Dominance
+              </th>
+              <th className="px-4 py-3 whitespace-nowrap">Last Active</th>
+              <th className="px-4 py-3 whitespace-nowrap">Claim code</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800">
             {q.data?.items.map(row => (
-              <tr key={row.player_id} className="hover:bg-gray-900/50">
-                <td className="px-4 py-3 text-gray-500">{row.rank}</td>
-                <td className="px-4 py-3">
+              <tr key={row.player_id} className="hover:bg-gray-900/50 transition-colors">
+                <td className="px-4 py-3 text-gray-500 font-mono sticky left-0 z-10 bg-gray-950">{row.rank}</td>
+                <td className="px-4 py-3 sticky left-12 z-10 bg-gray-950 border-r border-gray-800">
                   <button
                     onClick={() => setSelectedPlayer(row)}
-                    className="text-blue-400 hover:text-blue-300 font-medium text-left">
+                    className="text-blue-400 hover:text-blue-300 font-medium text-left"
+                  >
                     {row.name}
                   </button>
-                  {row.is_provisional && <span className="ml-1 text-yellow-500 text-xs">(P)</span>}
+                  {row.is_provisional && <span className="ml-2 text-yellow-500 text-xs">(P)</span>}
                 </td>
                 <td className="px-4 py-3 font-mono font-semibold text-white">{Math.round(row.current_rating)}</td>
                 <td className="px-4 py-3"><TierBadge tier={row.tier} /></td>
-                <td className="px-4 py-3 hidden lg:table-cell text-gray-400 text-xs">
+                <td className="px-4 py-3 text-gray-400 text-xs">
+                  {row.gender === 'MALE' ? 'M' : row.gender === 'FEMALE' ? 'F' : '—'}
+                </td>
+                <td className="px-4 py-3 text-gray-400 text-xs">{row.age_group ?? '—'}</td>
+                <td className="px-4 py-3 text-gray-400">{row.rated_matches}</td>
+                <WinPctCell row={row} />
+                <TrendCell row={row} />
+                <DominanceCell row={row} />
+                <td className="px-4 py-3 text-gray-400 text-xs">{lastActive(row.last_match_date)}</td>
+                <td className="px-4 py-3 text-gray-400 text-xs">
                   {row.claim_code && !row.is_claimed ? (
                     <div className="flex items-center gap-2">
                       <span>{row.claim_code}</span>
@@ -1092,19 +1111,6 @@ function RosterTab({ academyId }: { academyId: string }) {
                       )}
                     </div>
                   ) : '—'}
-                </td>
-                <td className="px-4 py-3 hidden lg:table-cell text-gray-400 text-xs">
-                  {row.gender === 'MALE' ? 'M' : row.gender === 'FEMALE' ? 'F' : '—'}
-                </td>
-                <td className="px-4 py-3 hidden lg:table-cell text-gray-400 text-xs">
-                  {row.age_group ?? '—'}
-                </td>
-                <td className="px-4 py-3 hidden md:table-cell text-gray-400">{row.rated_matches}</td>
-                <td className="px-4 py-3 hidden md:table-cell">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${activityDotClass(row.last_match_date)}`} />
-                    <span className="text-gray-500 text-xs">{activityLabel(row.last_match_date)}</span>
-                  </div>
                 </td>
               </tr>
             ))}

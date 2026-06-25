@@ -1199,6 +1199,11 @@ function PlayerPicker({
 
 const FORMATS = ['BEST_OF_3', 'BEST_OF_5', 'BEST_OF_7']
 
+function localTodayISO(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 function SubmitMatchTab({ academyId }: { academyId: string }) {
   const [playerA, setPlayerA] = useState<PlayerSearchResult | null>(null)
   const [playerB, setPlayerB] = useState<PlayerSearchResult | null>(null)
@@ -1207,7 +1212,7 @@ function SubmitMatchTab({ academyId }: { academyId: string }) {
     match_format: 'BEST_OF_3',
     sets_won_a: '',
     sets_won_b: '',
-    match_date: new Date().toISOString().slice(0, 10),
+    match_date: localTodayISO(),
     is_retirement: false,
   })
   const [setScores, setSetScores] = useState<Array<{ points_a: number; points_b: number }> | null>(null)
@@ -1236,7 +1241,7 @@ function SubmitMatchTab({ academyId }: { academyId: string }) {
       if (!playerA || !playerB) throw new Error('Select both players')
       
       // Form data validation using Zod schema with async checks
-      await validation.validateAsync({
+      const validationResult = await validation.validateAsync({
         event_id: form.event_id,
         match_format: form.match_format,
         sets_won_a: form.sets_won_a ? Number(form.sets_won_a) : 0,
@@ -1245,6 +1250,10 @@ function SubmitMatchTab({ academyId }: { academyId: string }) {
         is_retirement: form.is_retirement,
         set_scores: setScores,
       })
+
+      if (!validationResult.valid) {
+        throw new Error('Please correct the highlighted errors before submitting.')
+      }
 
       return matchesApi.submit({
         event_id: form.event_id,

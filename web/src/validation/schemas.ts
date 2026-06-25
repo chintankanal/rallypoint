@@ -258,7 +258,7 @@ export const MatchSubmissionSchema = z.object({
   }
 
   // Validate match date is not in the future
-  const matchDate = new Date(data.match_date)
+  const matchDate = new Date(data.match_date + 'T00:00:00')
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   

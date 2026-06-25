@@ -106,7 +106,13 @@ def _check_diminishing_signal(cur, player_a_id: str, player_b_id: str, match_dat
     return row["cnt"] >= threshold
 
 
-def submit_match(conn, body, submitted_by_user_id: str, caller_role: str = "") -> dict:
+def submit_match(
+    conn,
+    body,
+    submitted_by_user_id: str,
+    caller_role: str = "",
+    caller_academy_id: str | None = None,
+) -> dict:
     """
     Persist a new match.  Raises:
       - psycopg2.errors.UniqueViolation  → caller converts to 409 MATCH_DUPLICATE
@@ -116,7 +122,7 @@ def submit_match(conn, body, submitted_by_user_id: str, caller_role: str = "") -
     with conn.cursor() as cur:
         # Resolve event to get scheduling_mode and default match format
         cur.execute(
-            "SELECT event_id, scheduling_mode, event_type, default_match_format, status, fixture_state "
+            "SELECT event_id, scheduling_mode, event_type, default_match_format, status, fixture_state, host_academy_id "
             "FROM event WHERE event_id = %s",
             (body.event_id,),
         )
@@ -134,6 +140,18 @@ def submit_match(conn, body, submitted_by_user_id: str, caller_role: str = "") -
             if caller_role == "COACH":
                 raise PermissionError(
                     "Coaches cannot submit match results for inter-academy events — only players, umpires, or referees may submit"
+                )
+
+        if (
+            event["scheduling_mode"] == "INTRA_ACADEMY"
+            and caller_role == "COACH"
+        ):
+            if (
+                caller_academy_id is None
+                or str(event["host_academy_id"]) != str(caller_academy_id)
+            ):
+                raise PermissionError(
+                    "Coaches can only submit matches for their own academy's events"
                 )
 
         # Load players and validate active status

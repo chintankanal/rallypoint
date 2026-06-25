@@ -1242,34 +1242,11 @@ function SubmitMatchTab({ academyId }: { academyId: string }) {
     queryFn: () => eventsApi.list(),
   })
 
-  const visibleEvents = eventsQ.data?.items.filter(ev => {
-    if (ev.host_academy_id === academyId) return true
-
-    if (
-      Array.isArray((ev as any).participating_academies) &&
-      (ev as any).participating_academies.some(
-        (a: any) => a.academy_id === academyId
-      )
-    ) return true
-
-    if (
-      Array.isArray((ev as any).participating_academy_ids) &&
-      (ev as any).participating_academy_ids.includes(academyId)
-    ) return true
-
-    if (
-      Array.isArray((ev as any).participatingAcademies) &&
-      (ev as any).participatingAcademies.some(
-        (a: any) => a.academy_id === academyId
-      )
-    ) return true
-
-    return (
+  const visibleEvents = eventsQ.data?.items.filter(
+    ev =>
       ev.scheduling_mode === 'INTRA_ACADEMY' &&
-      (!Array.isArray((ev as any).participating_academies) ||
-        (ev as any).participating_academies.length === 0)
-    )
-  }) ?? []
+      ev.host_academy_id === academyId
+  ) ?? []
 
   const maxSets: Record<string, number> = { BEST_OF_3: 2, BEST_OF_5: 3, BEST_OF_7: 4 }
 

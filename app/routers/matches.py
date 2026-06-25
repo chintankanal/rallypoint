@@ -27,7 +27,11 @@ def submit_match(body: MatchSubmit, current_user: dict = _ANY_USER):
     try:
         with get_connection() as conn:
             row = match_service.submit_match(
-                conn, body, current_user["user_id"], caller_role=current_user["role"]
+                conn,
+                body,
+                current_user["user_id"],
+                caller_role=current_user["role"],
+                caller_academy_id=current_user.get("academy_id"),
             )
     except psycopg2.errors.UniqueViolation:
         raise HTTPException(

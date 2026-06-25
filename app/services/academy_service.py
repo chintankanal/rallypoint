@@ -189,7 +189,7 @@ def academy_leaderboard(
             cur.execute(
                 f"""
                 SELECT
-                    ROW_NUMBER() OVER (ORDER BY p.current_rating DESC) AS rank,
+                    ROW_NUMBER() OVER (ORDER BY {LEADERBOARD_ORDER_BY}) AS rank,
                     p.player_id::text, p.name, p.current_rating::float,
                     {_TIER_SQL} AS tier,
                     a.name AS academy_name,

@@ -88,7 +88,7 @@ def list_events(role: str, academy_id: str | None) -> list[dict]:
                 cur.execute(
                     """
                     SELECT e.event_id::text, e.name, e.scheduling_mode, e.event_type,
-                           e.default_match_format, e.tournament_format, e.status,
+                           e.host_academy_id::text, e.default_match_format, e.tournament_format, e.status,
                            e.start_date, e.end_date, e.created_at,
                            CASE WHEN e.season_id IS NOT NULL THEN
                                json_build_object('season_id', s.season_id, 'name', s.name)
@@ -111,7 +111,7 @@ def list_events(role: str, academy_id: str | None) -> list[dict]:
                 cur.execute(
                     """
                     SELECT e.event_id::text, e.name, e.scheduling_mode, e.event_type,
-                           e.default_match_format, e.tournament_format, e.status,
+                           e.host_academy_id::text, e.default_match_format, e.tournament_format, e.status,
                            e.start_date, e.end_date, e.created_at,
                            CASE WHEN e.season_id IS NOT NULL THEN
                                json_build_object('season_id', s.season_id, 'name', s.name)

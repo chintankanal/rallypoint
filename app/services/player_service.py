@@ -45,7 +45,7 @@ def _get_seeding_defaults() -> dict[str, tuple[float, int]]:
 _PLAYER_SELECT = """
     SELECT p.player_id, p.name, p.date_of_birth, p.gender, p.nationality,
            p.current_rating, p.rated_matches_completed,
-           p.virtual_matches, p.seeding_level, p.last_match_date, p.status,
+           p.virtual_matches, p.seeding_level, p.seeding_reference, p.last_match_date, p.status,
            p.guardian_name, p.guardian_phone, p.contact_email,
            p.is_claimed, p.claim_code, p.created_at,
            json_build_object(
@@ -157,6 +157,75 @@ def create_player(body, created_by_id: str) -> dict:
 def get_player(player_id: str) -> dict | None:
     with get_connection() as conn:
         with conn.cursor() as cur:
+            cur.execute(_PLAYER_SELECT, (player_id,))
+            return cur.fetchone()
+
+
+def update_player(player_id: str, body, caller_academy_id: str | None, caller_role: str) -> dict:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT primary_academy_id, rated_matches_completed FROM player WHERE player_id = %s",
+                (player_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise LookupError("Player not found")
+
+            if caller_role == 'COACH':
+                if not caller_academy_id or row['primary_academy_id'] != caller_academy_id:
+                    raise PermissionError("Coaches can only edit players in their own academy")
+
+            if (body.current_rating is not None or body.virtual_matches is not None) and row['rated_matches_completed'] != 0:
+                raise ValueError(
+                    "Current rating and virtual matches can only be updated before any rated matches have been completed"
+                )
+
+            updates: list[str] = []
+            params: list = []
+            if body.name is not None:
+                updates.append('name = %s')
+                params.append(body.name)
+            if body.date_of_birth is not None:
+                updates.append('date_of_birth = %s')
+                params.append(body.date_of_birth)
+            if body.gender is not None:
+                updates.append('gender = %s')
+                params.append(body.gender.value)
+            if body.nationality is not None:
+                updates.append('nationality = %s')
+                params.append(body.nationality)
+            if body.guardian_name is not None:
+                updates.append('guardian_name = %s')
+                params.append(body.guardian_name)
+            if body.guardian_phone is not None:
+                updates.append('guardian_phone = %s')
+                params.append(body.guardian_phone)
+            if body.contact_email is not None:
+                updates.append('contact_email = %s')
+                params.append(body.contact_email)
+            if body.seeding_level is not None:
+                updates.append('seeding_level = %s')
+                params.append(body.seeding_level.value)
+            if body.seeding_reference is not None:
+                updates.append('seeding_reference = %s')
+                params.append(body.seeding_reference)
+            if body.current_rating is not None:
+                updates.append('current_rating = %s')
+                params.append(body.current_rating)
+            if body.virtual_matches is not None:
+                updates.append('virtual_matches = %s')
+                params.append(body.virtual_matches)
+
+            if not updates:
+                raise ValueError('No valid fields provided for player update')
+
+            updates.append('updated_at = NOW()')
+            params.append(player_id)
+            cur.execute(
+                f"UPDATE player SET {', '.join(updates)} WHERE player_id = %s",
+                params,
+            )
             cur.execute(_PLAYER_SELECT, (player_id,))
             return cur.fetchone()
 

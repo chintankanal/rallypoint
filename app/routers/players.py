@@ -15,6 +15,7 @@ from schemas.player import (
     PlayerCreate,
     PlayerEventFixturesResponse,
     PlayerResponse,
+    PlayerUpdate,
 )
 from schemas.rating import PaginatedRatingHistory, RatingHistoryEntry
 
@@ -127,6 +128,26 @@ def get_academy_history(player_id: str, _: dict = _ANY_USER):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Player not found")
     history = [PlayerAcademyHistoryEntry(**dict(r)) for r in rows]
     return PlayerAcademyHistoryResponse(player_id=player_id, history=history)
+
+
+@router.patch("/{player_id}", response_model=PlayerResponse)
+def update_player(player_id: str, body: PlayerUpdate, current_user: dict = _ADMIN_COACH):
+    try:
+        row = player_service.update_player(
+            player_id,
+            body,
+            current_user.get('academy_id'),
+            current_user['role'],
+        )
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Player not found")
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        )
+    return PlayerResponse(**row)
 
 
 @router.patch("/{player_id}/academy", response_model=AcademyTransferResponse)

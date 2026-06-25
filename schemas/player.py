@@ -43,6 +43,7 @@ class PlayerResponse(BaseModel):
     rated_matches_completed: int
     virtual_matches: int
     seeding_level: str
+    seeding_reference: str | None = None
     primary_academy: dict
     last_match_date: date | None
     guardian_name: str | None = None
@@ -52,6 +53,44 @@ class PlayerResponse(BaseModel):
     is_claimed: bool
     claim_code: str | None = None
     created_at: datetime
+
+
+class PlayerUpdate(BaseModel):
+    name: str | None = None
+    date_of_birth: date | None = None
+    gender: Gender | None = None
+    nationality: str | None = None
+    guardian_name: str | None = None
+    guardian_phone: str | None = None
+    contact_email: str | None = None
+    seeding_level: SeedingLevel | None = None
+    seeding_reference: str | None = None
+    current_rating: float | None = None
+    virtual_matches: int | None = None
+
+    @model_validator(mode="after")
+    def validate_update(self) -> "PlayerUpdate":
+        if (
+            self.name is None
+            and self.date_of_birth is None
+            and self.gender is None
+            and self.nationality is None
+            and self.guardian_name is None
+            and self.guardian_phone is None
+            and self.contact_email is None
+            and self.seeding_level is None
+            and self.seeding_reference is None
+            and self.current_rating is None
+            and self.virtual_matches is None
+        ):
+            raise ValueError("At least one field must be provided for player updates")
+        if self.virtual_matches is not None and self.virtual_matches < 0:
+            raise ValueError("Virtual matches cannot be negative")
+        if self.current_rating is not None and self.current_rating < 0:
+            raise ValueError("Current rating cannot be negative")
+        if self.seeding_level is not None and self.seeding_level != SeedingLevel.UNSEEDED and not self.seeding_reference:
+            raise ValueError("seeding_reference is required for seeded players")
+        return self
 
 
 class ClaimPlayerRequest(BaseModel):

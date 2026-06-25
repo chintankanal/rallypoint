@@ -348,6 +348,61 @@ def test_player_role_cannot_register_new_player(client, admin_token, academy_id)
     assert resp.status_code == 403
 
 
+def test_coach_can_update_player_record(client, admin_token, academy_id, coach_token):
+    resp = _create_player(client, admin_token, academy_id, seeding_level="UNSEEDED")
+    assert resp.status_code == 201
+    player_id = resp.json()["player_id"]
+
+    patch_resp = client.patch(
+        f"/api/v1/players/{player_id}",
+        json={
+            "name": "Updated Name",
+            "guardian_name": "Updated Parent",
+            "contact_email": "updated@example.com",
+            "seeding_level": "DISTRICT",
+            "seeding_reference": "DISTRICT-REF",
+            "current_rating": 1150.0,
+            "virtual_matches": 5,
+        },
+        headers={"Authorization": f"Bearer {coach_token}"},
+    )
+
+    assert patch_resp.status_code == 200, patch_resp.text
+    updated = patch_resp.json()
+    assert updated["name"] == "Updated Name"
+    assert updated["guardian_name"] == "Updated Parent"
+    assert updated["contact_email"] == "updated@example.com"
+    assert updated["seeding_level"] == "DISTRICT"
+    assert updated["seeding_reference"] == "DISTRICT-REF"
+    assert updated["current_rating"] == 1150.0
+    assert updated["virtual_matches"] == 5
+
+
+def test_coach_cannot_update_rating_after_rated_matches(client, admin_token, academy_id, coach_token, test_db_conn):
+    resp = _create_player(client, admin_token, academy_id, seeding_level="UNSEEDED")
+    assert resp.status_code == 201
+    player_id = resp.json()["player_id"]
+
+    with test_db_conn.cursor() as cur:
+        cur.execute(
+            "UPDATE player SET rated_matches_completed = 1 WHERE player_id = %s",
+            (player_id,),
+        )
+        test_db_conn.commit()
+
+    patch_resp = client.patch(
+        f"/api/v1/players/{player_id}",
+        json={
+            "current_rating": 1100.0,
+            "virtual_matches": 3,
+        },
+        headers={"Authorization": f"Bearer {coach_token}"},
+    )
+
+    assert patch_resp.status_code == 422
+    assert "Current rating and virtual matches" in patch_resp.json()["detail"]
+
+
 # ── Academy transfer cooldown ─────────────────────────────────────────────────
 
 def test_transfer_cooldown_enforced(client, admin_token, academy_id, test_db_conn):

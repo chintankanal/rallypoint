@@ -250,6 +250,7 @@ export interface PlayerDetail {
   rated_matches_completed: number
   virtual_matches: number
   seeding_level: string
+  seeding_reference: string | null
   primary_academy: { academy_id: string; name: string; city: string; state: string }
   last_match_date: string | null
   guardian_name: string | null
@@ -259,6 +260,20 @@ export interface PlayerDetail {
   is_claimed: boolean
   claim_code: string | null
   created_at: string
+}
+
+export interface PlayerUpdate {
+  name?: string
+  date_of_birth?: string
+  gender?: 'MALE' | 'FEMALE' | null
+  nationality?: string | null
+  guardian_name?: string | null
+  guardian_phone?: string | null
+  contact_email?: string | null
+  seeding_level?: string
+  seeding_reference?: string | null
+  current_rating?: number
+  virtual_matches?: number
 }
 
 export interface ComputedStats {
@@ -336,6 +351,8 @@ export const playersApi = {
   }) => request<PlayerDetail>('/players', { method: 'POST', body: JSON.stringify(body) }),
   linkAccount: (playerId: string, userId: string) =>
     request<PlayerDetail>(`/players/${playerId}/link-account`, { method: 'PATCH', body: JSON.stringify({ user_id: userId }) }),
+  update: (playerId: string, body: PlayerUpdate) =>
+    request<PlayerDetail>(`/players/${playerId}`, { method: 'PATCH', body: JSON.stringify(body) }),
   claim: (claimCode: string) =>
     request<PlayerDetail>('/players/claim', { method: 'POST', body: JSON.stringify({ claim_code: claimCode }) }),
   fixtures: (playerId: string) =>

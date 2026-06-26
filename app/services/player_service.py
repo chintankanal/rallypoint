@@ -260,7 +260,13 @@ def search_players(q: str, academy_id: str | None, limit: int) -> list[dict]:
                 """,
                 params,
             )
-            return [dict(r) for r in cur.fetchall()]
+            cfg = _load_config()
+            results: list[dict] = []
+            for r in cur.fetchall():
+                row = dict(r)
+                row["tier"] = get_tier(float(row["current_rating"]), cfg)
+                results.append(row)
+            return results
 
 
 def list_all_players() -> list[dict]:

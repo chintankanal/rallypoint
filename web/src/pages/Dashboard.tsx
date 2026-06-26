@@ -295,6 +295,8 @@ function SessionsTab({ academyId }: { academyId: string }) {
       player_id: string
       name: string
       academy_name: string | null
+      current_rating: number
+      tier: string
     }>
   >([])
   const [guestQuery, setGuestQuery] = useState("")
@@ -436,6 +438,8 @@ function SessionsTab({ academyId }: { academyId: string }) {
         player_id: p.player_id,
         name: p.name,
         academy_name: p.academy_name,
+        current_rating: p.current_rating,
+        tier: p.tier,
       },
     ])
 
@@ -700,7 +704,11 @@ function SessionsTab({ academyId }: { academyId: string }) {
                         className="w-full text-left px-4 py-3 hover:bg-gray-700 border-b border-gray-700 last:border-b-0"
                       >
                         <div className="flex items-center justify-between gap-3">
-                          <span className="text-sm text-white">{p.name}</span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm text-white">{p.name}</span>
+                            <span className="text-xs text-gray-400 font-mono">{Math.round(p.current_rating)}</span>
+                            <TierBadge tier={p.tier} />
+                          </div>
                           <span className="text-xs text-gray-400">{p.academy_name ?? '—'}</span>
                         </div>
                       </button>
@@ -714,7 +722,12 @@ function SessionsTab({ academyId }: { academyId: string }) {
                       <div key={g.player_id} className="flex items-center justify-between gap-3 rounded-lg bg-gray-800 border border-gray-700 px-4 py-2">
                         <div>
                           <div className="text-sm text-white">{g.name}</div>
-                          <div className="text-xs text-gray-400">Guest · {g.academy_name ?? '—'}</div>
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400">
+                            <span>Guest</span>
+                            <TierBadge tier={g.tier} />
+                            <span className="font-mono">{Math.round(g.current_rating)}</span>
+                            <span>{g.academy_name ?? '—'}</span>
+                          </div>
                         </div>
                         <button
                           type="button"

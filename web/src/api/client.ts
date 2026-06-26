@@ -228,6 +228,7 @@ export interface PlayerSearchResult {
   player_id: string
   name: string
   current_rating: number
+  tier: string
   academy_name: string | null
 }
 

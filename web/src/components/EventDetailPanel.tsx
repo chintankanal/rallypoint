@@ -565,11 +565,28 @@
             )}
             {fixtures && fixtures.slots.length > 0 && (
               <div className="space-y-4">
-                <FixtureStats
-                  fixtures={fixtures}
-                  matchFormat={eventQ.data?.default_match_format ?? 'BEST_OF_3'}
-                  numTables={numTables}
-                />
+                {(() => {
+                  const playable = fixtures.slots.filter((s: any) => s.status !== 'BYE' && s.player_b)
+                  const playedCount = playable.filter((s: any) => s.status === 'PLAYED').length
+                  const pendingCount = playable.filter((s: any) => s.status === 'SCHEDULED').length
+                  const totalPlayable = playable.length
+                  return (
+                    <div>
+                      <div className="sticky top-0 z-10 bg-gray-900/95 backdrop-blur border border-gray-800 rounded-lg p-3 flex items-center gap-4 mb-2">
+                        <div className="text-sm text-white font-semibold whitespace-nowrap">Played {playedCount} / {totalPlayable}</div>
+                        <div className="flex-1 h-2 rounded-full bg-gray-800 overflow-hidden">
+                          <div className="h-2 bg-emerald-500" style={{ width: `${totalPlayable ? (playedCount / totalPlayable) * 100 : 0}%` }} />
+                        </div>
+                        <div className="text-xs text-amber-300 whitespace-nowrap">{pendingCount} pending</div>
+                      </div>
+                      <FixtureStats
+                        fixtures={fixtures}
+                        matchFormat={eventQ.data?.default_match_format ?? 'BEST_OF_3'}
+                        numTables={numTables}
+                      />
+                    </div>
+                  )
+                })()}
                 {(() => {
                   const model = buildMatrixModel(fixtures.slots as any, {
                     sectionOf: (p: any) => p.academy_id,
@@ -580,7 +597,7 @@
                     cellOf: (slot: any, self: any, opp: any) => {
                       const meta = classifyCell(slot as any, self as any, opp as any)
                       const opponentStrip = opp ? (colorMap[opp.academy_id]?.bg ?? '') : ''
-                      return { label: meta.label, stripClass: opponentStrip, category: meta.category, tooltip: meta.tooltip }
+                      return { label: meta.label, stripClass: opponentStrip, category: meta.category, tooltip: meta.tooltip, slot_id: slot.slot_id }
                     },
                     totalRounds: fixtures.total_rounds,
                     sectionSort: (a, b) => a.label.localeCompare(b.label),

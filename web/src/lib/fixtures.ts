@@ -176,6 +176,7 @@ export function buildMatrixModel<P extends MatrixPlayer>(
       tooltip: (paMeta as any).tooltip ?? paMeta.label,
       category: (paMeta as any).category ?? 'competitive',
       match_id: (paMeta as any).match_id,
+      slot_id: (paMeta as any).slot_id,
       status: (paMeta as any).status,
     }
 
@@ -190,6 +191,7 @@ export function buildMatrixModel<P extends MatrixPlayer>(
         tooltip: (pbMeta as any).tooltip ?? pbMeta.label,
         category: (pbMeta as any).category ?? 'competitive',
         match_id: (pbMeta as any).match_id,
+        slot_id: (pbMeta as any).slot_id,
         status: (pbMeta as any).status,
       }
     }

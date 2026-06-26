@@ -1240,9 +1240,10 @@
 
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
-        <div className="bg-gray-900 border border-gray-700 rounded-xl p-5 w-full max-w-sm mx-4 space-y-4"
+        <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-sm mx-4 flex flex-col max-h-[90vh] overflow-hidden"
           onClick={e => e.stopPropagation()}>
-          <div>
+
+          <div className="p-5 pb-3 border-b border-gray-800">
             <h3 className="text-white font-semibold">Enter Result</h3>
             <p className="text-sm text-gray-300 mt-1">
               <span className="text-white">{slot.player_a.name}</span>
@@ -1259,55 +1260,57 @@
             </p>
           </div>
 
-          {error && <ErrorMsg message={error} />}
+          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            {error && <ErrorMsg message={error} />}
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-gray-400 mb-1 truncate">{slot.player_a.name.split(' ')[0]} sets won</label>
-              <input type="number" min={0} max={max} value={setsA} onChange={e => setSetsA(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-3 text-white text-center text-2xl font-mono focus:outline-none focus:border-blue-500" />
-              <div className="text-center text-xs text-gray-600 mt-1 font-mono">{Math.round(slot.player_a.current_rating)}</div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1 truncate">{slot.player_a.name.split(' ')[0]} sets won</label>
+                <input type="number" min={0} max={max} value={setsA} onChange={e => setSetsA(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-3 text-white text-center text-2xl font-mono focus:outline-none focus:border-blue-500" />
+                <div className="text-center text-xs text-gray-600 mt-1 font-mono">{Math.round(slot.player_a.current_rating)}</div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1 truncate">{slot.player_b!.name.split(' ')[0]} sets won</label>
+                <input type="number" min={0} max={max} value={setsB} onChange={e => setSetsB(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-3 text-white text-center text-2xl font-mono focus:outline-none focus:border-blue-500" />
+                <div className="text-center text-xs text-gray-600 mt-1 font-mono">{Math.round(slot.player_b!.current_rating)}</div>
+              </div>
             </div>
+
             <div>
-              <label className="block text-xs text-gray-400 mb-1 truncate">{slot.player_b!.name.split(' ')[0]} sets won</label>
-              <input type="number" min={0} max={max} value={setsB} onChange={e => setSetsB(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-3 text-white text-center text-2xl font-mono focus:outline-none focus:border-blue-500" />
-              <div className="text-center text-xs text-gray-600 mt-1 font-mono">{Math.round(slot.player_b!.current_rating)}</div>
+              <label className="block text-xs text-gray-400 mb-1">Match date</label>
+              <input type="date" value={matchDate} onChange={e => setMatchDate(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
             </div>
+
+            <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
+              <input type="checkbox" checked={isRetirement} onChange={e => setIsRetirement(e.target.checked)}
+                className="w-4 h-4 accent-blue-500" />
+              Retirement / walkover
+            </label>
+
+            {setsA !== '' && setsB !== '' && (() => {
+              const nA = Number(setsA)
+              const nB = Number(setsB)
+              const maxSets = ({ BEST_OF_1: 1, BEST_OF_3: 3, BEST_OF_5: 5, BEST_OF_7: 7 } as const)[matchFormat as 'BEST_OF_1' | 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7']!
+              return nA + nB > 0 && nA <= maxSets && nB <= maxSets && nA + nB <= maxSets ? (
+                <SetPointsInput
+                  matchFormat={matchFormat as 'BEST_OF_1' | 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7'}
+                  setsWonA={nA}
+                  setsWonB={nB}
+                  isRetirement={isRetirement}
+                  onSetScoresChange={setSetScores}
+                />
+              ) : null
+            })()}
           </div>
 
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">Match date</label>
-            <input type="date" value={matchDate} onChange={e => setMatchDate(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
-          </div>
-
-          <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
-            <input type="checkbox" checked={isRetirement} onChange={e => setIsRetirement(e.target.checked)}
-              className="w-4 h-4 accent-blue-500" />
-            Retirement / walkover
-          </label>
-
-          {setsA !== '' && setsB !== '' && (() => {
-            const nA = Number(setsA)
-            const nB = Number(setsB)
-            const maxSets = ({ BEST_OF_1: 1, BEST_OF_3: 3, BEST_OF_5: 5, BEST_OF_7: 7 } as const)[matchFormat as 'BEST_OF_1' | 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7']!
-            return nA + nB > 0 && nA <= maxSets && nB <= maxSets && nA + nB <= maxSets ? (
-              <SetPointsInput
-                matchFormat={matchFormat as 'BEST_OF_1' | 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7'}
-                setsWonA={nA}
-                setsWonB={nB}
-                isRetirement={isRetirement}
-                onSetScoresChange={setSetScores}
-              />
-            ) : null
-          })()}
-
-          <div className="flex gap-2 pt-1">
+          <div className="p-5 pt-3 border-t border-gray-800 flex justify-end gap-3">
             <button onClick={onClose}
-              className="flex-1 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-sm">Cancel</button>
+              className="py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-sm px-4">Cancel</button>
             <button onClick={() => mut.mutate()} disabled={mut.isPending || !isValid}
-              className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg text-sm disabled:opacity-50">
+              className="py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg text-sm px-4 disabled:opacity-50">
               {mut.isPending ? 'Submitting…' : 'Submit Result'}
             </button>
           </div>

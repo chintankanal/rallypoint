@@ -62,6 +62,20 @@ class GenerateFixturesRequest(BaseModel):
         return v
 
 
+class AddLatePlayerRequest(BaseModel):
+    player_id: str
+    opponent_ids: list[str]
+
+    @field_validator("opponent_ids")
+    @classmethod
+    def non_empty_unique(cls, v: list[str]) -> list[str]:
+        if not v:
+            raise ValueError("At least one opponent is required")
+        if len(set(v)) != len(v):
+            raise ValueError("Opponent list contains duplicates")
+        return v
+
+
 class MarkSlotUnplayedRequest(BaseModel):
     unplayed: bool
 
@@ -94,6 +108,11 @@ class FixtureSlotResponse(BaseModel):
     status: str
     match_id: str | None
     match_result: dict | None = None  # populated when status == PLAYED
+
+
+class AddLatePlayerResponse(BaseModel):
+    slots: list[FixtureSlotResponse]
+    present_player_count: int
 
 
 class FixtureWarning(BaseModel):

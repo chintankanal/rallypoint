@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -308,6 +308,17 @@ function SessionsTab({ academyId }: { academyId: string }) {
   const [diagnosticsExpanded, setDiagnosticsExpanded] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // ── Late-player modal state ──────────────────────────────────────────────────
+  const [latePlayerModalOpen, setLatePlayerModalOpen] = useState(false)
+  const [latePlayer, setLatePlayer] = useState<PlayerSearchResult | null>(null)
+  const [latePlayerQuery, setLatePlayerQuery] = useState('')
+  const [latePlayerResults, setLatePlayerResults] = useState<PlayerSearchResult[]>([])
+  const latePlayerDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [lateMatchCount, setLateMatchCount] = useState(2)
+  const [lateOpponentIds, setLateOpponentIds] = useState<string[]>([])
+  const [latePlayerError, setLatePlayerError] = useState<string | null>(null)
+  const [latePlayerSubmitting, setLatePlayerSubmitting] = useState(false)
+
   const eventsQ = useQuery({ queryKey: ['events'], queryFn: () => eventsApi.list() })
   const sessionsQ = useQuery({
     queryKey: ['sessions', eventId],
@@ -469,6 +480,13 @@ function SessionsTab({ academyId }: { academyId: string }) {
     setGuestPlayers([])
     setGuestQuery("")
     setGuestResults([])
+    setLatePlayerModalOpen(false)
+    setLatePlayer(null)
+    setLatePlayerQuery('')
+    setLatePlayerResults([])
+    setLateMatchCount(2)
+    setLateOpponentIds([])
+    setLatePlayerError(null)
     setFixtureResult(null)
     setError(null)
   }
@@ -480,6 +498,13 @@ function SessionsTab({ academyId }: { academyId: string }) {
     setGuestPlayers([])
     setGuestQuery("")
     setGuestResults([])
+    setLatePlayerModalOpen(false)
+    setLatePlayer(null)
+    setLatePlayerQuery('')
+    setLatePlayerResults([])
+    setLateMatchCount(2)
+    setLateOpponentIds([])
+    setLatePlayerError(null)
     setFixtureResult(null)
     setError(null)
   }
@@ -487,6 +512,94 @@ function SessionsTab({ academyId }: { academyId: string }) {
   const intraEvents = eventsQ.data?.items.filter(e => e.scheduling_mode === 'INTRA_ACADEMY') ?? []
   const roster = rosterQ.data?.items ?? []
   const sessions = sessionsQ.data ?? []
+
+  // Derive present players from loaded fixture slots (for late-player modal)
+  const presentPlayers = useMemo(() => {
+    const slots = fixtureResult?.slots ?? fixturesQ.data?.slots ?? []
+    const players = new Map<string, { player_id: string; name: string; current_rating: number; tier?: string }>()
+    for (const slot of slots) {
+      if (slot.player_a && !players.has(slot.player_a.player_id)) {
+        players.set(slot.player_a.player_id, slot.player_a)
+      }
+      if (slot.player_b && !players.has(slot.player_b.player_id)) {
+        players.set(slot.player_b.player_id, slot.player_b)
+      }
+    }
+    return Array.from(players.values())
+  }, [fixtureResult?.slots, fixturesQ.data?.slots])
+
+  function handleLatePlayerSearch(v: string) {
+    setLatePlayerQuery(v)
+    setLatePlayerError(null)
+    if (latePlayerDebounceRef.current) clearTimeout(latePlayerDebounceRef.current)
+    if (!v.trim()) { setLatePlayerResults([]); return }
+    latePlayerDebounceRef.current = setTimeout(async () => {
+      const r = await playersApi.search(v)
+      const presentIds = new Set(presentPlayers.map(p => p.player_id))
+      setLatePlayerResults(r.items.filter(p => !presentIds.has(p.player_id)))
+    }, 250)
+  }
+
+  function pickLatePlayer(p: PlayerSearchResult) {
+    setLatePlayer(p)
+    setLatePlayerResults([])
+    setLatePlayerQuery(p.name)
+    setLatePlayerError(null)
+    // Auto-propose N closest-by-rating opponents
+    if (presentPlayers.length > 0) {
+      const sorted = [...presentPlayers]
+        .filter(pp => pp.player_id !== p.player_id)
+        .sort((a, b) => Math.abs(a.current_rating - p.current_rating) - Math.abs(b.current_rating - p.current_rating))
+      const n = Math.min(lateMatchCount, sorted.length)
+      setLateOpponentIds(sorted.slice(0, n).map(pp => pp.player_id))
+    }
+  }
+
+  function addLateOpponentRow() {
+    if (presentPlayers.length === 0) return
+    setLateOpponentIds(prev => {
+      const next = [...prev]
+      const nextPlayer = presentPlayers.find(p => !next.includes(p.player_id) && p.player_id !== latePlayer?.player_id)
+      next.push(nextPlayer?.player_id ?? presentPlayers[0].player_id)
+      return next
+    })
+    setLateMatchCount(prev => prev + 1)
+  }
+
+  function updateLateOpponent(index: number, value: string) {
+    setLateOpponentIds(prev => { const next = [...prev]; next[index] = value; return next })
+  }
+
+  function removeLateOpponent(index: number) {
+    setLateOpponentIds(prev => prev.filter((_, idx) => idx !== index))
+    setLateMatchCount(prev => Math.max(1, prev - 1))
+  }
+
+  async function submitLatePlayer() {
+    if (!sessionId) { setLatePlayerError('No session selected'); return }
+    if (!latePlayer) { setLatePlayerError('Select a late player first'); return }
+    if (lateOpponentIds.length === 0) { setLatePlayerError('Add at least one opponent'); return }
+    setLatePlayerSubmitting(true)
+    setLatePlayerError(null)
+    try {
+      await sessionsApi.addLatePlayer(sessionId, {
+        player_id: latePlayer.player_id,
+        opponent_ids: lateOpponentIds,
+      })
+      setLatePlayerModalOpen(false)
+      setLatePlayer(null)
+      setLatePlayerQuery('')
+      setLatePlayerResults([])
+      setLateOpponentIds([])
+      setLateMatchCount(2)
+      qc.invalidateQueries({ queryKey: ['fixtures', sessionId] })
+      qc.invalidateQueries({ queryKey: ['sessions', eventId] })
+    } catch (e: unknown) {
+      setLatePlayerError(e instanceof Error ? e.message : 'Unable to add late player')
+    } finally {
+      setLatePlayerSubmitting(false)
+    }
+  }
 
   const BOOTSTRAP_PHASE_BADGE: Record<string, string> = {
     DISCOVERY: 'bg-blue-500/10 text-blue-300 border-blue-500/20',
@@ -633,6 +746,15 @@ function SessionsTab({ academyId }: { academyId: string }) {
                       {applyRatingsMut.isPending ? 'Applying…' : '⚡ Apply Ratings'}
                     </button>
                   )}
+                  {hasFixtures && (
+                    <button
+                      type="button"
+                      onClick={() => setLatePlayerModalOpen(true)}
+                      className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded-lg transition-colors"
+                    >
+                      + Late player
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -765,6 +887,167 @@ function SessionsTab({ academyId }: { academyId: string }) {
                 qc.invalidateQueries({ queryKey: ['academy-leaderboard', academyId] })
               }}
             />
+          )}
+
+          {/* ── Late-player modal ─────────────────────────────────────────── */}
+          {latePlayerModalOpen && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8"
+              onClick={() => setLatePlayerModalOpen(false)}
+            >
+              <div
+                className="w-full max-w-2xl bg-gray-900 border border-gray-700 rounded-2xl flex flex-col max-h-[90vh] overflow-hidden"
+                onClick={e => e.stopPropagation()}
+              >
+                {/* Header */}
+                <div className="p-6 pb-4 border-b border-gray-800 flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">Add late player</h3>
+                    <p className="text-sm text-gray-400 mt-1">Append new rounds for a player who arrived after fixtures were generated.</p>
+                  </div>
+                  <button type="button" onClick={() => setLatePlayerModalOpen(false)}
+                    className="text-gray-400 hover:text-white text-sm">Close</button>
+                </div>
+
+                {/* Body */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-5">
+                  {latePlayerError && <ErrorMsg message={latePlayerError} />}
+
+                  {/* Search */}
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-1">Search late player</label>
+                    <input
+                      type="text"
+                      value={latePlayerQuery}
+                      onChange={e => handleLatePlayerSearch(e.target.value)}
+                      placeholder="Search by name…"
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm"
+                    />
+                    {latePlayerResults.length > 0 && (
+                      <div className="mt-2 bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
+                        {latePlayerResults.map(p => (
+                          <button
+                            key={p.player_id}
+                            type="button"
+                            onClick={() => pickLatePlayer(p)}
+                            className="w-full text-left px-4 py-3 hover:bg-gray-700 border-b border-gray-700 last:border-b-0"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="space-y-0.5">
+                                <div className="text-sm text-white">{p.name}</div>
+                                <div className="flex items-center gap-2 text-xs text-gray-400">
+                                  <span className="font-mono">{Math.round(p.current_rating)}</span>
+                                  <TierBadge tier={p.tier} />
+                                  <span>{p.academy_name ?? '—'}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Selected late player summary */}
+                  {latePlayer && (
+                    <div className="bg-gray-800 border border-gray-700 rounded-xl p-4 space-y-4">
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <div className="text-sm font-semibold text-white">{latePlayer.name}</div>
+                          <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
+                            <span className="font-mono">{Math.round(latePlayer.current_rating)}</span>
+                            <TierBadge tier={latePlayer.tier} />
+                            <span>{latePlayer.academy_name ?? '—'}</span>
+                          </div>
+                        </div>
+                        <button type="button" onClick={() => { setLatePlayer(null); setLatePlayerQuery('') }}
+                          className="text-xs text-red-400 hover:text-red-300">Remove</button>
+                      </div>
+
+                      {/* Match count */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm text-gray-400 mb-1">How many matches?</label>
+                          <input
+                            type="number" min={1}
+                            value={lateMatchCount}
+                            onChange={e => {
+                              const n = Math.max(1, Number(e.target.value) || 1)
+                              setLateMatchCount(n)
+                              // Re-propose opponents when count changes
+                              if (latePlayer) {
+                                const sorted = [...presentPlayers]
+                                  .filter(pp => pp.player_id !== latePlayer.player_id)
+                                  .sort((a, b) => Math.abs(a.current_rating - latePlayer.current_rating) - Math.abs(b.current_rating - latePlayer.current_rating))
+                                setLateOpponentIds(sorted.slice(0, Math.min(n, sorted.length)).map(pp => pp.player_id))
+                              }
+                            }}
+                            className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Opponent list */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-sm text-white">Proposed opponents</div>
+                            <div className="text-xs text-gray-400">Players already in this session. Coach can adjust.</div>
+                          </div>
+                          <button type="button" onClick={addLateOpponentRow}
+                            className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded-lg">
+                            Add opponent
+                          </button>
+                        </div>
+
+                        {lateOpponentIds.map((opponentId, idx) => (
+                          <div key={`${opponentId}-${idx}`} className="flex flex-col sm:flex-row sm:items-center gap-2 bg-gray-900 border border-gray-700 rounded-xl p-3">
+                            <select
+                              value={opponentId}
+                              onChange={e => updateLateOpponent(idx, e.target.value)}
+                              className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm"
+                            >
+                              {presentPlayers
+                                .filter(p => p.player_id !== latePlayer.player_id)
+                                .map(p => (
+                                  <option key={p.player_id} value={p.player_id}>
+                                    {p.name} · {Math.round(p.current_rating)} · {p.tier ?? '—'}
+                                  </option>
+                                ))}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => removeLateOpponent(idx)}
+                              className="text-xs text-red-400 hover:text-red-300 shrink-0"
+                            >Remove</button>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="text-xs text-gray-500">
+                        Existing slots and results are never modified. New matches are appended as new rounds.
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="border-t border-gray-800 px-6 py-4 bg-gray-950/80 flex items-center justify-end gap-3">
+                  <button type="button" onClick={() => setLatePlayerModalOpen(false)}
+                    className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white text-sm rounded-lg">
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={submitLatePlayer}
+                    disabled={!latePlayer || lateOpponentIds.length === 0 || latePlayerSubmitting}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg disabled:opacity-50"
+                  >
+                    {latePlayerSubmitting ? 'Adding…' : 'Add late player'}
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
 
           {hasFixtures && (

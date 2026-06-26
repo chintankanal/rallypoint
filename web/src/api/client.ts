@@ -729,6 +729,11 @@ export const sessionsApi = {
     ),
   fixtures: (sessionId: string) =>
     request<FixturesResponse>(`/sessions/${sessionId}/fixtures`),
+  addLatePlayer: (sessionId: string, body: { player_id: string; opponent_ids: string[] }) =>
+    request<{ slots: FixtureSlot[]; present_player_count: number }>(
+      `/sessions/${sessionId}/late-player`,
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
   updateStatus: (sessionId: string, status: string) =>
     request<SessionSummary>(`/sessions/${sessionId}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   applyRatings: (sessionId: string) =>

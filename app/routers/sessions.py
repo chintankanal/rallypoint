@@ -8,6 +8,8 @@ from app.services.rating_regime import regime_thresholds
 from app.utils.rating_math import _load_config, get_tier
 from app.dependencies.auth import get_current_user, require_roles
 from schemas.session import (
+    AddLatePlayerRequest,
+    AddLatePlayerResponse,
     FixtureSlotResponse,
     GenerateFixturesRequest,
     MarkSlotUnplayedRequest,
@@ -490,6 +492,158 @@ def get_session_fixtures(session_id: str, _: dict = _ANY):
         diagnostics=diagnostics,
         quality=quality,
     )
+
+
+@router.post(
+    "/sessions/{session_id}/late-player",
+    response_model=AddLatePlayerResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def add_late_player(
+    session_id: str,
+    body: AddLatePlayerRequest,
+    current_user: dict = _ADMIN_COACH,
+):
+    user_id = current_user["user_id"]
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT session_id, rating_spread, present_player_count, status, generated_at"
+                " FROM session WHERE session_id = %s",
+                (session_id,),
+            )
+            session = cur.fetchone()
+            if not session:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+            if session["status"] == "CANCELLED":
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot add a late player to a cancelled session")
+            if session["generated_at"] is None:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Fixtures have not been generated yet")
+
+            cur.execute(
+                "SELECT player_id::text, name, status, current_rating FROM player WHERE player_id = %s",
+                (body.player_id,),
+            )
+            late_player = cur.fetchone()
+            if not late_player:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Player not found")
+            if late_player["status"] != "ACTIVE":
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Late player must be active")
+
+            cur.execute(
+                "SELECT DISTINCT player_a_id::text AS player_id FROM fixture_slot WHERE session_id = %s "
+                "UNION SELECT DISTINCT player_b_id::text AS player_id FROM fixture_slot WHERE session_id = %s AND player_b_id IS NOT NULL",
+                (session_id, session_id),
+            )
+            present_player_ids = {row["player_id"] for row in cur.fetchall() if row["player_id"]}
+            if body.player_id in present_player_ids:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Player is already in this session")
+
+            invalid_present = [pid for pid in body.opponent_ids if pid not in present_player_ids]
+            if invalid_present:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Opponent list contains players not present in the session",
+                )
+
+            cur.execute(
+                "SELECT player_id::text, name, status, current_rating FROM player WHERE player_id = ANY(%s::uuid[])",
+                (body.opponent_ids,),
+            )
+            opponents = {row["player_id"]: dict(row) for row in cur.fetchall()}
+            for opponent_id in body.opponent_ids:
+                opponent = opponents.get(opponent_id)
+                if not opponent:
+                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Opponent not found")
+                if opponent["status"] != "ACTIVE":
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Opponent must be active")
+                if opponent_id == body.player_id:
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Opponent list contains the late player")
+
+            cur.execute(
+                "SELECT COALESCE(MAX(round_number), 0) AS max_round FROM fixture_slot WHERE session_id = %s",
+                (session_id,),
+            )
+            max_round = cur.fetchone()["max_round"] or 0
+
+            cfg = _load_config()
+            late_rating = float(late_player["current_rating"])
+            created_slots = []
+            for index, opponent_id in enumerate(body.opponent_ids):
+                opponent_rating = float(opponents[opponent_id]["current_rating"])
+                expected_rating_gap = abs(late_rating - opponent_rating)
+                gap_band = "COMPETITIVE" if expected_rating_gap <= float(session["rating_spread"]) else "STRETCH"
+                match_category = gap_band
+                slot_id = str(uuid.uuid4())
+                cur.execute(
+                    """
+                    INSERT INTO fixture_slot (
+                        slot_id, session_id, round_number, wave_number, sub_round, table_number,
+                        round_intent, gap_band, player_a_role, player_b_role,
+                        match_category, player_a_id, player_b_id,
+                        expected_rating_gap, status
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s,
+                        %s, %s, %s,
+                        %s, %s
+                    )
+                    RETURNING slot_id, round_number, wave_number, sub_round, table_number,
+                              round_intent, gap_band, player_a_role, player_b_role,
+                              match_category, player_a_id::text, player_b_id::text,
+                              expected_rating_gap, status, match_id
+                    """,
+                    (
+                        slot_id, session_id,
+                        max_round + 1 + index, 1, None, 1,
+                        "COMPETITIVE", gap_band,
+                        "PEER", "PEER",
+                        match_category, body.player_id, opponent_id,
+                        expected_rating_gap, "SCHEDULED",
+                    ),
+                )
+                created_slots.append(dict(cur.fetchone()))
+
+            cur.execute(
+                "UPDATE session SET present_player_count = present_player_count + 1, updated_by = %s, updated_at = NOW() WHERE session_id = %s",
+                (user_id, session_id),
+            )
+            new_present_player_count = session["present_player_count"] + 1
+
+    response_slots = [
+        FixtureSlotResponse(
+            slot_id=str(slot["slot_id"]),
+            round_number=slot["round_number"],
+            wave_number=slot["wave_number"],
+            sub_round=slot["sub_round"],
+            table_number=slot["table_number"],
+            round_intent=slot["round_intent"],
+            gap_band=slot["gap_band"],
+            player_a_role=slot["player_a_role"],
+            player_b_role=slot["player_b_role"],
+            match_category=slot["match_category"],
+            player_a={
+                "player_id": late_player["player_id"],
+                "name": late_player["name"],
+                "current_rating": float(late_player["current_rating"]),
+                "tier": get_tier(float(late_player["current_rating"]), cfg),
+            },
+            player_b={
+                "player_id": opponents[slot["player_b_id"]]["player_id"],
+                "name": opponents[slot["player_b_id"]]["name"],
+                "current_rating": float(opponents[slot["player_b_id"]]["current_rating"]),
+                "tier": get_tier(float(opponents[slot["player_b_id"]]["current_rating"]), cfg),
+            } if slot["player_b_id"] else None,
+            expected_rating_gap=float(slot["expected_rating_gap"]),
+            status=slot["status"],
+            match_id=str(slot["match_id"]) if slot.get("match_id") else None,
+            match_result=None,
+        )
+        for slot in created_slots
+    ]
+
+    return AddLatePlayerResponse(slots=response_slots, present_player_count=new_present_player_count)
 
 
 @router.post("/sessions/{session_id}/fixtures/{slot_id}/mark-unplayed")

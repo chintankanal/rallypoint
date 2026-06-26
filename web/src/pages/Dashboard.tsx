@@ -290,6 +290,16 @@ function SessionsTab({ academyId }: { academyId: string }) {
   const [showNewForm, setShowNewForm] = useState(false)
   const [sessionForm, setSessionForm] = useState({ session_date: new Date().toISOString().slice(0, 10), num_tables: '3', session_minutes: '150', match_format: '' })
   const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set())
+  const [guestPlayers, setGuestPlayers] = useState<
+    Array<{
+      player_id: string
+      name: string
+      academy_name: string | null
+    }>
+  >([])
+  const [guestQuery, setGuestQuery] = useState("")
+  const [guestResults, setGuestResults] = useState<PlayerSearchResult[]>([])
+  const guestDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [fixtureResult, setFixtureResult] = useState<FixturesResponse | null>(null)
   const [resultSlot, setResultSlot] = useState<FixtureSlot | null>(null)
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<string | null>(null)
@@ -397,10 +407,64 @@ function SessionsTab({ academyId }: { academyId: string }) {
     })
   }
 
+  function handleGuestSearch(v: string) {
+    setGuestQuery(v)
+
+    if (guestDebounceRef.current)
+      clearTimeout(guestDebounceRef.current)
+
+    if (!v.trim()) {
+      setGuestResults([])
+      return
+    }
+
+    guestDebounceRef.current = setTimeout(async () => {
+      const r = await playersApi.search(v)
+      const rosterIds = new Set(roster.map((p: LeaderboardEntry) => p.player_id))
+      const guestIds = new Set(guestPlayers.map(g => g.player_id))
+
+      setGuestResults(r.items.filter(
+        p => !rosterIds.has(p.player_id) && !guestIds.has(p.player_id)
+      ))
+    }, 250)
+  }
+
+  function addGuest(p: PlayerSearchResult) {
+    setGuestPlayers(prev => [
+      ...prev,
+      {
+        player_id: p.player_id,
+        name: p.name,
+        academy_name: p.academy_name,
+      },
+    ])
+
+    setSelectedPlayers(prev => {
+      const next = new Set(prev)
+      next.add(p.player_id)
+      return next
+    })
+
+    setGuestQuery("")
+    setGuestResults([])
+  }
+
+  function removeGuest(id: string) {
+    setGuestPlayers(prev => prev.filter(g => g.player_id !== id))
+    setSelectedPlayers(prev => {
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
+  }
+
   function openSession(s: SessionSummary) {
     setSessionId(s.session_id)
     setShowNewForm(false)
     setSelectedPlayers(new Set())
+    setGuestPlayers([])
+    setGuestQuery("")
+    setGuestResults([])
     setFixtureResult(null)
     setError(null)
   }
@@ -409,6 +473,9 @@ function SessionsTab({ academyId }: { academyId: string }) {
     setSessionId(null)
     setShowNewForm(false)
     setSelectedPlayers(new Set())
+    setGuestPlayers([])
+    setGuestQuery("")
+    setGuestResults([])
     setFixtureResult(null)
     setError(null)
   }
@@ -610,6 +677,58 @@ function SessionsTab({ academyId }: { academyId: string }) {
                   ))}
                 </div>
               </div>
+
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Add guest players from other academies</label>
+                  <input
+                    type="text"
+                    value={guestQuery}
+                    onChange={e => handleGuestSearch(e.target.value)}
+                    placeholder="Search players by name..."
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm"
+                  />
+                </div>
+
+                {guestResults.length > 0 && (
+                  <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
+                    {guestResults.map(p => (
+                      <button
+                        key={p.player_id}
+                        type="button"
+                        onClick={() => addGuest(p)}
+                        className="w-full text-left px-4 py-3 hover:bg-gray-700 border-b border-gray-700 last:border-b-0"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-sm text-white">{p.name}</span>
+                          <span className="text-xs text-gray-400">{p.academy_name ?? '—'}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {guestPlayers.length > 0 && (
+                  <div className="space-y-2">
+                    {guestPlayers.map(g => (
+                      <div key={g.player_id} className="flex items-center justify-between gap-3 rounded-lg bg-gray-800 border border-gray-700 px-4 py-2">
+                        <div>
+                          <div className="text-sm text-white">{g.name}</div>
+                          <div className="text-xs text-gray-400">Guest · {g.academy_name ?? '—'}</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeGuest(g.player_id)}
+                          className="text-xs text-red-400 hover:text-red-300"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <button onClick={() => generateMut.mutate()}
                 disabled={generateMut.isPending || selectedPlayers.size < 2}
                 className="w-full py-2.5 bg-purple-700 hover:bg-purple-600 text-white font-semibold rounded-lg disabled:opacity-50">

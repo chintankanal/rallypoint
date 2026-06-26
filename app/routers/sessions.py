@@ -576,6 +576,7 @@ def add_late_player(
                 gap_band = "COMPETITIVE" if expected_rating_gap <= float(session["rating_spread"]) else "STRETCH"
                 match_category = gap_band
                 slot_id = str(uuid.uuid4())
+                pa_id, pb_id = sorted([body.player_id, opponent_id])
                 cur.execute(
                     """
                     INSERT INTO fixture_slot (
@@ -599,7 +600,7 @@ def add_late_player(
                         max_round + 1 + index, 1, None, 1,
                         "COMPETITIVE", gap_band,
                         "PEER", "PEER",
-                        match_category, body.player_id, opponent_id,
+                        match_category, pa_id, pb_id,
                         expected_rating_gap, "SCHEDULED",
                     ),
                 )

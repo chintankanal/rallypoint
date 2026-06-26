@@ -13,6 +13,7 @@ import { playersApi, eventsApi } from '../api/client'
 // ── Constants ──────────────────────────────────────────────────────────────
 
 const MAX_SETS_BY_FORMAT = {
+  BEST_OF_1: 1,
   BEST_OF_3: 2,
   BEST_OF_5: 3,
   BEST_OF_7: 4,
@@ -211,7 +212,7 @@ export const MatchSubmissionSchema = z.object({
     .uuid('Event ID must be a valid UUID'),
   
   match_format: z
-    .enum(['BEST_OF_3', 'BEST_OF_5', 'BEST_OF_7'])
+    .enum(['BEST_OF_1', 'BEST_OF_3', 'BEST_OF_5', 'BEST_OF_7'])
     .default('BEST_OF_3'),
   
   sets_won_a: z
@@ -509,6 +510,7 @@ export async function validateEventAsync(eventId: string): Promise<string | null
  */
 export function getMatchFormatRules(format: string): string {
   const rules: Record<string, string> = {
+    BEST_OF_1: 'Single game decides the match (unless retirement)',
     BEST_OF_3: 'First to 2 sets wins (unless retirement)',
     BEST_OF_5: 'First to 3 sets wins (unless retirement)',
     BEST_OF_7: 'First to 4 sets wins (unless retirement)',

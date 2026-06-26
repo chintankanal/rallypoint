@@ -10,7 +10,7 @@ import psycopg2.errors
 from app.utils.timezone import end_of_day_ist
 
 # Set score tables for validating winner sets per format
-_REQUIRED_WINNER_SETS = {"BEST_OF_3": 2, "BEST_OF_5": 3, "BEST_OF_7": 4}
+_REQUIRED_WINNER_SETS = {"BEST_OF_1": 1, "BEST_OF_3": 2, "BEST_OF_5": 3, "BEST_OF_7": 4}
 
 # Ratings trigger label per scheduling mode
 _RATINGS_TRIGGER = {

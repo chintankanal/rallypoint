@@ -114,6 +114,9 @@ def test_match_submit_valid_best_of_3():
 
 
 @pytest.mark.parametrize("sa,sb,fmt,valid", [
+    (1, 0, "BEST_OF_1", True),
+    (0, 0, "BEST_OF_1", False),   # winner needs 1
+    (1, 1, "BEST_OF_1", False),   # invalid non-retirement score
     (2, 0, "BEST_OF_3", True),
     (2, 1, "BEST_OF_3", True),
     (1, 0, "BEST_OF_3", False),   # winner needs 2

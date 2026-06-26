@@ -15,7 +15,7 @@ EXCEPTION
 END $$;
 
 DO $$ BEGIN
-    CREATE TYPE match_format AS ENUM ('BEST_OF_3', 'BEST_OF_5', 'BEST_OF_7');
+    CREATE TYPE match_format AS ENUM ('BEST_OF_1', 'BEST_OF_3', 'BEST_OF_5', 'BEST_OF_7');
 EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;

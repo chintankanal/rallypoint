@@ -32,7 +32,7 @@ class SetPoints(BaseModel):
         return self
 
 
-_REQUIRED_WINNER_SETS = {"BEST_OF_3": 2, "BEST_OF_5": 3, "BEST_OF_7": 4}
+_REQUIRED_WINNER_SETS = {"BEST_OF_1": 1, "BEST_OF_3": 2, "BEST_OF_5": 3, "BEST_OF_7": 4}
 
 
 class MatchSubmit(BaseModel):

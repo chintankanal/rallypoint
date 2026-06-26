@@ -187,6 +187,9 @@ def get_expected_score(r_adj_a: float, r_adj_b: float, cfg: dict[str, float] | N
 
 # Margin-of-victory actual score tables
 _ACTUAL_SCORES: dict[str, dict[tuple[int, int], tuple[float, float]]] = {
+    "BEST_OF_1": {
+        (1, 0): (1.0, 0.0),
+    },
     "BEST_OF_3": {
         (2, 0): (1.0, 0.0),
         (2, 1): (0.75, 0.25),

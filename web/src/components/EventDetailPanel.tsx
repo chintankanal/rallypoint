@@ -57,9 +57,9 @@
     { bg: 'bg-indigo-700', text: 'text-indigo-50' },
   ]
 
-  const MAX_SETS_MAP: Record<string, number> = { BEST_OF_3: 2, BEST_OF_5: 3, BEST_OF_7: 4 }
+  const MAX_SETS_MAP: Record<string, number> = { BEST_OF_1: 1, BEST_OF_3: 2, BEST_OF_5: 3, BEST_OF_7: 4 }
 
-  const MATCH_DURATION_MIN: Record<string, number> = { BEST_OF_3: 18, BEST_OF_5: 30, BEST_OF_7: 45 }
+  const MATCH_DURATION_MIN: Record<string, number> = { BEST_OF_1: 10, BEST_OF_3: 18, BEST_OF_5: 30, BEST_OF_7: 45 }
 
   // Shared helpers and matrix grid are provided by web/src/lib/fixtures and FixtureMatrixGrid
 
@@ -1214,10 +1214,10 @@
           {setsA !== '' && setsB !== '' && (() => {
             const nA = Number(setsA)
             const nB = Number(setsB)
-            const maxSets = ({ BEST_OF_3: 3, BEST_OF_5: 5, BEST_OF_7: 7 } as const)[matchFormat as 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7']!
+            const maxSets = ({ BEST_OF_1: 1, BEST_OF_3: 3, BEST_OF_5: 5, BEST_OF_7: 7 } as const)[matchFormat as 'BEST_OF_1' | 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7']!
             return nA + nB > 0 && nA <= maxSets && nB <= maxSets && nA + nB <= maxSets ? (
               <SetPointsInput
-                matchFormat={matchFormat as 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7'}
+                matchFormat={matchFormat as 'BEST_OF_1' | 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7'}
                 setsWonA={nA}
                 setsWonB={nB}
                 isRetirement={isRetirement}

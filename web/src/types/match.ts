@@ -23,7 +23,7 @@ export interface MatchSubmitData {
   fixture_slot_id?: string | null
   player_a_id: string
   player_b_id: string
-  match_format: 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7'
+  match_format: 'BEST_OF_1' | 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7'
   sets_won_a: number
   sets_won_b: number
   sets_won_a_actual?: number | null

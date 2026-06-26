@@ -99,6 +99,7 @@ const EVENT_STATUS_COLOR: Record<string, string> = {
 }
 
 const MATCH_FORMATS = [
+  { value: 'BEST_OF_1', label: 'Best of 1' },
   { value: 'BEST_OF_3', label: 'Best of 3' },
   { value: 'BEST_OF_5', label: 'Best of 5' },
   { value: 'BEST_OF_7', label: 'Best of 7' },
@@ -1431,7 +1432,7 @@ function PlayerPicker({
 
 // ── Submit match ──────────────────────────────────────────────────────────────
 
-const FORMATS = ['BEST_OF_3', 'BEST_OF_5', 'BEST_OF_7']
+const FORMATS = ['BEST_OF_1', 'BEST_OF_3', 'BEST_OF_5', 'BEST_OF_7']
 
 function localTodayISO(): string {
   const d = new Date()
@@ -1467,7 +1468,7 @@ function SubmitMatchTab({ academyId }: { academyId: string }) {
       ev.host_academy_id === academyId
   ) ?? []
 
-  const maxSets: Record<string, number> = { BEST_OF_3: 2, BEST_OF_5: 3, BEST_OF_7: 4 }
+  const maxSets: Record<string, number> = { BEST_OF_1: 1, BEST_OF_3: 2, BEST_OF_5: 3, BEST_OF_7: 4 }
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -1660,10 +1661,10 @@ function SubmitMatchTab({ academyId }: { academyId: string }) {
       {form.sets_won_a !== '' && form.sets_won_b !== '' && (() => {
         const nA = Number(form.sets_won_a)
         const nB = Number(form.sets_won_b)
-        const maxSets = ({ BEST_OF_3: 3, BEST_OF_5: 5, BEST_OF_7: 7 } as const)[form.match_format as 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7']!
+        const maxSets = ({ BEST_OF_1: 1, BEST_OF_3: 3, BEST_OF_5: 5, BEST_OF_7: 7 } as const)[form.match_format as 'BEST_OF_1' | 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7']!
         return nA + nB > 0 && nA <= maxSets && nB <= maxSets && nA + nB <= maxSets ? (
           <SetPointsInput
-            matchFormat={form.match_format as 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7'}
+            matchFormat={form.match_format as 'BEST_OF_1' | 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7'}
             setsWonA={nA}
             setsWonB={nB}
             isRetirement={form.is_retirement}
@@ -1760,6 +1761,7 @@ function MatchesTab({ academyId }: { academyId: string }) {
   const sessionOptions = sessionsQ.data ?? []
 
   const REQUIRED_MATCH_WINNER_SETS: Record<string, number> = {
+    BEST_OF_1: 1,
     BEST_OF_3: 2,
     BEST_OF_5: 3,
     BEST_OF_7: 4,
@@ -2172,7 +2174,7 @@ function MatchesTab({ academyId }: { academyId: string }) {
           {form.sets_won_a !== '' && form.sets_won_b !== '' && selectedMatch && (
             <SetPointsInput
               key={selectedMatch.match_id}
-              matchFormat={selectedMatch.match_format as 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7'}
+              matchFormat={selectedMatch.match_format as 'BEST_OF_1' | 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7'}
               setsWonA={Number(form.sets_won_a) || 0}
               setsWonB={Number(form.sets_won_b) || 0}
               isRetirement={selectedMatch.is_retirement}
@@ -2302,7 +2304,7 @@ function MatchesTab({ academyId }: { academyId: string }) {
 
 // ── Result entry modal ────────────────────────────────────────────────────────
 
-const MAX_SETS: Record<string, number> = { BEST_OF_3: 2, BEST_OF_5: 3, BEST_OF_7: 4 }
+const MAX_SETS: Record<string, number> = { BEST_OF_1: 1, BEST_OF_3: 2, BEST_OF_5: 3, BEST_OF_7: 4 }
 
 function ResultEntryModal({
   slot, sessionId, eventId, matchFormat, sessionDate, onClose, onSuccess,
@@ -2403,10 +2405,10 @@ function ResultEntryModal({
         {setsA !== '' && setsB !== '' && (() => {
           const nA = Number(setsA)
           const nB = Number(setsB)
-          const maxTotalSets = ({ BEST_OF_3: 3, BEST_OF_5: 5, BEST_OF_7: 7 } as const)[matchFormat as 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7']!
+          const maxTotalSets = ({ BEST_OF_1: 1, BEST_OF_3: 3, BEST_OF_5: 5, BEST_OF_7: 7 } as const)[matchFormat as 'BEST_OF_1' | 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7']!
           return nA + nB > 0 && nA + nB <= maxTotalSets ? (
             <SetPointsInput
-              matchFormat={matchFormat as 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7'}
+              matchFormat={matchFormat as 'BEST_OF_1' | 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7'}
               setsWonA={nA}
               setsWonB={nB}
               isRetirement={isRetirement}

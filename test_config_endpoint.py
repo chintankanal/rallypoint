@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.database import init_pool, close_pool, get_connection
 from app.config import settings
-from python_jose import jwt
+from jose import jwt
 
 async def test_config_endpoint():
     """Test that /api/v1/config returns values from database."""

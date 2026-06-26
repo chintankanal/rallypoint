@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 
 interface SetPointsInputProps {
-  matchFormat: 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7'
+  matchFormat: 'BEST_OF_1' | 'BEST_OF_3' | 'BEST_OF_5' | 'BEST_OF_7'
   setsWonA: number
   setsWonB: number
   onSetScoresChange: (scores: Array<{ points_a: number; points_b: number }> | null) => void
@@ -41,7 +41,7 @@ export const SetPointsInput: React.FC<SetPointsInputProps> = ({
   const [errors, setErrors] = useState<ValidationError[]>([])
 
   const totalSets = setsWonA + setsWonB
-  const maxSetsAllowed = ({ BEST_OF_3: 3, BEST_OF_5: 5, BEST_OF_7: 7 } as const)[matchFormat]
+  const maxSetsAllowed = ({ BEST_OF_1: 1, BEST_OF_3: 3, BEST_OF_5: 5, BEST_OF_7: 7 } as const)[matchFormat]
 
   const isScoreEmpty = (score: LocalSetScore) =>
     score.points_a.trim() === '' && score.points_b.trim() === ''

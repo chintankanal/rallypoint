@@ -86,7 +86,7 @@ def _build_rematch_context(
     )
 
 # Match duration in minutes (not including 5-min changeover)
-_MATCH_DURATION = {"BEST_OF_3": 20, "BEST_OF_5": 30, "BEST_OF_7": 40}
+_MATCH_DURATION = {"BEST_OF_1": 10, "BEST_OF_3": 20, "BEST_OF_5": 30, "BEST_OF_7": 40}
 _CHANGEOVER = 5
 
 # Gap thresholds are now regime-driven and sourced from fixture config.

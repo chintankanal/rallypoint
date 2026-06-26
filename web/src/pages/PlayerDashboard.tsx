@@ -316,7 +316,13 @@ function FixtureResultModal({
   const [error, setError] = useState<string | null>(null)
 
   const matchFormat = event.default_match_format ?? 'BEST_OF_3'
-  const maxSets = matchFormat === 'BEST_OF_3' ? 2 : matchFormat === 'BEST_OF_5' ? 3 : 4
+  const maxSets = matchFormat === 'BEST_OF_1'
+    ? 1
+    : matchFormat === 'BEST_OF_3'
+      ? 2
+      : matchFormat === 'BEST_OF_5'
+        ? 3
+        : 4
   const winnerSets = Number(setsA) > Number(setsB) ? Number(setsA) : Number(setsB)
   const loserSets = Number(setsA) <= Number(setsB) ? Number(setsA) : Number(setsB)
   const isValid = setsA !== '' && setsB !== '' && Number(setsA) !== Number(setsB) && (

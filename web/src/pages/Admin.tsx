@@ -151,7 +151,7 @@ const VALID_COMBOS: Record<string, string[]> = {
   INTRA_ACADEMY: ['FRIENDLY'],
   INTER_ACADEMY: ['LEAGUE', 'TOURNAMENT_EXTERNAL', 'TOURNAMENT_MANAGED'],
 }
-const FORMATS = ['BEST_OF_3', 'BEST_OF_5', 'BEST_OF_7']
+const FORMATS = ['BEST_OF_1', 'BEST_OF_3', 'BEST_OF_5', 'BEST_OF_7']
 const EVENT_STATUSES = ['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED']
 const EVENT_STATUS_COLOR: Record<string, string> = {
   SCHEDULED: 'bg-yellow-800 text-yellow-100',

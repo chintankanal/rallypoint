@@ -67,10 +67,10 @@ export default function FixtureMatrixGrid({
                   ? 'bg-red-500'
                   : 'bg-blue-500'
           return (
-            <td key={r} className={`relative text-center px-1.5 py-1.5 border-b border-gray-800 ${isHighlighted ? 'bg-yellow-900/40' : ''} ${cell?.match_id ? 'cursor-pointer hover:bg-gray-800/70 group' : ''}`}
+            <td key={r} className={`relative text-center px-1.5 py-1.5 border-b border-gray-800 ${isHighlighted ? 'bg-yellow-900/40' : ''} ${(cell?.match_id || cell?.slot_id) ? 'cursor-pointer hover:bg-gray-800/70 group' : ''}`}
               title={cell?.tooltip ?? (isBye ? 'BYE' : 'No opponent')}
               onClick={() => {
-                if (!cell?.match_id) return
+                  if (!cell || (!cell.match_id && !cell.slot_id)) return
                 if (onCellAction) {
                   setMenuCellKey(key === menuCellKey ? null : key)
                 } else {

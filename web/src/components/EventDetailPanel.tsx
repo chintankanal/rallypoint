@@ -8,7 +8,7 @@
   import { Spinner, ErrorMsg } from './Layout'
   import { SetPointsInput } from './SetPointsInput'
   import FixtureMatrixGrid from './FixtureMatrixGrid'
-  import { buildMatrixModel, classifyCell } from '../lib/fixtures'
+  import { buildMatrixModel, classifyCell, type MatrixCell } from '../lib/fixtures'
 
   type FixtureState = 'ROSTER_OPEN' | 'FIXTURES_READY' | 'FIXTURE_FROZEN' | 'RESULTS_SUBMITTED' | 'RATINGS_APPLIED' | null
 
@@ -74,6 +74,8 @@
     const [dirLoading, setDirLoading] = useState(false)
     const [fixturesLoading, setFixturesLoading] = useState(false)
     const [fixturesError, setFixturesError] = useState<string | null>(null)
+    const [resultStatusFilter, setResultStatusFilter] = useState<'PENDING' | 'PLAYED' | 'ALL'>('PENDING')
+    const [resultPlayerQuery, setResultPlayerQuery] = useState('')
     const [dirFilterAcademy, setDirFilterAcademy] = useState<string | null>(null)
     const [numTables, setNumTables] = useState(4)
     const [fixtureStrategy, setFixtureStrategy] = useState('TIER_MATCHED')
@@ -587,7 +589,19 @@
                   const legend = model.sections.map(s => ({ label: s.label, bg: s.accent.bg }))
 
                   return (
-                    <FixtureMatrixGrid model={model} legend={legend} sectionFilter={true} />
+                    <FixtureMatrixGrid
+                      model={model}
+                      legend={legend}
+                      sectionFilter={true}
+                      onCellClick={(cell: MatrixCell) => {
+                        const slotId = cell.slot_id
+                        if (!slotId) return
+                        const slot = fixtures.slots.find(s => s.slot_id === slotId)
+                        if (slot && slot.status === 'SCHEDULED' && canManage) {
+                          setResultSlot(slot)
+                        }
+                      }}
+                    />
                   )
                 })()}
                 <SlotResultList
@@ -597,6 +611,10 @@
                   onMarkUnplayed={handleMarkUnplayed}
                   markingUnplayed={markingUnplayed}
                   canManage={canManage}
+                  resultStatusFilter={resultStatusFilter}
+                  resultPlayerQuery={resultPlayerQuery}
+                  setResultStatusFilter={setResultStatusFilter}
+                  setResultPlayerQuery={setResultPlayerQuery}
                 />
               </div>
             )}
@@ -998,32 +1016,74 @@
     )
   }
 
-  function SlotResultList({ fixtures, colorMap, onEnterResult, onMarkUnplayed, markingUnplayed, canManage }: {
+  function SlotResultList({ fixtures, colorMap, onEnterResult, onMarkUnplayed, markingUnplayed, canManage, resultStatusFilter, resultPlayerQuery, setResultStatusFilter, setResultPlayerQuery }: {
     fixtures: EventFixtures
     colorMap: Record<string, { bg: string; text: string }>
     onEnterResult: (slot: EventFixtureSlot) => void
     onMarkUnplayed: ((slot: EventFixtureSlot, unplayed: boolean) => void)
     markingUnplayed: boolean
     canManage: boolean
+    resultStatusFilter: 'PENDING' | 'PLAYED' | 'ALL'
+    resultPlayerQuery: string
+    setResultStatusFilter: React.Dispatch<React.SetStateAction<'PENDING' | 'PLAYED' | 'ALL'>>
+    setResultPlayerQuery: React.Dispatch<React.SetStateAction<string>>
   }) {
-    const byRound = fixtures.slots.reduce<Record<number, EventFixtureSlot[]>>((acc, s) => {
+    const q = resultPlayerQuery.trim().toLowerCase()
+    const filteredSlots = fixtures.slots.filter(s => {
+      if (resultStatusFilter === 'PENDING' && s.status !== 'SCHEDULED') return false
+      if (resultStatusFilter === 'PLAYED' && s.status !== 'PLAYED') return false
+      if (q) {
+        const a = s.player_a?.name?.toLowerCase() ?? ''
+        const b = s.player_b?.name?.toLowerCase() ?? ''
+        if (!a.includes(q) && !b.includes(q)) return false
+      }
+      return true
+    })
+
+    const byRound = filteredSlots.reduce<Record<number, EventFixtureSlot[]>>((acc, s) => {
       ;(acc[s.round_number] ??= []).push(s)
       return acc
     }, {})
 
-    const scheduledCount = fixtures.slots.filter(s => s.status === 'SCHEDULED').length
+    const scheduledCount = filteredSlots.filter(s => s.status === 'SCHEDULED').length
 
     const [expandedByes, setExpandedByes] = useState<Record<number, boolean>>({})
 
     return (
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Enter Results</p>
-          {scheduledCount > 0 && (
-            <span className="text-xs text-yellow-400">{scheduledCount} match{scheduledCount !== 1 ? 'es' : ''} pending</span>
-          )}
-          {scheduledCount === 0 && (
-            <span className="text-xs text-green-400">All matches completed</span>
+        <div className="space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <input
+                type="text"
+                value={resultPlayerQuery}
+                onChange={e => setResultPlayerQuery(e.target.value)}
+                placeholder="Search by player name..."
+                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white w-full sm:w-80"
+              />
+              <div className="flex flex-wrap gap-2">
+                {(['PENDING', 'PLAYED', 'ALL'] as const).map(status => (
+                  <button key={status}
+                    type="button"
+                    onClick={() => setResultStatusFilter(status)}
+                    className={`px-3 py-1 text-xs rounded-lg transition ${resultStatusFilter === status ? 'bg-white text-gray-900 font-semibold' : 'bg-gray-800 text-gray-400 hover:text-white'}`}>
+                    {status === 'PENDING' ? 'Pending' : status === 'PLAYED' ? 'Played' : 'All'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Enter Results</p>
+              {scheduledCount > 0 && (
+                <span className="text-xs text-yellow-400">{scheduledCount} match{scheduledCount !== 1 ? 'es' : ''} pending</span>
+              )}
+              {scheduledCount === 0 && (
+                <span className="text-xs text-green-400">All matches completed</span>
+              )}
+            </div>
+          </div>
+          {filteredSlots.length === 0 && (
+            <div className="rounded-lg border border-gray-800 bg-gray-900/60 px-4 py-3 text-sm text-gray-400">No matches match this filter.</div>
           )}
         </div>
         {Object.entries(byRound).map(([rn, slots]) => {

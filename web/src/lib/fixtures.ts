@@ -18,6 +18,7 @@ export interface MatrixCell {
   tooltip: string
   category: string
   match_id?: string
+  slot_id?: string
   status?: string
 }
 

@@ -612,37 +612,66 @@ def add_late_player(
             )
             new_present_player_count = session["present_player_count"] + 1
 
-    response_slots = [
-        FixtureSlotResponse(
-            slot_id=str(slot["slot_id"]),
-            round_number=slot["round_number"],
-            wave_number=slot["wave_number"],
-            sub_round=slot["sub_round"],
-            table_number=slot["table_number"],
-            round_intent=slot["round_intent"],
-            gap_band=slot["gap_band"],
-            player_a_role=slot["player_a_role"],
-            player_b_role=slot["player_b_role"],
-            match_category=slot["match_category"],
-            player_a={
+    response_slots = []
+    for slot in created_slots:
+        pa_id = slot.get("player_a_id")
+        pb_id = slot.get("player_b_id")
+
+        # Determine which side contains the late player and which side is the opponent
+        if pa_id == late_player["player_id"]:
+            player_a = {
                 "player_id": late_player["player_id"],
                 "name": late_player["name"],
                 "current_rating": float(late_player["current_rating"]),
                 "tier": get_tier(float(late_player["current_rating"]), cfg),
-            },
-            player_b={
-                "player_id": opponents[slot["player_b_id"]]["player_id"],
-                "name": opponents[slot["player_b_id"]]["name"],
-                "current_rating": float(opponents[slot["player_b_id"]]["current_rating"]),
-                "tier": get_tier(float(opponents[slot["player_b_id"]]["current_rating"]), cfg),
-            } if slot["player_b_id"] else None,
-            expected_rating_gap=float(slot["expected_rating_gap"]),
-            status=slot["status"],
-            match_id=str(slot["match_id"]) if slot.get("match_id") else None,
-            match_result=None,
+            }
+            player_b = None
+            if pb_id:
+                opp = opponents.get(pb_id)
+                player_b = {
+                    "player_id": opp["player_id"],
+                    "name": opp["name"],
+                    "current_rating": float(opp["current_rating"]),
+                    "tier": get_tier(float(opp["current_rating"]), cfg),
+                }
+        else:
+            # late player must be player_b
+            player_b = {
+                "player_id": late_player["player_id"],
+                "name": late_player["name"],
+                "current_rating": float(late_player["current_rating"]),
+                "tier": get_tier(float(late_player["current_rating"]), cfg),
+            }
+            player_a = None
+            if pa_id:
+                opp = opponents.get(pa_id)
+                player_a = {
+                    "player_id": opp["player_id"],
+                    "name": opp["name"],
+                    "current_rating": float(opp["current_rating"]),
+                    "tier": get_tier(float(opp["current_rating"]), cfg),
+                }
+
+        response_slots.append(
+            FixtureSlotResponse(
+                slot_id=str(slot["slot_id"]),
+                round_number=slot["round_number"],
+                wave_number=slot["wave_number"],
+                sub_round=slot["sub_round"],
+                table_number=slot["table_number"],
+                round_intent=slot["round_intent"],
+                gap_band=slot["gap_band"],
+                player_a_role=slot["player_a_role"],
+                player_b_role=slot["player_b_role"],
+                match_category=slot["match_category"],
+                player_a=player_a,
+                player_b=player_b,
+                expected_rating_gap=float(slot["expected_rating_gap"]),
+                status=slot["status"],
+                match_id=str(slot["match_id"]) if slot.get("match_id") else None,
+                match_result=None,
+            )
         )
-        for slot in created_slots
-    ]
 
     return AddLatePlayerResponse(slots=response_slots, present_player_count=new_present_player_count)
 

@@ -82,7 +82,9 @@ _PREFIX = "/api/v1"
 @app.get("/overview", include_in_schema=False)
 def overview_redirect():
     """Simplified redirect for unified service."""
-    return RedirectResponse(url="/")
+    # Redirect to the configured frontend landing page so browser requests
+    # to /overview are forwarded to the web UI.
+    return RedirectResponse(url=settings.frontend_url)
 
 
 app.include_router(auth.router, prefix=_PREFIX)

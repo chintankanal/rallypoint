@@ -6,7 +6,7 @@ A standalone, responsive travelogue for the September–October 2026 US trip. Th
 
 1. Create a **new service** in your Railway project and connect it to this same GitHub repository.
 2. In the new service's Settings, set **Root Directory** to `/travelogue`.
-3. Railway should detect `travelogue/Dockerfile` as the service Dockerfile because the service root is `/travelogue`.
+3. Set the service's **Config-as-code file path** to `/travelogue/railway.toml` so Railway loads the deployment settings from this subdirectory. The Dockerfile is at `/travelogue/Dockerfile`.
 4. Deploy, then open Settings → Networking and generate a domain. This produces a separate URL from JLRS.
 5. Optional: attach a custom domain later.
 

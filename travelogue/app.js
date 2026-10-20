@@ -38,7 +38,7 @@ addEventListener("scroll",()=>{if(!tick){tick=true;requestAnimationFrame(prog)}}
 const el=document.getElementById("tripMap");
 if(el&&window.L){
  const map=L.map("tripMap",{scrollWheelZoom:false}).setView([37.8,-83.6],5);
- L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",{maxZoom:18,subdomains:"abcd",attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'}).addTo(map);
+ L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',crossOrigin:true}).addTo(map);
  const points=stops.map(s=>s.coords);
  // Draw road-following driving routes with OSRM. The ferry crossing is kept as
  // its own dashed segment, rather than being mistaken for a road journey.

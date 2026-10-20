@@ -12,12 +12,14 @@ const stops = [
 {name:"Carlisle, Pennsylvania",day:"Day 4",coords:[40.2010,-77.2003],note:"Overnight before Gettysburg."},
 {name:"Gettysburg",day:"Day 5",coords:[39.7893,-77.2375],note:"Civil War battlefield and Little Round Top."},
 {name:"Washington, DC",day:"Day 5",coords:[38.8895,-77.0353],note:"Museums and national memorials."},
+{name:"Fairfax, Virginia",day:"Day 5",coords:[38.8462,-77.3064],note:"George Mason University and the overnight area."},
 {name:"Bristol",day:"Day 6",coords:[36.5951,-82.1887],note:"Soul food and country music history."},
 {name:"Knoxville",day:"Day 6",coords:[35.9694,-83.9197],note:"Coffee in the Old City."},
 {name:"Nashville",day:"Day 6–7",coords:[36.1627,-86.7816],note:"Ryman Auditorium and live music."},
 {name:"Lynchburg",day:"Day 7",coords:[35.2831,-86.3742],note:"Jack Daniel's distillery tour."},
 {name:"Memphis",day:"Day 7–8",coords:[35.1556,-90.0659],note:"Beale Street and the Mississippi River."},
-{name:"Little Rock",day:"Day 8",coords:[34.7487,-92.2671],note:"Junction Bridge and the Old Mill nearby."},
+{name:"Little Rock",day:"Day 8",coords:[34.7487,-92.2671],note:"Junction Bridge and downtown Little Rock."},
+{name:"Old Mill, North Little Rock",day:"Day 8",coords:[34.7904,-92.2670],note:"A brief stop at the Old Mill before continuing west."},
 {name:"Texarkana",day:"Day 8",coords:[33.4251,-94.0436],note:"A late stop at the Arkansas–Texas line."},
 {name:"Houston",day:"Finish",coords:[29.7604,-95.3698],note:"Arrived around 3:30 a.m. on October 3."}
 ];
@@ -38,7 +40,28 @@ if(el&&window.L){
  const map=L.map("tripMap",{scrollWheelZoom:false}).setView([37.8,-83.6],5);
  L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",{maxZoom:18,subdomains:"abcd",attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'}).addTo(map);
  const points=stops.map(s=>s.coords);
- L.polyline(points,{color:"#a4502e",weight:3,opacity:.85,dashArray:"2 8",lineCap:"round"}).addTo(map);
+ // Draw road-following driving routes with OSRM. The ferry crossing is kept as
+ // its own dashed segment, rather than being mistaken for a road journey.
+ const routeLayer=L.layerGroup().addTo(map);
+ const drawRoute=async segment=>{
+  const coords=segment.map(p=>p[1]+","+p[0]).join(";");
+  const url="https://router.project-osrm.org/route/v1/driving/"+coords+"?overview=full&geometries=geojson&steps=false";
+  try{
+   const response=await fetch(url);
+   if(!response.ok)throw new Error("Routing service unavailable");
+   const data=await response.json();
+   if(data.code!=="Ok"||!data.routes?.length)throw new Error("No route returned");
+   L.geoJSON(data.routes[0].geometry,{style:{color:"#a4502e",weight:4,opacity:.9,lineCap:"round",lineJoin:"round"}}).addTo(routeLayer);
+  }catch(error){
+   // If online routing is unavailable, keep a subdued fallback line.
+   L.polyline(segment,{color:"#a4502e",weight:3,opacity:.55,dashArray:"3 7",lineCap:"round"}).addTo(routeLayer);
+  }
+ };
+ // Road route to the ferry terminal, ferry across Long Island Sound, then
+ // the driving itinerary from Bridgeport through Houston.
+ drawRoute(points.slice(0,2));
+ L.polyline([stops[1].coords,stops[2].coords],{color:"#a4502e",weight:3,opacity:.9,dashArray:"8 7",lineCap:"round"}).addTo(routeLayer);
+ drawRoute(points.slice(2));
  stops.forEach((s,i)=>{
   const end=i===0||i===stops.length-1;
   const pin=L.divIcon({className:"",html:'<div class="custom-pin'+(end?' end':'')+'"></div>',iconSize:[16,16],iconAnchor:[8,8],popupAnchor:[0,-10]});

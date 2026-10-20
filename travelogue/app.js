@@ -21,13 +21,30 @@ const stops = [
 {name:"Texarkana",day:"Day 8",coords:[33.4251,-94.0436],note:"A late stop at the Arkansas–Texas line."},
 {name:"Houston",day:"Finish",coords:[29.7604,-95.3698],note:"Arrived around 3:30 a.m. on October 3."}
 ];
+const q=s=>document.querySelectorAll(s),RV=".lede,.intro-block,.section-heading,.day,.ending>div";
+if("IntersectionObserver" in window){
+ const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add("in");io.unobserve(e.target)}}),{threshold:.12,rootMargin:"0px 0px -6% 0px"});
+ q(RV).forEach(e=>io.observe(e));
+ const links=[...q(".site-header nav a")];
+ const so=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting)links.forEach(a=>a.classList.toggle("active",a.getAttribute("href")==="#"+e.target.id))}),{rootMargin:"-40% 0px -55% 0px"});
+ ["new-york","route","journal"].forEach(id=>{const s=document.getElementById(id);s&&so.observe(s)});
+}else q(RV).forEach(e=>e.classList.add("in"));
+const bar=document.getElementById("progress");let tick=false;
+const prog=()=>{const d=document.documentElement;bar.style.transform="scaleX("+Math.min(1,d.scrollTop/((d.scrollHeight-d.clientHeight)||1))+")";tick=false};
+addEventListener("scroll",()=>{if(!tick){tick=true;requestAnimationFrame(prog)}},{passive:true});prog();
+
 const el=document.getElementById("tripMap");
 if(el&&window.L){
  const map=L.map("tripMap",{scrollWheelZoom:false}).setView([37.8,-83.6],5);
- L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:18,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(map);
+ L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",{maxZoom:18,subdomains:"abcd",attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'}).addTo(map);
  const points=stops.map(s=>s.coords);
- L.polyline(points,{color:"#9b6247",weight:3,opacity:.8,dashArray:"6 7"}).addTo(map);
- const pin=L.divIcon({className:"",html:'<div class="custom-pin"></div>',iconSize:[12,12],iconAnchor:[6,6]});
- stops.forEach(s=>L.marker(s.coords,{icon:pin}).addTo(map).bindPopup("<strong>"+s.name+"</strong><br><span>"+s.day+"</span><br>"+s.note));
+ L.polyline(points,{color:"#a4502e",weight:3,opacity:.85,dashArray:"2 8",lineCap:"round"}).addTo(map);
+ stops.forEach((s,i)=>{
+  const end=i===0||i===stops.length-1;
+  const pin=L.divIcon({className:"",html:'<div class="custom-pin'+(end?' end':'')+'"></div>',iconSize:[16,16],iconAnchor:[8,8],popupAnchor:[0,-10]});
+  L.marker(s.coords,{icon:pin,title:s.name}).addTo(map).bindPopup("<strong>"+s.name+"</strong><em>"+s.day+"</em><p>"+s.note+"</p>");
+ });
  map.fitBounds(L.latLngBounds(points).pad(.08));
+ map.on("click",()=>map.scrollWheelZoom.enable());
+ map.on("mouseout",()=>map.scrollWheelZoom.disable());
 }

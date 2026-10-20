@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f5ef">
+  <title>The Ultimate American Road Trip</title>
+  <meta name="description" content="A personal account of an eight-day road trip from Long Island to Houston, through New England, Vermont, Washington, Nashville, Memphis and beyond.">
+  <link rel="preconnect" href="https://images.unsplash.com">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Source+Serif+4:wght@400;600&display=swap">
+  <script>document.documentElement.classList.add("js")</script>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="progress" id="progress" aria-hidden="true"></div>
+  <header class="site-header">
+    <a href="#top" class="site-name">The Ultimate American Road Trip</a>
+    <nav><a href="#new-york">New York</a><a href="#route">Route</a><a href="#journal">Day by day</a></nav>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <img fetchpriority="high" src="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1800&q=80" alt="A road winding through a mountain landscape">
+      <div class="hero-copy">
+        <p class="eyebrow">SEPTEMBER 25 – OCTOBER 2, 2026</p>
+        <h1>The Ultimate<br>American Road Trip</h1>
+        <p class="subtitle">Long Island, New York, to Houston, Texas</p>
+      </div>
+    </section>
+
+    <section class="lede">
+        <p class="intro">Eight days. Multiple states. A ferry across Long Island Sound, Vermont mountain passes, Civil War battlefields, country music, a legendary whiskey distillery, the musical heritage of Memphis, and the mighty Mississippi River — followed by a late-night drive across Arkansas and Texas.</p>
+        <p class="intro">What made this journey memorable was not simply a tour of famous attractions. It was shaped by spontaneous decisions, local food, unexpected discoveries, and the freedom to stop when something caught your attention.</p>
+        <p class="intro">You began in Long Island with a ferry crossing and New England ahead of you. Eight days later, after travelling through the American South and across Arkansas, you arrived in Houston at 3:30 a.m.</p>
+        <p class="intro theme"><strong>The defining theme:</strong> discovering America one road, one town, one meal and one unexpected stop at a time.</p>
+        <a class="text-link" href="#journal">Read the travelogue ↓</a>
+    </section>
+
+    <section class="intro-block" id="new-york">
+      <div class="intro-image">
+        <img src="https://images.unsplash.com/photo-1534430480872-3498386e7856?auto=format&fit=crop&w=1400&q=85" alt="New York City skyline">
+      </div>
+      <div class="intro-text">
+        <p class="eyebrow">BEFORE THE ROAD TRIP</p>
+        <h2>A few days in New York</h2>
+        <p>I arrived in New York on September 19 and stayed at the Hilton Garden Inn on Whitehall Street, close to South Ferry. Before setting off on the road trip, I spent the evenings getting to know the city.</p>
+        <p>I took the Staten Island Ferry and saw the Statue of Liberty, had lunch at River Dock Cafe, and took my first subway ride to Times Square. Over the next few days I explored the High Line, SoHo and the World Trade Center area.</p>
+        <p>I also walked through NYU's Washington Square campus and Washington Square Park, where university life spills into Greenwich Village, and visited Union Square Park. These walks were a good introduction to navigating an unfamiliar city before the longer drive began.</p>
+      </div>
+    </section>
+
+    <section class="route-section" id="route">
+      <div class="section-heading">
+        <p class="eyebrow">THE JOURNEY</p>
+        <h2>The actual route map</h2>
+        <p>The map marks the principal places and overnight areas from the account. The precise New Hampshire stop on Day 2 and exact hotel addresses weren't specified, so those details are not represented as verified locations.</p>
+        <p>The first leg was distinctive: rather than driving around Long Island Sound, we took the Bridgeport &amp; Port Jefferson Ferry. The crossing is approximately 75 minutes.</p>
+      </div>
+      <div id="tripMap" role="application" aria-label="Map of the road trip"></div>
+      <p class="map-note">Tap a marker to explore a principal stop. Route lines are illustrative; the precise New Hampshire bar stop and exact hotel addresses were not specified.</p>
+    </section>
+
+    <section class="journal" id="journal">
+      <div class="section-heading">
+        <p class="eyebrow">THE TRAVEL JOURNAL</p>
+        <h2>Day by day</h2>
+      </div>
+
+<article class="day">
+        <img src="https://www.ncl.com/sites/default/files/1440x803_Boston_Massachusetts_02.jpg" alt="Water and coastline" loading="lazy">
+        <div class="day-copy">
+          <p class="eyebrow day-meta"><span class="d-num">DAY 1</span><span class="d-date">FRIDAY, SEPTEMBER 25</span><span class="d-region">NEW YORK, CONNECTICUT AND RHODE ISLAND</span></p>
+          <h3>The journey begins: Long Island to Providence</h3>
+          <ol class="trail" aria-label="Route"><li><span>Roslyn Harbour</span></li><li><span>Port Jefferson</span></li><li><span>Bridgeport</span></li><li><span>Providence area</span></li></ol>
+          <p>We left home in Roslyn Harbour at around 4:30 p.m., ready to begin the road trip. Rather than drive through New York and around the coast, we headed to Port Jefferson for the 6:45 p.m. ferry to Bridgeport, Connecticut.</p>
+          <p>Before boarding, we stopped at Tommy's Place for drinks and sides. The ferry crossing took approximately an hour and fifteen minutes — a welcome change from the usual highway grind. There was something satisfying about beginning a long American road trip on the water.</p>
+          <p>We reached Connecticut and continued towards New Haven, passing through the coastal corridor before dinner at Shell &amp; Bones Oyster Bar and Grill around 9 p.m. By the end of the evening, we had made our way to the Providence area for an overnight stay at Holiday Inn Express near Smithfield.</p>
+          <p class="day-character"><strong>Day in review:</strong> A maritime beginning to an ambitious journey, with the first taste of New England's coastal geography.</p>
+        </div>
+      </article>
+
+      <article class="day">
+        <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Burlington%20vermont%20skyline.jpg?width=1400" alt="Historic American city architecture" loading="lazy">
+        <div class="day-copy">
+          <p class="eyebrow day-meta"><span class="d-num">DAY 2</span><span class="d-date">SATURDAY, SEPTEMBER 26</span><span class="d-region">MASSACHUSETTS AND VERMONT-BOUND</span></p>
+          <h3>Boston, baseball and a taste of Cambridge</h3>
+          <ol class="trail" aria-label="Route"><li><span>Providence area</span></li><li><span>Boston</span></li><li><span>New Hampshire</span></li><li><span>Colchester, Vermont</span></li></ol>
+          <p>We set off for Boston around 11:40 a.m. and explored the harbour area before driving through downtown East Boston. We then made our way to Boston Common, where we visited the Soldiers and Sailors Monument.</p>
+          <p>The next stop was Fenway Park, one of America's most recognisable baseball stadiums. Even without attending a game, seeing a historic American sports venue added another dimension to the trip.</p>
+          <p>By mid-afternoon, we were in Harvard Square for lunch at Santouka, enjoying Japanese ramen — an interesting contrast to the American landmarks and university neighbourhood around us.</p>
+          <p>Later, we continued north, stopping for drinks at a Mexican bar in New Hampshire before reaching Motel 6 in Colchester, Vermont, for the night.</p>
+          <p class="day-character"><strong>Day in review:</strong> Urban exploration, American sports culture and university-town atmosphere — with Vermont waiting for the next morning.</p>
+        </div>
+      </article>
+
+      <article class="day">
+        <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Smugglers%20Notch(fromSouth).jpg?width=1400" alt="Mountain landscape" loading="lazy">
+        <div class="day-copy">
+          <p class="eyebrow day-meta"><span class="d-num">DAY 3</span><span class="d-date">SUNDAY, SEPTEMBER 27</span><span class="d-region">VERMONT TO UPSTATE NEW YORK</span></p>
+          <h3>Vermont's lakes, mountain passes and a race against closing time</h3>
+          <ol class="trail" aria-label="Route"><li><span>Colchester</span></li><li><span>Burlington</span></li><li><span>Shelburne</span></li><li><span>Jeffersonville</span></li><li><span>Smugglers' Notch</span></li><li><span>Stowe</span></li><li><span>Lake George</span></li></ol>
+          <p>This was one of the most scenic and spontaneous days of the trip.</p>
+          <p>We drove into downtown Burlington, passing the University of Vermont, and continued to the waterfront overlooking Lake Champlain. At Spot on the Dock, we stopped for lunch and drinks. We also saw a train arriving at Burlington station — a small moment that made the town feel especially alive.</p>
+          <p>Rain meant we couldn't take the planned tour at Shelburne Farms. Instead, we continued towards Jeffersonville and stopped at El Gato Cantina for drinks around 5 p.m.</p>
+          <p>Then came the mountain drive through Smugglers' Notch and Stowe. We reached Ben &amp; Jerry's Factory around 6:45 p.m., just fifteen minutes before closing, with enough time for ice cream before driving roughly two and a half hours to Lake George.</p>
+          <p>We checked into Holiday Inn Express in Lake George that night.</p>
+          <p class="day-character"><strong>Day in review:</strong> Rain changed one plan, but a mountain pass, a local bar and a last-minute ice-cream stop made the day memorable.</p>
+        </div>
+      </article>
+
+      <article class="day">
+        <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Lake%20George%20NY.jpg?width=1400" alt="Lake and mountains" loading="lazy">
+        <div class="day-copy">
+          <p class="eyebrow day-meta"><span class="d-num">DAY 4</span><span class="d-date">MONDAY, SEPTEMBER 28</span><span class="d-region">NEW YORK TO PENNSYLVANIA</span></p>
+          <h3>Lake George, café culture and the road to Carlisle</h3>
+          <ol class="trail" aria-label="Route"><li><span>Lake George</span></li><li><span>Carlisle, Pennsylvania</span></li></ol>
+          <p>We started with a relaxed morning walking around Lake George. We visited the Steamboat Company store and then walked to Café Vero for coffee and breakfast.</p>
+          <p>Discovering Café Vero's miniature brewery was an unexpected bonus — one of those small details you rarely plan for but remember afterwards.</p>
+          <p>We also visited Fort William Henry. At around 2:30 p.m., we set off south and west through New York and Pennsylvania, spending the night at Holiday Inn Express in Carlisle.</p>
+          <p class="day-character"><strong>Day in review:</strong> A slower travel day and a welcome pause between Vermont's mountains and the historical destinations ahead.</p>
+        </div>
+      </article>
+
+      <article class="day">
+        <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Little%20Round%20Top%20Gettysburg.jpg?width=1400" alt="Historic memorial landscape" loading="lazy">
+        <div class="day-copy">
+          <p class="eyebrow day-meta"><span class="d-num">DAY 5</span><span class="d-date">TUESDAY, SEPTEMBER 29</span><span class="d-region">PENNSYLVANIA, WASHINGTON, DC AND VIRGINIA</span></p>
+          <h3>From the Civil War battlefield to the monuments of Washington</h3>
+          <ol class="trail" aria-label="Route"><li><span>Carlisle</span></li><li><span>Gettysburg</span></li><li><span>Washington, DC</span></li><li><span>Georgetown</span></li><li><span>Fairfax</span></li></ol>
+          <p>We left Carlisle around 10:30 a.m. and headed to Gettysburg National Military Park. Touring the battlefield by car, we visited several memorials, including Little Round Top.</p>
+          <p>The day then shifted from Civil War history to America's national story. We visited the Smithsonian National Air and Space Museum and saw the World War II Memorial, Washington Monument and Lincoln Memorial.</p>
+          <p>By evening, we were in Georgetown. We stopped for drinks at Sovereign and had dinner at Reren, a Chinese restaurant. On the way back towards our overnight area, we also visited George Mason University in Fairfax.</p>
+          <p class="day-character"><strong>Day in review:</strong> History at two scales — the battlefield that helped shape the United States and the national institutions that represent it today.</p>
+        </div>
+      </article>
+
+      <article class="day">
+        <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Lower%20Broadway%20Nashville.jpg?width=1400" alt="Live music venue with warm lights" loading="lazy">
+        <div class="day-copy">
+          <p class="eyebrow day-meta"><span class="d-num">DAY 6</span><span class="d-date">WEDNESDAY, SEPTEMBER 30</span><span class="d-region">VIRGINIA AND TENNESSEE</span></p>
+          <h3>Across the mountains to the home of country music</h3>
+          <ol class="trail" aria-label="Route"><li><span>Fairfax area</span></li><li><span>Bristol</span></li><li><span>Knoxville</span></li><li><span>Nashville</span></li></ol>
+          <p>We left around 10:45 a.m. for Nashville, driving through the mountain region. In Bristol, we stopped at Legit's Kitchen for soul food before visiting the Birthplace of Country Music Museum.</p>
+          <p>We continued to Knoxville, took a coffee break at Awaken Coffee in the Old City and captured photographs at the Virginia–Tennessee border.</p>
+          <p>We reached Nashville around 9:10 p.m., too late for the Bluebird Cafe show that had started at 9. Instead, we parked near Lower Broadway and explored the neon-lit entertainment district. Robert's Western World and Posty's became our main stops for food, drinks and live music. We returned to Robert's before reaching our downtown hotel at 2:30 a.m.</p>
+          <p class="day-character"><strong>Day in review:</strong> A long mountain drive that ended in a night of live music, Southern food and Nashville's after-dark atmosphere.</p>
+        </div>
+      </article>
+
+      <article class="day">
+        <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Beale%20Street%20Memphis.jpg?width=1400" alt="Warmly lit bar interior" loading="lazy">
+        <div class="day-copy">
+          <p class="eyebrow day-meta"><span class="d-num">DAY 7</span><span class="d-date">THURSDAY, OCTOBER 1</span><span class="d-region">NASHVILLE, LYNCHBURG AND MEMPHIS</span></p>
+          <h3>The Ryman Auditorium, Jack Daniel's and a late arrival in Memphis</h3>
+          <ol class="trail" aria-label="Route"><li><span>Nashville</span></li><li><span>Lynchburg</span></li><li><span>Memphis</span></li></ol>
+          <p>After the late night in Nashville, we left the hotel around 11 a.m. and visited Ryman Auditorium. We watched a show about the venue's history and picked up memorabilia.</p>
+          <p>We drove to Lynchburg for the Jack Daniel's distillery tour, arriving around 1:45 p.m. The visit took approximately three and a half hours. We explored the distillery, browsed the gift shop and saw Mason's Hall from outside.</p>
+          <p>This was more than a whiskey stop: it was a chance to experience a famous American brand in the small Tennessee town where its story is rooted. We then headed west and arrived in Memphis around 11 p.m.</p>
+          <p class="day-character"><strong>Day in review:</strong> A transition from country music to whiskey heritage, followed by the anticipation of exploring Memphis.</p>
+        </div>
+      </article>
+
+      <article class="day">
+        <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Old%20Mill%20North%20Little%20Rock%20Arkansas.jpg?width=1400" alt="Open road through a broad landscape" loading="lazy">
+        <div class="day-copy">
+          <p class="eyebrow day-meta"><span class="d-num">DAY 8</span><span class="d-date">FRIDAY, OCTOBER 2</span><span class="d-region">MEMPHIS, ARKANSAS, TEXARKANA AND HOUSTON</span></p>
+          <h3>Elvis, the Mississippi River and an unexpected journey across Arkansas</h3>
+          <ol class="trail" aria-label="Route"><li><span>Memphis</span></li><li><span>North Little Rock</span></li><li><span>Little Rock</span></li><li><span>Texarkana</span></li><li><span>Houston</span></li></ol>
+          <p>We set off around 10:30 a.m. intending to visit Graceland, Elvis Presley's mansion. Heavy rain changed the plan. With the tour requiring two to three hours and the admission price feeling excessive for the time available, we skipped the mansion and browsed the Elvis gift store for memorabilia.</p>
+          <p>We visited Aretha Franklin's birthplace, walked along Beale Street and stopped at Charles Vergos' Rendezvous for its famous charcoal-grilled dry pork ribs. After lunch, we headed to Mud Island River Park, passing the Pyramid building, now home to Bass Pro Shops.</p>
+          <p>At Mud Island, we found the iconic Memphis sign and walked along the Mississippi River trail. Its carefully constructed representation of the river's twists and bends, with the real river flowing alongside, made the walk both educational and beautiful.</p>
+          <p>We left Memphis around 3:30 p.m. Before reaching Little Rock, we discovered the Old Mill in North Little Rock. The picturesque water mill, surrounded by greenery and water, looked almost like a scene from a fairy tale.</p>
+          <p>In Little Rock, we saw Junction Bridge and read about the city's history, then stopped for coffee at Starbucks at the Courtyard by Marriott before leaving around 7:15 p.m.</p>
+          <p>By approximately 9:30 p.m., we were in Texarkana, where we visited the Arkansas–Texas state line near the US Post Office. We had dinner at Verona, an Italian restaurant, before setting off again at 10:30 p.m. We reached Houston at around 3:30 a.m. on October 3.</p>
+          <p class="day-character"><strong>Day in review:</strong> The trip in miniature — music, food, a great river, an unexpected discovery, local history and a determined final push across state lines to Texas.</p>
+        </div>
+      </article>
+        </section>
+
+    <section class="ending">
+      <img src="https://images.unsplash.com/photo-1500534623283-312aade485b7?auto=format&fit=crop&w=1800&q=85" alt="Open road disappearing into the distance" loading="lazy">
+      <div><p class="eyebrow">THE ROAD TRIP, IN RETROSPECT</p><h2>One road, one town,<br>one unexpected stop at a time.</h2>
+      <p>What made this journey memorable was not just the famous attractions. It was the ferry across Long Island Sound, Vermont's mountain passes, Civil War history, music in Nashville and Memphis, local meals, and the discoveries that weren't on the itinerary.</p>
+      <p>Rain changed plans at Shelburne Farms. We missed the Bluebird Cafe show and skipped the Graceland mansion tour. In their place came a train arriving in Burlington, ice cream just before closing, live music on Lower Broadway and the Old Mill in North Little Rock.</p>
+      <p>After leaving Memphis, we crossed Arkansas and Texarkana and arrived in Houston at 3:30 a.m. The road connected very different parts of America — and the journey was as much about the places between destinations as the destinations themselves.</p></div>
+    </section>
+  </main>
+
+  <footer><span>From Long Island to Texas · September–October 2026</span><a href="#top">Back to top ↑</a></footer>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="app.js"></script>
+</body>
+</html>

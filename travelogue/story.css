@@ -16,3 +16,10 @@
 .photo-grid-complete .album-photo img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; }
 .photo-grid-complete .album-photo figcaption { line-height: 1.45; overflow-wrap: anywhere; }
 .photo-id { display: inline-block; font-size: .72rem; font-weight: 700; letter-spacing: .08em; color: var(--accent, #a4502e); margin-right: .35rem; }
+
+/* Album uses the natural page scroll; keep the full image collection readable and responsive. */
+.photo-grid-complete { grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); }
+.photo-grid-complete .album-photo a { display:block; overflow:hidden; border-radius:10px; }
+.photo-grid-complete .album-photo img { transition:transform .25s ease; }
+.photo-grid-complete .album-photo a:hover img, .photo-grid-complete .album-photo a:focus-visible img { transform:scale(1.035); }
+.photo-grid-complete .album-photo { scroll-margin-top:90px; }

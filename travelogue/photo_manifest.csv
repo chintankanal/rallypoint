@@ -1,4 +1,4 @@
-﻿photo_id,filename,asset_status,caption_or_review_note
+photo_id,filename,asset_status,caption_or_review_note
 P001,P001.jpg,included,"George Mason University, Fairfax, Virginia — a stop during the Washington-area leg."
 P002,P002.jpg,included,"Lower Broadway, Nashville, with cousin Asheesh — the lively country-music bar scene."
 P003,P003.jpg,included,"Beale Street, Memphis, in a light drizzle."
@@ -9,144 +9,144 @@ P007,P007.jpg,included,"Charles Vergos’ Rendezvous, Memphis — dry-rub charco
 P008,P008.jpg,included,"The High Line, New York City, with Asheesh."
 P009,P009.jpg,included,"Mud Island Park, Memphis — an unplanned stop with a striking river and skyline view."
 P010,P010.jpg,included,"Junction Bridge over the Arkansas River, Little Rock."
-P011,P011.jpg,included,A memorial at Gettysburg; the exact memorial was not confirmed.
-P012,P012.jpg,included,"The Memphis birthplace of Aretha Franklin, the Queen of Soul."
+P011,P011.jpg,included,"A memorial at Gettysburg; the exact memorial was not confirmed."
+P012,P012.jpg,included,"The Old Mill grounds in North Little Rock, with visitors beside the millrace."
 P013,P013.jpg,included,"Port Jefferson, while waiting for the ferry."
 P014,P014.jpg,included,"Beale Street selfie: Chintan on the right, Sid Kaul in the middle, Asheesh on the left."
 P015,P015.jpg,included,"Ryman Auditorium, Nashville — the historic ‘Mother Church of Country Music.’"
-P016,P016.jpg,included,Outside the visitor reception at Graceland; the mansion tour was not taken.
-P017,P017.jpg,included,Chintan and Sid Kaul aboard the Port Jefferson ferry beneath a crimson sky.
+P016,P016.jpg,included,"Outside the visitor reception at Graceland; the mansion tour was not taken."
+P017,P017.jpg,included,"Chintan and Sid Kaul aboard the Port Jefferson ferry beneath a crimson sky."
 P018,P018.jpg,included,"The Old Mill, North Little Rock — a 1930s faux-bois replica of an old water-powered grist mill."
-P019,P019.jpg,included,The Port Jefferson–Bridgeport ferry crossing.
-P020,P020.jpg,included,Historical plaque at Little Rock’s riverfront.
-P021,P021.jpg,included,Sid Kaul beside a vintage vehicle outside an auditorium in Nashville; exact vehicle model unconfirmed.
-P022,P022.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
+P019,P019.jpg,included,"The Port Jefferson–Bridgeport ferry crossing."
+P020,P020.jpg,included,"Interpretive plaque on Little Rock’s riverfront, explaining the area’s history."
+P021,P021.jpg,included,"Sid Kaul beside a vintage vehicle outside an auditorium in Nashville; exact vehicle model unconfirmed."
+P022,P022.jpg,included,"Outside a Nashville music venue at night; the exact venue is not confirmed."
 P023,P023.jpg,included,"Mississippi River Walk at Mud Island Park, Memphis, with the river and bridge in view."
-P024,P024.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P025,P025.jpg,included,"At the Birthplace of Country Music Museum in Bristol, Tennessee–Virginia."
-P026,P026.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
+P024,P024.jpg,included,"Friends beside the Mississippi River and the Hernando de Soto Bridge in Memphis."
+P025,P025.jpg,included,"Trying on a cowboy hat during the Bristol stop."
+P026,P026.jpg,included,"Ryman Auditorium’s red-brick exterior in Nashville."
 P027,P027.jpg,included,"Jack Daniel’s Distillery, Lynchburg, Tennessee."
-P028,P028.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P029,P029.jpg,included,"Exterior of the Birthplace of Country Music Museum, Bristol."
-P030,P030.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P031,P031.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
+P028,P028.jpg,included,"A rainy street scene on Lower Broadway, Nashville."
+P029,P029.jpg,included,"A guitar-themed sculpture outside the Birthplace of Country Music Museum in Bristol."
+P030,P030.jpg,included,"An outdoor statue in Bristol; the figure’s identity is not confirmed."
+P031,P031.jpg,included,"Exterior of the Smithsonian National Air and Space Museum in Washington, D.C."
 P032,P032.jpg,included,"Cave Spring at Jack Daniel’s Distillery, a natural spring on the grounds."
-P033,P033.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P034,P034.jpg,included,Chintan and Asheesh outside Graceland’s visitor reception.
+P033,P033.jpg,included,"Exterior of the Birthplace of Country Music Museum in Bristol."
+P034,P034.jpg,included,"Chintan and Asheesh outside Graceland’s visitor reception."
 P035,P035.jpg,included,"Posing with a country-music performer at Robert’s Western World, Nashville."
-P036,P036.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P037,P037.jpg,included,At the Jack Daniel’s barrel-transport truck.
-P038,P038.jpg,included,"‘A Piece of the Rock, a Piece of History’ plaque, Little Rock."
-P039,P039.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P040,P040.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P041,P041.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
+P036,P036.jpg,included,"A second pose with a performer at Robert’s Western World, Nashville."
+P037,P037.jpg,included,"At the Jack Daniel’s barrel-transport truck."
+P038,P038.jpg,included,"“A Piece of the Rock, a Piece of History” plaque on the Little Rock riverfront."
+P039,P039.jpg,duplicate,"Exact duplicate of P038; omit from the gallery to avoid repeating the same photo."
+P040,P040.jpg,included,"The Birthplace of Country Music Museum in Bristol, viewed from the street."
+P041,P041.jpg,included,"A view of the Jack Daniel’s Distillery grounds in Lynchburg, Tennessee."
 P042,P042.jpg,included,"Posty’s on Lower Broadway, Nashville."
-P043,P043.jpg,included,The office building at Jack Daniel’s Distillery.
-P044,P044.jpg,included,Outside the Jack Daniel’s gift shop.
-P045,P045.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P046,P046.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P047,P047.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P048,P048.jpg,included,"At the Texarkana post office, shaking hands across the Arkansas–Texas state line."
-P049,P049.jpg,included,"Chintan and Asheesh beside the B.B. King sign on Beale Street, Memphis."
-P050,P050.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P051,P051.jpg,included,Chintan and Asheesh with the Elvis Presley statue on Beale Street.
+P043,P043.jpg,included,"The office building at Jack Daniel’s Distillery."
+P044,P044.jpg,included,"Outside the Jack Daniel’s gift shop."
+P045,P045.jpg,included,"Whiskey barrels inside the Jack Daniel’s Distillery."
+P046,P046.jpg,included,"Live music at Posty’s on Lower Broadway, Nashville."
+P047,P047.jpg,included,"A posed photo beside a brick building; the location is not confirmed."
+P048,P048.jpg,included,"The U.S. Post Office and Federal Building at the Arkansas–Texas line in Texarkana."
+P049,P049.jpg,included,"Chintan and Asheesh posing across the Arkansas–Texas state line in Texarkana."
+P050,P050.jpg,included,"Another view of the barrel-transport truck at Jack Daniel’s Distillery."
+P051,P051.jpg,included,"Chintan and Asheesh with the Elvis Presley statue on Beale Street."
 P052,P052.jpg,included,"The Birthplace of Country Music Museum, Bristol — exterior view."
 P053,P053.jpg,included,"Chintan and Asheesh inside Ryman Auditorium, Nashville."
-P054,P054.jpg,included,"Mud Island Park, Memphis, with the skyline and Mississippi River behind."
-P055,P055.jpg,included,"Ben & Jerry’s factory visitor experience in Waterbury, Vermont."
+P054,P054.jpg,included,"A memorial pool in Washington, D.C.; the exact memorial is not confirmed from this photo alone."
+P055,P055.jpg,included,"Posing inside a music venue on Lower Broadway, Nashville."
 P056,P056.jpg,included,"Washington Square Park, New York City, with Chintan, Asheesh and Sid."
 P057,P057.jpg,included,"The group outside Charles Vergos’ Rendezvous, Memphis."
 P058,P058.jpg,included,"Stone Street, Manhattan — historic cobbles and outdoor dining."
-P059,P059.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
+P059,P059.jpg,included,"Cave Spring at Jack Daniel’s Distillery; this is a similar view to P032."
 P060,P060.jpg,included,"The Old Mill, North Little Rock — its storybook setting reminded Chintan of The Lord of the Rings."
 P061,P061.jpg,included,"Café Vero, Lake George, New York — one of the trip’s standout coffees."
-P062,P062.jpg,included,"At Jack Daniel’s Distillery with Asheesh, and a bottle of Jack Daniel’s."
+P062,P062.jpg,included,"Posing beside a seated bronze statue; the statue’s identity is not confirmed."
 P063,P063.jpg,included,"The Old Mill scenery, North Little Rock, with a fantasy-film feel."
-P064,P064.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
+P064,P064.jpg,included,"A small historic building and sign in the Old Mill grounds, North Little Rock."
 P065,P065.jpg,included,"The miniature coffee-brewing setup at Café Vero, Lake George."
-P066,P066.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P067,P067.jpg,included,The Port Jefferson–Bridgeport ferry — the road trip’s opening crossing.
-P068,P068.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P069,P069.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P070,P070.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
+P066,P066.jpg,included,"The group outside Charles Vergos’ Rendezvous in Memphis."
+P067,P067.jpg,included,"The Port Jefferson–Bridgeport ferry — the road trip’s opening crossing."
+P068,P068.jpg,included,"Friends posing in front of the “Home of the Blues” sign in Memphis."
+P069,P069.jpg,included,"A visit to the Old Mill grounds in North Little Rock."
+P070,P070.jpg,included,"A nighttime stop outside a neoclassical building; the exact building is not confirmed."
 P071,P071.jpg,included,"The High Line, New York City."
-P072,P072.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P073,P073.jpg,included,Plaque at Aretha Franklin’s birthplace in Memphis.
+P072,P072.jpg,included,"The stream and millrace at the Old Mill in North Little Rock."
+P073,P073.jpg,included,"Plaque at Aretha Franklin’s birthplace in Memphis."
 P074,P074.jpg,included,"Entering Manhattan from JFK, with the high-rises coming into view."
-P075,P075.jpg,included,Manhattan skyline from the Staten Island Ferry on the first day.
-P076,P076.jpg,included,The Statue of Liberty from the Staten Island Ferry.
-P077,P077.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P078,P078.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P079,P079.jpg,included,The Statue of Liberty from another angle.
+P075,P075.jpg,included,"Manhattan skyline from the Staten Island Ferry on the first day."
+P076,P076.jpg,included,"The Statue of Liberty from the Staten Island Ferry."
+P077,P077.jpg,included,"The Statue of Liberty viewed from the ferry, from a slightly different angle."
+P078,P078.jpg,included,"The Statue of Liberty viewed from the ferry, from another angle."
+P079,P079.jpg,included,"The Statue of Liberty from another angle."
 P080,P080.jpg,included,"River Dock Café, Staten Island — first lunch and beer in New York, beside the water."
 P081,P081.jpg,included,"Selfie at River Dock Café, Staten Island."
-P082,P082.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
+P082,P082.jpg,included,"Manhattan’s skyline seen across the water from the ferry."
 P083,P083.jpg,included,"Inside River Dock Café, with everyone smiling."
-P084,P084.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P085,P085.jpg,included,Wide view of the Manhattan skyline from the Staten Island Ferry.
-P086,P086.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
+P084,P084.jpg,included,"A distant view of the Statue of Liberty from the ferry."
+P085,P085.jpg,included,"Wide view of the Manhattan skyline from the Staten Island Ferry."
+P086,P086.jpg,included,"Manhattan’s skyline across the water on the Staten Island Ferry."
 P087,P087.jpg,included,"Times Square, New York City."
-P088,P088.jpg,included,Manhattan viewed from above Times Square.
+P088,P088.jpg,included,"Manhattan viewed from above Times Square."
 P089,P089.jpg,included,"Tommy’s Place, Port Jefferson, while waiting for the ferry."
-P090,P090.jpg,included,A double rainbow over the Port Jefferson ferry beneath a crimson sky — a memorable start to the road trip.
-P091,P091.jpg,included,Another view of the double rainbow at Port Jefferson.
-P092,P092.jpg,included,Scenic view from the Port Jefferson ferry.
-P093,P093.jpg,included,The ferry crossing beneath a beautiful evening sky.
-P094,P094.jpg,included,Selfie aboard the ferry at the start of the road trip.
-P095,P095.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P096,P096.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
+P090,P090.jpg,included,"A double rainbow over the Port Jefferson ferry beneath a crimson sky — a memorable start to the road trip."
+P091,P091.jpg,included,"Another view of the double rainbow at Port Jefferson."
+P092,P092.jpg,included,"Scenic view from the Port Jefferson ferry."
+P093,P093.jpg,included,"The ferry crossing beneath a beautiful evening sky."
+P094,P094.jpg,included,"Selfie aboard the ferry at the start of the road trip."
+P095,P095.jpg,included,"The Port Jefferson ferry and waterfront beneath the evening sky."
+P096,P096.jpg,included,"Sunset over the water during the Port Jefferson–Bridgeport ferry crossing."
 P097,P097.jpg,included,"Historical plaque at Boston Common, America’s oldest public park, established in 1634."
-P098,P098.jpg,included,A Civil War memorial at Boston Common; identification is tentative.
+P098,P098.jpg,included,"The Soldiers and Sailors Monument in Boston Common; the monument’s exact title should be verified before publication."
 P099,P099.jpg,included,"Boston Common, a historic green space in the city."
 P100,P100.jpg,included,"A bar in Concord, New Hampshire, where the group stopped for drinks before heading to Burlington."
-P101,P101.jpg,included,"Lake George, New York."
-P102,P102.jpg,included,"Shelburne Farms plaque, Vermont; the group visited the gift shop but skipped the tour because of drizzle."
-P103,P103.jpg,included,A scenic road through the Smoky Mountains; the exact location was not confirmed.
-P104,P104.jpg,included,"Along the driveway at Smugglers’ Notch, Vermont."
-P105,P105.jpg,included,Ben & Jerry’s trademark van in Vermont.
-P106,P106.jpg,included,"Lake George, New York."
-P107,P107.jpg,included,The broad expanse of Lake George.
-P109,P109.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
+P101,P101.jpg,included,"Boats at the Lake George waterfront in upstate New York."
+P102,P102.jpg,included,"The welcome and visitor information sign at Shelburne Farms, Vermont."
+P103,P103.jpg,included,"A mountain road in Vermont; the precise stretch is not confirmed."
+P104,P104.jpg,included,"The winding mountain road through Smugglers’ Notch, Vermont."
+P105,P105.jpg,included,"A Ben & Jerry’s-branded van at the Vermont visitor stop."
+P106,P106.jpg,included,"The Lake George waterfront and passenger boat dock."
+P107,P107.jpg,included,"The broad expanse of Lake George."
+P109,P109.jpg,included,"The group seated inside Café Vero in Lake George."
 P110,P110.jpg,included,"Coffee at Café Vero, Lake George."
-P111,P111.jpg,included,Chintan at Lake George in New York’s Adirondack region.
-P112,P112.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
+P111,P111.jpg,included,"Chintan at Lake George in New York’s Adirondack region."
+P112,P112.jpg,included,"A framed historical display encountered on the trip; its location is not confirmed."
 P113,P113.jpg,included,"A bar in Scranton, Pennsylvania, visited for dinner and drinks; the stop was not at The Office building."
-P114,P114.jpg,included,Gettysburg Address plaque — Lincoln’s brief 1863 address honoured the fallen and reaffirmed the ideals of equality and democracy.
-P115,P115.jpg,included,Selfie with the Lincoln statue near the Gettysburg Address plaque.
-P116,P116.jpg,included,"Gettysburg, Pennsylvania — battlefield landscape and memorials."
-P117,P117.jpg,included,"Gettysburg, Pennsylvania."
-P118,P118.jpg,included,"Gettysburg, Pennsylvania; individual landmark not confirmed."
-P119,P119.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P120,P120.jpg,included,Road-trip photo from the reviewed album; caption to be refined from the original review notes.
-P121,P121.jpg,included,Road-trip photo from the reviewed album; caption to be refined from the original review notes.
-P122,P122.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P123,P123.jpg,included,Road-trip photo from the reviewed album; caption to be refined from the original review notes.
-P124,P124.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P125,P125.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P126,P126.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P127,P127.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P128,P128.jpg,included,Road-trip photo from the reviewed album; caption to be refined from the original review notes.
-P129,P129.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P130,P130.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P131,P131.jpg,included,Road-trip photo from the reviewed album; caption to be refined from the original review notes.
-P132,P132.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P133,P133.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P134,P134.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P136,P136.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P138,P138.jpg,included,Road-trip photo from the reviewed album; caption to be refined from the original review notes.
-P142,P142.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P143,P143.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P144,P144.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P145,P145.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P147,P147.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P148,P148.jpg,included,Road-trip photo from the reviewed album; caption to be refined from the original review notes.
-P149,P149.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P150,P150.jpg,included,Road-trip photo from the reviewed album; caption to be refined from the original review notes.
-P151,P151.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P152,P152.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P153,P153.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P154,P154.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P155,P155.jpg,included,Road-trip photo from the reviewed album; caption to be refined from the original review notes.
-P156,P156.jpg,included,Reviewed photo; original per-photo description needs to be recovered from the conversation notes before final captioning.
-P157,P157.jpg,included,Road-trip photo from the reviewed album; caption to be refined from the original review notes.
-P158,P158.jpg,included,Road-trip photo from the reviewed album; caption to be refined from the original review notes.
+P114,P114.jpg,included,"Friends sharing drinks inside a bar in Scranton, Pennsylvania."
+P115,P115.jpg,included,"A stone battlefield marker at Gettysburg; the exact site is not confirmed."
+P116,P116.jpg,included,"A selfie beside a seated bronze statue; the statue’s identity and location are not confirmed."
+P117,P117.jpg,included,"A memorial on the Gettysburg battlefield."
+P118,P118.jpg,included,"A rural road through the Gettysburg battlefield landscape."
+P119,P119.jpg,included,"A split-rail fence on the Gettysburg battlefield."
+P120,P120.jpg,included,"The “Unflinching Under Fire” interpretation panel at Trostle Farm, Gettysburg."
+P121,P121.jpg,included,"The Abraham Trostle Farm buildings at Gettysburg."
+P122,P122.jpg,included,"A historic farm building on the Gettysburg battlefield; the exact structure is not confirmed."
+P123,P123.jpg,included,"A monument at Gettysburg; the specific memorial is not confirmed."
+P124,P124.jpg,included,"A cannon displayed on the Gettysburg battlefield."
+P125,P125.jpg,included,"A small battlefield marker at Gettysburg; the exact site is not confirmed."
+P126,P126.jpg,included,"Cannons and a memorial marker on the Gettysburg battlefield."
+P127,P127.jpg,included,"The Pennsylvania State Memorial at Gettysburg."
+P128,P128.jpg,included,"The Pennsylvania State Memorial at Gettysburg, photographed from another angle."
+P129,P129.jpg,included,"A soldier statue on the Gettysburg battlefield."
+P130,P130.jpg,included,"A cannon and memorial marker on the Gettysburg battlefield."
+P131,P131.jpg,included,"A monument on Little Round Top, Gettysburg."
+P132,P132.jpg,included,"The Little Round Top interpretive marker at Gettysburg."
+P133,P133.jpg,included,"A bridge across the river in Little Rock, Arkansas."
+P134,P134.jpg,included,"Aircraft and exhibits inside the Smithsonian National Air and Space Museum."
+P136,P136.jpg,included,"The fountain and plaza at the World War II Memorial in Washington, D.C."
+P138,P138.jpg,included,"Road-trip photo from the reviewed album; caption to be refined from the original review notes."
+P142,P142.jpg,included,"An open highway during the long drive south; the precise location is not confirmed."
+P143,P143.jpg,included,"A star set into the pavement on Beale Street, Memphis."
+P144,P144.jpg,included,"A rainy street scene in a downtown entertainment district; the exact street is not confirmed."
+P145,P145.jpg,included,"An interpretive map showing the Mississippi River and its course."
+P147,P147.jpg,included,"A second interpretive panel about the Mississippi River; the precise site is not confirmed."
+P148,P148.jpg,included,"The road-trip vehicle parked at a residential property; the location is not confirmed."
+P149,P149.jpg,included,"The road-trip vehicle parked outside a house; the location is not confirmed."
+P150,P150.jpg,included,"Road-trip photo from the reviewed album; caption to be refined from the original review notes."
+P151,P151.jpg,included,"Traffic on a highway during the drive toward Houston."
+P152,P152.jpg,included,"A waterfront marker beside the water; the precise location is not confirmed."
+P153,P153.jpg,included,"Lake George historical plaque describing the French and Indian War and the 1757 fall of Fort William Henry."
+P154,P154.jpg,included,"Chintan beside the waterfront at Lake George."
+P155,P155.jpg,included,"Friends inside a museum gallery beside a sculptural exhibit; the exact exhibit is not confirmed."
+P156,P156.jpg,included,"A group visit to a whiskey-distillery interior; the precise room is not confirmed."
+P157,P157.jpg,included,"The Washington Monument in Washington, D.C."
+P158,P158.jpg,included,"Two visitors at the World War II Memorial in Washington, D.C."

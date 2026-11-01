@@ -29,3 +29,9 @@
  .photo-pair{gap:8px;margin:26px 0 30px}
  .photo-pair img{height:clamp(145px,42vw,210px)}
 }
+
+
+/* Harvard statue: keep the explanatory text full-width and the portrait in a deliberate, centered feature. */
+.photo-statue{float:none;clear:both;width:min(100%,560px);max-width:560px;margin:28px auto 34px}
+.photo-statue img{width:100%;height:auto;max-height:520px;object-fit:contain;background:#e5e1d8}
+@media(max-width:650px){.photo-statue{width:min(100%,440px);margin:24px auto 30px}.photo-statue img{max-height:460px;object-fit:contain}}

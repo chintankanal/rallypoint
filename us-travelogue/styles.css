@@ -33,3 +33,6 @@
 /* Keep the transition between the first two chapters compact. */
 .story[aria-labelledby="day-1-title"]{padding-bottom:28px}
 #day-2.chapter-heading{padding-top:28px}
+
+/* Keep the train caption with the right-hand train photo only. */
+.train-pair figcaption{grid-column:2;}

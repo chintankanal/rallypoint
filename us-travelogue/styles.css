@@ -9,3 +9,27 @@
 .photo{margin:34px 0;min-width:0;clear:both}.photo img{display:block;width:100%;height:auto;max-height:650px;object-fit:contain;background:#e5e1d8}.photo figcaption{color:var(--muted);font-size:12px;line-height:1.5;margin-top:9px}.photo-small{width:39%;max-width:310px;margin-top:4px;margin-bottom:22px}.float-right{float:right;margin-left:28px}.float-left{float:left;margin-right:28px}.photo-wide{max-width:760px;margin:40px auto}.interlude{font-family:"Playfair Display",Georgia,serif;font-size:clamp(24px,3vw,32px);line-height:1.35;font-style:italic;color:var(--accent);margin:42px 0!important}.photo-pair{display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:800px;margin:42px auto}.photo-pair img{width:100%;height:300px;object-fit:cover}.photo-pair figcaption{grid-column:1/-1}.route{border-top:1px solid var(--line);padding-top:24px;margin-top:46px!important;font-size:14px;color:#555}.route strong{color:var(--ink)}footer{display:flex;justify-content:space-between;gap:20px;padding:26px clamp(20px,5vw,76px);background:var(--night);color:#f4f1e9;font-size:10px;letter-spacing:.14em}footer span{color:#b9bac0}
 @media(max-width:760px){.journey-intro{grid-template-columns:1fr;gap:32px;padding:58px 24px 54px}.chapter-heading{padding:54px 24px 18px}.story{padding:24px 22px 64px}}
 @media(max-width:650px){.masthead{height:58px}.edition{font-size:9px}.hero{height:78vh;min-height:540px}.hero-copy{left:24px;right:24px;bottom:58px}h1{font-size:clamp(42px,12vw,62px)}.hero-caption{right:18px;font-size:10px}.hero-subtitle{font-size:19px}.journey-copy h2,.chapter-heading h2{font-size:36px}.chapter-link{grid-template-columns:34px minmax(0,1fr) 18px;gap:12px}.chapter-details strong{font-size:17px}.chapter-details small{font-size:10px}.story{font-size:16px}.lede{font-size:19px}.photo-small{width:48%;max-width:none}.float-right{margin-left:16px}.float-left{margin-right:16px}.photo-pair{gap:8px}.photo-pair img{height:190px}.interlude{font-size:26px}footer{flex-direction:column;gap:6px}}
+
+
+/* Editorial photo rhythm: wrap story-led images, group supporting shots, spotlight only key moments. */
+.photo-float{float:right;clear:none;width:41%;max-width:340px;margin:5px 0 22px 28px}
+.photo-float.float-left{float:left;margin:5px 28px 22px 0}
+.photo-float img{width:100%;max-height:360px;object-fit:cover}
+.photo-feature{max-width:820px;margin:38px auto 42px}
+.photo-feature img{width:100%;max-height:500px;object-fit:cover}
+.photo-pair{max-width:100%;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:30px 0 36px}
+.photo-pair img{height:clamp(190px,24vw,270px);object-fit:cover}
+.photo figcaption{max-width:100%}
+.story:after{content:"";display:block;clear:both}
+@media(max-width:650px){
+ .photo-float,.photo-float.float-left{float:none;clear:both;width:min(100%,440px);max-width:100%;margin:24px auto}
+ .photo-float img{max-height:420px;object-fit:contain}
+ .photo-feature{margin:30px auto}
+ .photo-feature img{max-height:380px;object-fit:contain}
+ .photo-pair{gap:8px;margin:26px 0 30px}
+ .photo-pair img{height:clamp(145px,42vw,210px)}
+}
+
+/* Keep the transition between the first two chapters compact. */
+.story[aria-labelledby="day-1-title"]{padding-bottom:28px}
+#day-2.chapter-heading{padding-top:28px}

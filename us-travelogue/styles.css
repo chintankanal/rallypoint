@@ -29,3 +29,7 @@
  .photo-pair{gap:8px;margin:26px 0 30px}
  .photo-pair img{height:clamp(145px,42vw,210px)}
 }
+
+/* Keep the transition between the first two chapters compact. */
+.story[aria-labelledby="day-1-title"]{padding-bottom:28px}
+#day-2.chapter-heading{padding-top:28px}

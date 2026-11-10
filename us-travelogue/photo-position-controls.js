@@ -1,80 +1,70 @@
 (() => {
   "use strict";
   const targets = new Set(["D7P5.JPG", "D6P15.JPG", "D6P11.JPG"]);
-  const positions = new Map();
 
-  function applyPosition(image, wrapper, position) {
-    // A small, fixed zoom creates real horizontal and vertical travel while
-    // preserving the image frame and the surrounding page layout.
-    const extraTravel = 25; // 125% image size gives 25% travel in either direction.
-    image.style.left = (extraTravel * (50 - position.h) / 50) + "%";
-    image.style.top = (extraTravel * (50 - position.v) / 50) + "%";
-    const readout = wrapper.querySelector(".photo-position-readout");
-    if (readout) readout.textContent = "H" + position.h + " V" + position.v;
+  function addSlider(figure, image, axis, initialValue) {
+    const row = document.createElement("div");
+    row.className = "photo-adjust-row";
+
+    const label = document.createElement("label");
+    const id = "crop-" + image.getAttribute("src").split("/").pop().replace(/[^a-z0-9]/gi, "-") + "-" + axis;
+    label.htmlFor = id;
+    label.textContent = axis === "h" ? "Horizontal" : "Vertical";
+
+    const slider = document.createElement("input");
+    slider.type = "range";
+    slider.id = id;
+    slider.min = "0";
+    slider.max = "100";
+    slider.step = "1";
+    slider.value = String(initialValue);
+    slider.setAttribute("aria-label", label.textContent + " image crop position");
+
+    const value = document.createElement("output");
+    value.className = "photo-adjust-value";
+    value.htmlFor = id;
+    value.textContent = initialValue + "%";
+
+    slider.addEventListener("input", () => {
+      const h = figure.querySelector('[data-crop-axis="h"]')?.value ?? "50";
+      const v = figure.querySelector('[data-crop-axis="v"]')?.value ?? "50";
+      slider.dataset.cropAxis = axis;
+      image.style.objectPosition = h + "% " + v + "%";
+      value.textContent = slider.value + "%";
+    });
+    slider.dataset.cropAxis = axis;
+    row.append(label, slider, value);
+    return row;
   }
 
-  function addControls(image, filename) {
+  function addControls(image) {
     const figure = image.closest("figure.photo");
-    if (!figure || image.parentElement.classList.contains("photo-adjust-wrap")) return;
+    if (!figure || figure.querySelector(".photo-adjust-controls")) return;
 
-    const isPair = figure.classList.contains("photo-pair");
-    const wrapper = document.createElement("div");
-    wrapper.className = "photo-adjust-wrap" + (isPair ? " photo-adjust-pair" : " photo-adjust-feature");
-    if (!isPair) {
-      const setAspect = () => {
-        if (image.naturalWidth && image.naturalHeight) {
-          wrapper.style.aspectRatio = image.naturalWidth + " / " + image.naturalHeight;
-        }
-      };
-      setAspect();
-      if (!image.complete) image.addEventListener("load", setAspect, { once: true });
-    }
-
-    image.parentNode.insertBefore(wrapper, image);
-    wrapper.appendChild(image);
-    image.classList.add("photo-adjust-image");
-
-    const position = { h: 50, v: 50 };
-    positions.set(filename, position);
-
+    // Keep the original image and its fixed CSS crop frame. Only change
+    // object-position, exactly as with the previously approved D7P21 framing.
+    image.style.objectFit = "cover";
     const controls = document.createElement("div");
-    controls.className = "photo-position-controls";
+    controls.className = "photo-adjust-controls";
     controls.setAttribute("role", "group");
-    controls.setAttribute("aria-label", "Adjust " + filename + " photo position");
+    controls.setAttribute("aria-label", "Adjust photo crop");
 
-    const makeButton = (direction, symbol, label) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "photo-position-arrow arrow-" + direction;
-      button.textContent = symbol;
-      button.setAttribute("aria-label", label);
-      button.addEventListener("click", () => {
-        // The arrows move the visible picture, not the crop anchor.
-        if (direction === "left") position.h = Math.min(100, position.h + 1);
-        if (direction === "right") position.h = Math.max(0, position.h - 1);
-        if (direction === "up") position.v = Math.min(100, position.v + 1);
-        if (direction === "down") position.v = Math.max(0, position.v - 1);
-        applyPosition(image, wrapper, position);
-      });
-      return button;
-    };
-
-    controls.appendChild(makeButton("up", "↑", "Move photo up"));
-    controls.appendChild(makeButton("left", "←", "Move photo left"));
-    const readout = document.createElement("span");
-    readout.className = "photo-position-readout";
-    readout.textContent = "H50 V50";
-    controls.appendChild(readout);
-    controls.appendChild(makeButton("right", "→", "Move photo right"));
-    controls.appendChild(makeButton("down", "↓", "Move photo down"));
-    wrapper.appendChild(controls);
-    applyPosition(image, wrapper, position);
+    const hint = document.createElement("p");
+    hint.className = "photo-adjust-hint";
+    hint.textContent = "Move the crop window across the original photo. H50 V50 is centred.";
+    controls.append(
+      hint,
+      addSlider(figure, image, "h", 50),
+      addSlider(figure, image, "v", 50)
+    );
+    figure.appendChild(controls);
+    image.style.objectPosition = "50% 50%";
   }
 
   function initialise() {
     document.querySelectorAll("figure.photo img").forEach((image) => {
       const filename = decodeURIComponent(image.getAttribute("src").split("/").pop()).toUpperCase();
-      if (targets.has(filename)) addControls(image, filename);
+      if (targets.has(filename)) addControls(image);
     });
   }
 

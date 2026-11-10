@@ -43,7 +43,7 @@
 @media(max-width:650px){.coffee-photo{float:right;width:42%;max-width:180px;margin:5px 0 18px 16px}}
 
 
-/* D7P21: keep the existing feature-image dimensions, but crop from the bottom. */
+/* D7P21: balance the faces and safe within the existing feature-image frame. */
 .story .photo-feature img[src$="D7P21.jpg"]{
-  object-position:center top;
+  object-position:center 40%;
 }

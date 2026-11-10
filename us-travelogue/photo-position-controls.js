@@ -1,6 +1,11 @@
 (() => {
   "use strict";
   const targets = new Set(["D7P5.JPG", "D6P15.JPG", "D6P11.JPG"]);
+  const savedPositions = {
+    "D7P5.JPG": { h: 50, v: 20 },
+    "D6P15.JPG": { h: 50, v: 19 },
+    "D6P11.JPG": { h: 50, v: 37 }
+  };
 
   function addSlider(figure, image, axis, initialValue) {
     const row = document.createElement("div");
@@ -37,7 +42,7 @@
     return row;
   }
 
-  function addControls(image) {
+  function addControls(image, filename) {
     const figure = image.closest("figure.photo");
     if (!figure || figure.querySelector(".photo-adjust-controls")) return;
 
@@ -58,13 +63,13 @@
       addSlider(figure, image, "v", 50)
     );
     figure.appendChild(controls);
-    image.style.objectPosition = "50% 50%";
+    image.style.objectPosition = savedPositions[filename].h + "% " + savedPositions[filename].v + "%";
   }
 
   function initialise() {
     document.querySelectorAll("figure.photo img").forEach((image) => {
       const filename = decodeURIComponent(image.getAttribute("src").split("/").pop()).toUpperCase();
-      if (targets.has(filename)) addControls(image);
+      if (targets.has(filename)) addControls(image, filename);
     });
   }
 

@@ -47,3 +47,18 @@
 .story .photo-feature img[src$="D7P21.jpg"]{
   object-position:50% 34%;
 }
+
+/* Temporary on-image crop controls for D7P5, D6P15 and D6P11. */
+.photo-adjust-wrap{position:relative;overflow:hidden;min-width:0;isolation:isolate}
+.photo-adjust-pair{height:clamp(190px,24vw,270px);width:100%}
+.photo-adjust-feature{width:100%;max-height:500px}
+.photo-adjust-wrap>.photo-adjust-image{position:absolute!important;display:block;width:112%!important;height:112%!important;max-width:none!important;max-height:none!important;object-fit:cover!important;margin:0!important}
+.photo-position-controls{position:absolute;z-index:3;left:50%;top:50%;transform:translate(-50%,-50%);display:grid;grid-template-columns:34px auto 34px;grid-template-rows:34px 34px 34px;gap:4px;align-items:center;justify-items:center;padding:7px;border-radius:12px;background:rgba(18,22,29,.68);border:1px solid rgba(255,255,255,.32);box-shadow:0 2px 12px rgba(0,0,0,.24);backdrop-filter:blur(5px)}
+.photo-position-arrow{width:32px;height:32px;border:1px solid rgba(255,255,255,.35);border-radius:8px;background:rgba(255,255,255,.14);color:#fff;font:700 20px/1 "DM Sans",sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;touch-action:manipulation}
+.photo-position-arrow:hover,.photo-position-arrow:focus-visible{background:rgba(255,255,255,.3);outline:2px solid #fff;outline-offset:1px}
+.photo-position-arrow.arrow-up{grid-column:2;grid-row:1}
+.photo-position-arrow.arrow-left{grid-column:1;grid-row:2}
+.photo-position-arrow.arrow-right{grid-column:3;grid-row:2}
+.photo-position-arrow.arrow-down{grid-column:2;grid-row:3}
+.photo-position-readout{grid-column:2;grid-row:2;white-space:nowrap;color:#fff;font:700 11px/1 "DM Sans",sans-serif;letter-spacing:.04em;padding:0 2px;text-shadow:0 1px 2px #000}
+@media(max-width:650px){.photo-adjust-pair{height:clamp(145px,42vw,210px)}.photo-adjust-feature{max-height:380px}.photo-position-controls{grid-template-columns:30px auto 30px;grid-template-rows:30px 30px 30px;gap:3px;padding:5px}.photo-position-arrow{width:29px;height:29px;font-size:18px}.photo-position-readout{font-size:10px}}

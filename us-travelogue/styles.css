@@ -41,3 +41,27 @@
 /* Keep the Café Vero coffee close-up as a supporting detail, not a feature image. */
 .coffee-photo{width:28%;max-width:220px;margin:5px 0 20px 28px}
 @media(max-width:650px){.coffee-photo{float:right;width:42%;max-width:180px;margin:5px 0 18px 16px}}
+
+
+/* Show complete travel photographs: prevent fixed-height frames from cropping content. */
+.story .photo img{
+  height:auto;
+  max-height:650px;
+  object-fit:contain;
+}
+.story .photo-pair img{
+  height:auto;
+  max-height:500px;
+  object-fit:contain;
+  align-self:start;
+}
+.story .photo-feature img{
+  height:auto;
+  max-height:650px;
+  object-fit:contain;
+}
+.story .photo-float img{
+  height:auto;
+  max-height:500px;
+  object-fit:contain;
+}

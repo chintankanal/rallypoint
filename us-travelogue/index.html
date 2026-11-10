@@ -307,13 +307,7 @@ One of the familiar traditions associated with Harvard is rubbing the foot of th
 <p>The tour included a visit to Jack Daniel's original office, where a wooden table has been preserved. Another display showed containers of corn, barley and rye placed on top of wooden barrels, alongside a motto that captures the distillery's approach to its craft: <em>“Every day we make it, we'll make the best we can.”</em></p>
 <figure class="photo photo-pair"><img src="assets/D7P19.jpg" alt="The old wooden table preserved in Jack Daniel's original office"><img src="assets/D7P20.jpg" alt="Grains used in whiskey-making and the distillery's motto"><figcaption>Inside Jack Daniel's office, with a motto that still reflects the distillery's approach.</figcaption></figure>
 <p>The office also contained a heavy iron safe associated with one of the most famous stories about Jack Daniel. According to the tale shared at the distillery, Jack once arrived at work before his nephew and assistant, Lem Motlow, but could not remember the safe's combination. Frustrated, he kicked the safe and injured his toe. The story goes that the injury eventually developed into a severe infection, leading to the amputation of his leg. Whether every detail of the story is exactly as told or has grown through retelling, it has become part of the folklore surrounding Jack Daniel and the distillery.</p>
-<figure class="photo photo-feature d7p21-tuning-target"><img src="assets/D7P21.jpg" alt="The heavy iron safe associated with the story of Jack Daniel's injury"><div class="photo-tuning-controls" id="d7p21-controls" aria-label="Photo framing controls">
-<label for="d7p21-horizontal">Horizontal position <output id="d7p21-horizontal-value">50%</output></label>
-<input id="d7p21-horizontal" type="range" min="0" max="100" value="50">
-<label for="d7p21-vertical">Vertical position <output id="d7p21-vertical-value">40%</output></label>
-<input id="d7p21-vertical" type="range" min="0" max="100" value="40">
-<p>Adjust the framing above. Share the two percentages when you're happy with the result.</p>
-</div><figcaption>The iron safe at the centre of a well-known Jack Daniel story.</figcaption></figure>
+<figure class="photo photo-feature"><img src="assets/D7P21.jpg" alt="The heavy iron safe associated with the story of Jack Daniel's injury"><figcaption>The iron safe at the centre of a well-known Jack Daniel story.</figcaption></figure>
 <h3>Around the distillery</h3>
 <p>Beyond the guided tour, we spent some additional time exploring the property. We saw the production area, the display truck and the gift store, and took a few photographs along the way.</p>
 <figure class="photo photo-pair"><img src="assets/D7P23.jpg" alt="The distillery's production site"><img src="assets/D7P24.jpg" alt="A Jack Daniel's truck on display"><figcaption>The production site and a display truck on the distillery grounds.</figcaption></figure>
@@ -329,28 +323,6 @@ One of the familiar traditions associated with Harvard is rubbing the foot of th
 
 </main>
 <footer>THE ULTIMATE AMERICAN ROAD TRIP <span>SEPTEMBER–OCTOBER 2026</span></footer>
-<script>
-(function () {
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('tune') !== 'D7P21') return;
-  document.body.classList.add('photo-tuning-mode');
-  const image = document.querySelector('.d7p21-tuning-target img');
-  const horizontal = document.getElementById('d7p21-horizontal');
-  const vertical = document.getElementById('d7p21-vertical');
-  const horizontalValue = document.getElementById('d7p21-horizontal-value');
-  const verticalValue = document.getElementById('d7p21-vertical-value');
-  if (!image || !horizontal || !vertical) return;
-  function updatePosition() {
-    const x = horizontal.value;
-    const y = vertical.value;
-    image.style.objectPosition = x + '% ' + y + '%';
-    horizontalValue.value = x + '%';
-    verticalValue.value = y + '%';
-  }
-  horizontal.addEventListener('input', updatePosition);
-  vertical.addEventListener('input', updatePosition);
-  updatePosition();
-})();
-</script>
+
 </body>
 </html>

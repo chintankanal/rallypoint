@@ -43,39 +43,7 @@
 @media(max-width:650px){.coffee-photo{float:right;width:42%;max-width:180px;margin:5px 0 18px 16px}}
 
 
-/* D7P21: balance the faces and safe within the existing feature-image frame. */
+/* D7P21: final framing selected after review; preserve the existing image frame. */
 .story .photo-feature img[src$="D7P21.jpg"]{
-  object-position:center 40%;
-}
-
-
-/* D7P21 crop tuner: hidden for normal readers; enabled only by ?tune=D7P21. */
-.photo-tuning-controls{display:none}
-.photo-tuning-mode .photo-tuning-controls{
-  display:block;
-  margin:16px 0 4px;
-  padding:16px 18px;
-  border:1px solid var(--line);
-  background:#efede7;
-  border-radius:6px;
-}
-.photo-tuning-mode .photo-tuning-controls label{
-  display:flex;
-  justify-content:space-between;
-  gap:16px;
-  margin:8px 0 4px;
-  font-size:13px;
-  font-weight:600;
-}
-.photo-tuning-mode .photo-tuning-controls input[type="range"]{
-  display:block;
-  width:100%;
-  margin:4px 0 12px;
-  accent-color:var(--accent);
-}
-.photo-tuning-mode .photo-tuning-controls p{
-  margin:8px 0 0;
-  color:var(--muted);
-  font-size:12px;
-  line-height:1.5;
+  object-position:50% 34%;
 }

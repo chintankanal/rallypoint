@@ -56,10 +56,12 @@
 
 
 
-/* Minimal hover preview, limited to D7P14 and D7P15. */
+
+
+/* Reliable, restrained hover preview for D7P14 and D7P15 only. */
+#selected-photo-preview{position:fixed!important;inset:0!important;z-index:2147483000!important;display:flex!important;align-items:center!important;justify-content:center!important;padding:24px!important;background:rgba(18,21,27,.38)!important;opacity:0!important;visibility:hidden!important;pointer-events:none!important;transition:opacity .12s ease!important}
+#selected-photo-preview.is-visible{opacity:1!important;visibility:visible!important}
+#selected-photo-preview figure{display:flex!important;flex-direction:column!important;align-items:center!important;gap:8px!important;max-width:92vw!important;max-height:92vh!important;margin:0!important;padding:12px!important;background:#fff!important;box-shadow:0 12px 42px rgba(0,0,0,.28)!important}
+#selected-photo-preview img{display:block!important;width:auto!important;height:auto!important;max-width:88vw!important;max-height:82vh!important;object-fit:contain!important}
+#selected-photo-preview figcaption{margin:0!important;color:#555!important;font-size:12px!important;line-height:1.45!important;text-align:center!important}
 .story .photo img.photo-preview-enabled{cursor:zoom-in}
-.photo-hover-preview{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:4vh 4vw;background:rgba(18,21,27,.32);opacity:0;visibility:hidden;transition:opacity .14s ease,visibility .14s ease;pointer-events:none}
-.photo-hover-preview.is-visible{opacity:1;visibility:visible}
-.photo-hover-preview figure{display:flex;flex-direction:column;align-items:center;gap:8px;max-width:100%;max-height:100%;margin:0;padding:12px;background:#fff;box-shadow:0 12px 42px rgba(0,0,0,.24)}
-.photo-hover-preview img{display:block;width:auto;height:auto;max-width:88vw;max-height:82vh;object-fit:contain}
-.photo-hover-preview figcaption{max-width:min(88vw,900px);margin:0;color:#555;font-size:12px;line-height:1.45;text-align:center}

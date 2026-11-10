@@ -41,3 +41,9 @@
 /* Keep the Café Vero coffee close-up as a supporting detail, not a feature image. */
 .coffee-photo{width:28%;max-width:220px;margin:5px 0 20px 28px}
 @media(max-width:650px){.coffee-photo{float:right;width:42%;max-width:180px;margin:5px 0 18px 16px}}
+
+
+/* D7P21: keep the existing feature-image dimensions, but crop from the bottom. */
+.story .photo-feature img[src$="D7P21.jpg"]{
+  object-position:center top;
+}

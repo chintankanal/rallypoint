@@ -52,12 +52,3 @@
 .story .photo-feature img[src$="D7P21.jpg"]{
   object-position:50% 34%;
 }
-
-/* Temporary horizontal and vertical crop sliders for selected photos. */
-.photo-adjust-controls{display:grid;grid-template-columns:1fr;gap:8px;margin:10px 0 0;padding:12px 14px;background:#eeece6;border:1px solid var(--line);border-radius:8px}
-.photo-adjust-row{display:grid;grid-template-columns:92px minmax(80px,1fr) 58px;gap:10px;align-items:center;font-size:12px;line-height:1.3;color:var(--ink)}
-.photo-adjust-row label{font-weight:600}
-.photo-adjust-row input[type="range"]{width:100%;accent-color:var(--accent);cursor:pointer}
-.photo-adjust-value{font-variant-numeric:tabular-nums;text-align:right;color:var(--muted);font-size:11px}
-.photo-adjust-hint{font-size:10px;line-height:1.4;color:var(--muted);margin:0}
-@media(max-width:650px){.photo-adjust-controls{padding:10px 11px}.photo-adjust-row{grid-template-columns:76px minmax(70px,1fr) 52px;gap:7px}}

@@ -43,6 +43,11 @@
 @media(max-width:650px){.coffee-photo{float:right;width:42%;max-width:180px;margin:5px 0 18px 16px}}
 
 
+/* Final crop positions selected using the adjustment sliders. */
+.story .photo img[src$="D7P5.jpg"]{object-position:50% 20%}
+.story .photo img[src$="D6P15.jpg"]{object-position:50% 19%}
+.story .photo img[src$="D6P11.jpg"]{object-position:50% 37%}
+
 /* D7P21: final framing selected after review; preserve the existing image frame. */
 .story .photo-feature img[src$="D7P21.jpg"]{
   object-position:50% 34%;

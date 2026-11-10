@@ -54,18 +54,12 @@
 }
 
 
-/* Full-frame hover preview and click-to-enlarge, enabled only for D7P14 and D7P15. */
+
+
+/* Minimal hover preview, limited to D7P14 and D7P15. */
 .story .photo img.photo-preview-enabled{cursor:zoom-in}
-.story .photo img.photo-preview-enabled:focus-visible{outline:3px solid var(--accent);outline-offset:4px}
-.photo-hover-preview{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:4vh 4vw;background:rgba(12,15,21,.82);opacity:0;visibility:hidden;transition:opacity .16s ease,visibility .16s ease;pointer-events:none}
+.photo-hover-preview{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:4vh 4vw;background:rgba(18,21,27,.32);opacity:0;visibility:hidden;transition:opacity .14s ease,visibility .14s ease;pointer-events:none}
 .photo-hover-preview.is-visible{opacity:1;visibility:visible}
-.photo-hover-preview__content{display:flex;flex-direction:column;align-items:center;gap:10px;max-width:100%;max-height:100%}
-.photo-hover-preview img{display:block;width:auto;height:auto;max-width:92vw;max-height:86vh;object-fit:contain;box-shadow:0 18px 60px rgba(0,0,0,.35);background:#fff}
-.photo-hover-preview p{margin:0;color:#fff;text-align:center;font-size:13px;line-height:1.5}
-.photo-lightbox{width:100vw;height:100vh;max-width:none;max-height:none;margin:0;padding:5vh 5vw;border:0;background:rgba(10,12,17,.96);color:#fff}
-.photo-lightbox::backdrop{background:rgba(10,12,17,.96)}
-.photo-lightbox figure{height:100%;margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
-.photo-lightbox img{display:block;max-width:100%;max-height:88vh;width:auto;height:auto;object-fit:contain}
-.photo-lightbox figcaption{color:#e8e8e8;text-align:center;font-size:13px;line-height:1.5}
-.photo-lightbox__close{position:absolute;top:18px;right:24px;border:0;background:transparent;color:#fff;font-size:38px;line-height:1;cursor:pointer}
-@media(max-width:650px){.photo-hover-preview{display:none}.photo-lightbox{padding:56px 16px 24px}.photo-lightbox img{max-height:82vh}.photo-lightbox__close{top:12px;right:16px}}
+.photo-hover-preview figure{display:flex;flex-direction:column;align-items:center;gap:8px;max-width:100%;max-height:100%;margin:0;padding:12px;background:#fff;box-shadow:0 12px 42px rgba(0,0,0,.24)}
+.photo-hover-preview img{display:block;width:auto;height:auto;max-width:88vw;max-height:82vh;object-fit:contain}
+.photo-hover-preview figcaption{max-width:min(88vw,900px);margin:0;color:#555;font-size:12px;line-height:1.45;text-align:center}

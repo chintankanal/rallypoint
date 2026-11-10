@@ -6,10 +6,9 @@
   function applyPosition(image, wrapper, position) {
     // A small, fixed zoom creates real horizontal and vertical travel while
     // preserving the image frame and the surrounding page layout.
-    const zoom = 112;
-    const travel = 100 - zoom;
-    image.style.left = (travel * position.h / 100) + "%";
-    image.style.top = (travel * position.v / 100) + "%";
+    const extraTravel = 25; // 125% image size gives 25% travel in either direction.
+    image.style.left = (extraTravel * (50 - position.h) / 50) + "%";
+    image.style.top = (extraTravel * (50 - position.v) / 50) + "%";
     const readout = wrapper.querySelector(".photo-position-readout");
     if (readout) readout.textContent = "H" + position.h + " V" + position.v;
   }

@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  const targets = new Set(["D7P5.jpg", "D6P15.jpg", "D6P11.jpg"]);
+  const targets = new Set(["D7P5.JPG", "D6P15.JPG", "D6P11.JPG"]);
   const positions = new Map();
 
   function applyPosition(image, wrapper, position) {
@@ -21,8 +21,14 @@
     const isPair = figure.classList.contains("photo-pair");
     const wrapper = document.createElement("div");
     wrapper.className = "photo-adjust-wrap" + (isPair ? " photo-adjust-pair" : " photo-adjust-feature");
-    if (!isPair && image.naturalWidth && image.naturalHeight) {
-      wrapper.style.aspectRatio = image.naturalWidth + " / " + image.naturalHeight;
+    if (!isPair) {
+      const setAspect = () => {
+        if (image.naturalWidth && image.naturalHeight) {
+          wrapper.style.aspectRatio = image.naturalWidth + " / " + image.naturalHeight;
+        }
+      };
+      setAspect();
+      if (!image.complete) image.addEventListener("load", setAspect, { once: true });
     }
 
     image.parentNode.insertBefore(wrapper, image);

@@ -2,7 +2,7 @@
   function isTarget(img) {
     if (!img || img.tagName !== 'IMG') return false;
     const source = (img.getAttribute('src') || '').toLowerCase();
-    return source.includes('d7p14.jpg') || source.includes('d7p15.jpg');
+    return source.includes('d7p14.jpg') || source.includes('d7p15.jpg') || source.includes('beale street - filmstrip.png');
   }
 
   const preview = document.createElement('div');

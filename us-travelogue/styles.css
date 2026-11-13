@@ -132,3 +132,6 @@
 @media(max-width:650px){
   .story #d8p5-photo .d8p5-frame{height:260px}
 }
+
+/* D8P5 final vertical framing selected with the adjustment slider. */
+.story #d8p5-photo .d8p5-frame img{object-position:50% 11%}

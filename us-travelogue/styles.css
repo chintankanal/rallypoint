@@ -83,10 +83,11 @@
   clear:none;
 }
 .story .graceland-photo-pair .photo img{
+  display:block;
   width:100%;
   height:360px;
   max-height:none;
-  object-fit:contain;
+  object-fit:cover;
 }
 .story .graceland-photo-pair .photo figcaption{
   font-size:11px;
@@ -94,5 +95,5 @@
 }
 @media(max-width:650px){
   .story .graceland-photo-pair{grid-template-columns:minmax(0,0.8fr) minmax(0,1.35fr);gap:8px;margin:24px 0 30px}
-  .story .graceland-photo-pair .photo img{height:220px}
+  .story .graceland-photo-pair .photo img{height:220px;object-fit:cover}
 }

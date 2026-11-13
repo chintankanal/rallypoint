@@ -68,29 +68,3 @@
   });
 })();
 
-
-/* Temporary D8P9 framing tool; open the page with ?tune=D8P9. */
-(() => {
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('tune') !== 'D8P9') return;
-  const figure = document.querySelector('#d8p9-photo');
-  const img = figure?.querySelector('.d8p9-frame img');
-  if (!figure || !img) return;
-
-  const panel = document.createElement('div');
-  panel.className = 'd8p9-tuning-panel';
-  panel.innerHTML = '<div class="tuning-heading">Adjust D8P9 image position</div>' +
-    '<label class="tuning-control"><span>Horizontal</span><input type="range" min="0" max="100" value="50" data-axis="x"><output>50%</output></label>' +
-    '<label class="tuning-control"><span>Vertical</span><input type="range" min="0" max="100" value="50" data-axis="y"><output>50%</output></label>';
-  figure.insertAdjacentElement('afterend', panel);
-
-  const values = { x: 50, y: 50 };
-  panel.querySelectorAll('input[type="range"]').forEach((slider) => {
-    slider.addEventListener('input', () => {
-      const axis = slider.dataset.axis;
-      values[axis] = Number(slider.value);
-      slider.nextElementSibling.value = slider.value + '%';
-      img.style.objectPosition = values.x + '% ' + values.y + '%';
-    });
-  });
-})();

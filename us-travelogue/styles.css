@@ -114,6 +114,7 @@
   grid-template-columns:repeat(2,minmax(0,1fr));
   gap:22px;
   max-width:900px;
+  clear:both;
   margin:34px auto 40px;
 }
 .story .rendezvous-gallery .photo{

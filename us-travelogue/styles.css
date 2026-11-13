@@ -65,3 +65,34 @@
 #selected-photo-preview img{display:block!important;width:auto!important;height:auto!important;max-width:88vw!important;max-height:82vh!important;object-fit:contain!important}
 #selected-photo-preview figcaption{margin:0!important;color:#555!important;font-size:12px!important;line-height:1.45!important;text-align:center!important}
 .story .photo img.photo-preview-enabled{cursor:zoom-in}
+
+
+/* Day 8: pair the related Elvis statue and Graceland photographs at equal height. */
+.story .graceland-photo-pair{
+  display:grid;
+  grid-template-columns:minmax(0,0.8fr) minmax(0,1.35fr);
+  gap:16px;
+  align-items:start;
+  margin:30px 0 36px;
+}
+.story .graceland-photo-pair .photo{
+  width:100%;
+  max-width:none;
+  min-width:0;
+  margin:0;
+  clear:none;
+}
+.story .graceland-photo-pair .photo img{
+  width:100%;
+  height:360px;
+  max-height:none;
+  object-fit:contain;
+}
+.story .graceland-photo-pair .photo figcaption{
+  font-size:11px;
+  line-height:1.45;
+}
+@media(max-width:650px){
+  .story .graceland-photo-pair{grid-template-columns:minmax(0,0.8fr) minmax(0,1.35fr);gap:8px;margin:24px 0 30px}
+  .story .graceland-photo-pair .photo img{height:220px}
+}

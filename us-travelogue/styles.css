@@ -146,16 +146,16 @@
 }
 
 
-/* Paired vertical entrance photographs with editorial text wrap */
+/* Full-width paired Rendezvous entrance photos; following copy sits beneath. */
 .story .rendezvous-entry-pair{
-  float:right;
-  clear:none;
+  float:none;
+  clear:both;
   display:grid;
   grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:14px;
-  width:68%;
-  max-width:680px;
-  margin:5px 0 24px 28px;
+  gap:20px;
+  width:100%;
+  max-width:none;
+  margin:28px 0 34px;
 }
 .story .rendezvous-entry-pair .photo{
   width:100%;
@@ -166,27 +166,16 @@
 .story .rendezvous-entry-pair .photo img{
   display:block;
   width:100%;
-  height:390px;
+  height:auto;
   max-height:none;
+  aspect-ratio:3/4;
   object-fit:cover;
 }
 .story .rendezvous-entry-pair .photo figcaption{
   font-size:12px;
-  line-height:1.4;
-}
-@media(max-width:760px){
-  .story .rendezvous-entry-pair{
-    float:none;
-    clear:both;
-    width:100%;
-    max-width:none;
-    gap:12px;
-    margin:24px 0 30px;
-  }
-  .story .rendezvous-entry-pair .photo img{height:340px}
+  line-height:1.45;
 }
 @media(max-width:650px){
-  .story .rendezvous-entry-pair{gap:8px;margin:20px 0 26px}
-  .story .rendezvous-entry-pair .photo img{height:240px}
+  .story .rendezvous-entry-pair{gap:10px;margin:22px 0 28px}
   .story .rendezvous-entry-pair .photo figcaption{font-size:10px}
 }

@@ -98,40 +98,5 @@
   .story .graceland-photo-pair .photo img{height:220px;object-fit:cover}
 }
 
-/* D8P5 temporary framing controls; activated only with ?tune=D8P5. */
-.story #d8p5-photo .d8p5-frame{height:360px;overflow:hidden;background:#e5e1d8}
-.story #d8p5-photo .d8p5-frame img{
-  display:block;
-  width:100%;
-  height:100%;
-  max-height:none;
-  object-fit:cover;
-  object-position:50% 50%;
-  transform:translateX(0) scale(1.15);
-  transform-origin:center center;
-}
-.story #d8p5-photo .d8p5-position-controls{
-  margin-top:12px;
-  padding:12px 14px;
-  background:#eeece6;
-  border:1px solid var(--line);
-  display:grid;
-  gap:10px;
-}
-.story #d8p5-photo .d8p5-position-controls[hidden]{display:none}
-.story #d8p5-photo .d8p5-position-controls label{
-  display:grid;
-  grid-template-columns:88px minmax(100px,1fr) 42px;
-  align-items:center;
-  gap:10px;
-  color:#555b63;
-  font-size:12px;
-}
-.story #d8p5-photo .d8p5-position-controls input{width:100%;accent-color:var(--accent)}
-.story #d8p5-photo .d8p5-position-controls output{font-variant-numeric:tabular-nums;text-align:right}
-@media(max-width:650px){
-  .story #d8p5-photo .d8p5-frame{height:260px}
-}
-
 /* D8P5 final vertical framing selected with the adjustment slider. */
 .story #d8p5-photo .d8p5-frame img{object-position:50% 11%}

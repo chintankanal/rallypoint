@@ -185,3 +185,27 @@
 .story .photo-pair .d7p26-frame{overflow:hidden;width:100%;height:300px;background:#e5e1d8}
 .story .photo-pair .d7p26-frame img{width:100%;height:100%;max-height:none;object-fit:cover;object-position:50% 31%}
 @media(max-width:650px){.story .photo-pair .d7p26-frame{height:190px}}
+
+
+/* Align D7P26 and D7P27 as equal-height photographs */
+.story .photo-pair:has(.d7p26-frame){
+  align-items:start;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+}
+.story .photo-pair .d7p26-frame,
+.story .photo-pair .d7p26-frame img,
+.story .photo-pair > img[src$="D7P27.jpg"]{
+  display:block;
+  width:100%;
+  height:300px;
+  min-width:0;
+  max-height:none;
+  object-fit:cover;
+}
+.story .photo-pair .d7p26-frame{overflow:hidden}
+.story .photo-pair .d7p26-frame img{object-position:50% 31%}
+@media(max-width:650px){
+  .story .photo-pair .d7p26-frame,
+  .story .photo-pair .d7p26-frame img,
+  .story .photo-pair > img[src$="D7P27.jpg"]{height:190px}
+}

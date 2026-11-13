@@ -1,8 +1,11 @@
 (() => {
-  function isTarget(img) {
-    if (!img || img.tagName !== 'IMG') return false;
+  function targetImage(node) {
+    const img = node?.closest?.('img');
+    if (!img) return null;
     const source = (img.getAttribute('src') || '').toLowerCase();
-    return source.includes('d7p14.jpg') || source.includes('d7p15.jpg') || source.includes('beale street - filmstrip.png');
+    return source.includes('d7p14.jpg') ||
+      source.includes('d7p15.jpg') ||
+      source.includes('beale street - filmstrip.png') ? img : null;
   }
 
   const preview = document.createElement('div');
@@ -17,7 +20,7 @@
   let activeImage = null;
 
   function show(img) {
-    if (!isTarget(img)) return;
+    if (!img || activeImage === img) return;
     activeImage = img;
     previewImage.src = img.currentSrc || img.src;
     previewImage.alt = img.alt || '';
@@ -28,37 +31,33 @@
   }
 
   function hide() {
+    if (!activeImage) return;
     activeImage = null;
     preview.classList.remove('is-visible');
     preview.setAttribute('aria-hidden', 'true');
     previewImage.removeAttribute('src');
   }
 
-  // Delegated mouse events avoid relying on individual image listeners.
-  document.addEventListener('mouseover', (event) => {
-    const img = event.target.closest?.('.story .photo img');
-    if (isTarget(img) && img !== activeImage) show(img);
+  // Listen at document level so the behaviour also works for images added later.
+  document.addEventListener('pointerover', (event) => {
+    const img = targetImage(event.target);
+    if (img && !img.contains(event.relatedTarget)) show(img);
   });
-  document.addEventListener('mouseout', (event) => {
-    const img = event.target.closest?.('.story .photo img');
-    if (isTarget(img) && !img.contains(event.relatedTarget)) hide();
+  document.addEventListener('pointerout', (event) => {
+    const img = targetImage(event.target);
+    if (img && !img.contains(event.relatedTarget)) hide();
   });
 
-  document.addEventListener('focusin', (event) => {
-    const img = event.target.closest?.('.story .photo img');
-    if (isTarget(img)) show(img);
-  });
+  document.addEventListener('focusin', (event) => show(targetImage(event.target)));
   document.addEventListener('focusout', (event) => {
-    const img = event.target.closest?.('.story .photo img');
-    if (isTarget(img)) hide();
+    if (targetImage(event.target)) hide();
   });
-
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') hide();
   });
 
-  document.querySelectorAll('.story .photo img').forEach((img) => {
-    if (isTarget(img)) {
+  document.querySelectorAll('img').forEach((img) => {
+    if (targetImage(img)) {
       img.classList.add('photo-preview-enabled');
       img.tabIndex = 0;
       img.setAttribute('aria-label', 'Hover to view the complete photograph');

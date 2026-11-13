@@ -100,3 +100,14 @@
 
 /* D8P5 final vertical framing selected with the adjustment slider. */
 .story #d8p5-photo .d8p5-frame img{object-position:50% 11%}
+
+
+/* Temporary D8P9 framing controls */
+.story #d8p9-photo .d8p9-frame{height:500px;overflow:hidden;background:#e5e1d8}
+.story #d8p9-photo .d8p9-frame img{width:100%;height:100%;max-height:none;object-fit:cover;object-position:50% 50%}
+.d8p9-tuning-panel{max-width:820px;margin:-18px auto 24px;padding:14px 18px;border:1px solid var(--line);background:#f7f5f0;border-radius:8px;font:13px/1.5 inherit;color:var(--ink)}
+.d8p9-tuning-panel .tuning-heading{font-weight:700;margin-bottom:8px}
+.d8p9-tuning-panel .tuning-control{display:grid;grid-template-columns:100px 1fr 42px;align-items:center;gap:12px;margin:8px 0}
+.d8p9-tuning-panel input{width:100%;accent-color:var(--accent)}
+.d8p9-tuning-panel output{text-align:right;font-variant-numeric:tabular-nums}
+@media(max-width:700px){.story #d8p9-photo .d8p9-frame{height:380px}.d8p9-tuning-panel{margin:-12px 0 22px}.d8p9-tuning-panel .tuning-control{grid-template-columns:78px 1fr 38px;gap:8px}}

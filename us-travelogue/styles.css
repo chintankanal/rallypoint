@@ -152,10 +152,10 @@
   clear:none;
   display:grid;
   grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:10px;
-  width:52%;
-  max-width:560px;
-  margin:5px 0 22px 26px;
+  gap:14px;
+  width:68%;
+  max-width:680px;
+  margin:5px 0 24px 28px;
 }
 .story .rendezvous-entry-pair .photo{
   width:100%;
@@ -166,20 +166,27 @@
 .story .rendezvous-entry-pair .photo img{
   display:block;
   width:100%;
-  height:300px;
+  height:390px;
   max-height:none;
   object-fit:cover;
 }
 .story .rendezvous-entry-pair .photo figcaption{
-  font-size:11px;
+  font-size:12px;
   line-height:1.4;
 }
-@media(max-width:650px){
+@media(max-width:760px){
   .story .rendezvous-entry-pair{
-    width:54%;
-    gap:7px;
-    margin:4px 0 14px 14px;
+    float:none;
+    clear:both;
+    width:100%;
+    max-width:none;
+    gap:12px;
+    margin:24px 0 30px;
   }
-  .story .rendezvous-entry-pair .photo img{height:210px}
+  .story .rendezvous-entry-pair .photo img{height:340px}
+}
+@media(max-width:650px){
+  .story .rendezvous-entry-pair{gap:8px;margin:20px 0 26px}
+  .story .rendezvous-entry-pair .photo img{height:240px}
   .story .rendezvous-entry-pair .photo figcaption{font-size:10px}
 }

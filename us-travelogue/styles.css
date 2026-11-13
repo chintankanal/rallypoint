@@ -106,3 +106,40 @@
 .story #d8p9-photo .d8p9-frame{height:500px;overflow:hidden;background:#e5e1d8}
 .story #d8p9-photo .d8p9-frame img{width:100%;height:100%;max-height:none;object-fit:cover;object-position:50% 18%}
 @media(max-width:700px){.story #d8p9-photo .d8p9-frame{height:380px}}
+
+
+/* Rendezvous restaurant photo gallery */
+.story .rendezvous-gallery{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:22px;
+  max-width:900px;
+  margin:34px auto 40px;
+}
+.story .rendezvous-gallery .photo{
+  width:100%;
+  max-width:none;
+  min-width:0;
+  margin:0;
+  clear:none;
+}
+.story .rendezvous-entry-photo img{
+  display:block;
+  width:100%;
+  height:360px;
+  max-height:none;
+  object-fit:cover;
+}
+.story .rendezvous-gallery .photo img{
+  display:block;
+  width:100%;
+  height:280px;
+  max-height:none;
+  object-fit:cover;
+  background:#e5e1d8;
+}
+@media(max-width:650px){
+  .story .rendezvous-gallery{gap:12px;margin:26px auto 30px}
+  .story .rendezvous-gallery .photo img{height:190px}.story .rendezvous-entry-photo img{height:260px}
+  .story .rendezvous-gallery .photo figcaption{font-size:11px}
+}

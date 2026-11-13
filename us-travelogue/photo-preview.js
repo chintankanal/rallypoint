@@ -67,3 +67,32 @@
     }
   });
 })();
+
+/* Temporary D8P5 framing tool. Controls appear only on the private tuning URL. */
+(() => {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('tune') !== 'D8P5') return;
+  const figure = document.getElementById('d8p5-photo');
+  if (!figure) return;
+  const frame = figure.querySelector('.d8p5-frame img');
+  const panel = figure.querySelector('.d8p5-position-controls');
+  if (!frame || !panel) return;
+  panel.hidden = false;
+  const sliders = panel.querySelectorAll('input[type="range"]');
+  const values = { x: 50, y: 50 };
+  const apply = () => {
+    frame.style.objectPosition = '50% ' + values.y + '%';
+    frame.style.transform = 'translateX(' + ((50 - values.x) * 0.15) + '%) scale(1.15)';
+    sliders.forEach((slider) => {
+      const output = slider.parentElement.querySelector('output');
+      output.textContent = values[slider.dataset.axis] + '%';
+    });
+  };
+  sliders.forEach((slider) => {
+    slider.addEventListener('input', () => {
+      values[slider.dataset.axis] = Number(slider.value);
+      apply();
+    });
+  });
+  apply();
+})();

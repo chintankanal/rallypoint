@@ -68,3 +68,25 @@
   });
 })();
 
+
+
+/* Temporary D7P26 vertical framing tool; open with ?tune=D7P26. */
+(() => {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('tune') !== 'D7P26') return;
+  const figure = document.querySelector('.story .photo-pair img[src$="D7P26.jpg"]')?.closest('figure');
+  const img = figure?.querySelector('.d7p26-frame img');
+  if (!figure || !img) return;
+
+  const panel = document.createElement('div');
+  panel.className = 'd7p26-tuning-panel';
+  panel.innerHTML = '<div class="tuning-heading">Adjust D7P26 vertical position</div>' +
+    '<label class="tuning-control"><span>Vertical</span><input type="range" min="0" max="100" value="50"><output>50%</output></label>';
+  figure.insertAdjacentElement('afterend', panel);
+
+  const slider = panel.querySelector('input[type="range"]');
+  slider.addEventListener('input', () => {
+    img.style.objectPosition = '50% ' + slider.value + '%';
+    slider.nextElementSibling.value = slider.value + '%';
+  });
+})();

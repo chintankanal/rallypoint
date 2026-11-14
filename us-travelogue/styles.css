@@ -249,36 +249,3 @@
   .story .mississippi-sign-pair{grid-template-columns:1fr}
   .story .mississippi-gallery .photo figcaption{font-size:10px}
 }
-
-
-/* Mississippi story: the Mud Island river-walk panorama as a quiet watermark. */
-.story .mississippi-watermark{
-  position:relative;
-  isolation:isolate;
-}
-.story .mississippi-watermark::before{
-  content:"";
-  position:absolute;
-  z-index:-1;
-  top:0;
-  left:-28px;
-  right:-28px;
-  height:520px;
-  pointer-events:none;
-  background-image:
-    linear-gradient(to bottom,rgba(247,245,240,.76) 0%,rgba(247,245,240,.88) 48%,rgba(247,245,240,1) 100%),
-    url("assets/mississippi-watermark.svg");
-  background-size:100% 100%,100% auto;
-  background-position:center top,center top;
-  background-repeat:no-repeat;
-}
-@media(max-width:650px){
-  .story .mississippi-watermark::before{
-    left:-22px;
-    right:-22px;
-    height:380px;
-    background-image:
-      linear-gradient(to bottom,rgba(247,245,240,.80) 0%,rgba(247,245,240,.91) 55%,rgba(247,245,240,1) 100%),
-      url("assets/mississippi-watermark.svg");
-  }
-}

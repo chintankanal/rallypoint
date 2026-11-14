@@ -209,3 +209,43 @@
   .story .photo-pair .d7p26-frame img,
   .story .photo-pair > img[src$="D7P27.jpg"]{height:190px}
 }
+
+
+/* Mud Island / Mississippi River photo sequence */
+.story .mississippi-gallery{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:20px;
+  max-width:100%;
+  margin:28px 0 34px;
+}
+.story .mississippi-gallery .photo{
+  width:100%;
+  max-width:none;
+  min-width:0;
+  margin:0;
+  clear:none;
+}
+.story .mississippi-gallery .photo img{
+  display:block;
+  width:100%;
+  height:auto;
+  max-height:none;
+  object-fit:cover;
+}
+.story .mississippi-gallery:not(.mississippi-sign-pair) .photo{
+  grid-column:1 / -1;
+}
+.story .mississippi-sign-pair .photo img{
+  aspect-ratio:16 / 9;
+  object-fit:cover;
+}
+.story .mississippi-gallery .photo figcaption{
+  font-size:12px;
+  line-height:1.45;
+}
+@media(max-width:650px){
+  .story .mississippi-gallery{gap:10px;margin:22px 0 28px}
+  .story .mississippi-sign-pair{grid-template-columns:1fr}
+  .story .mississippi-gallery .photo figcaption{font-size:10px}
+}

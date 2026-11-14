@@ -249,3 +249,16 @@
   .story .mississippi-sign-pair{grid-template-columns:1fr}
   .story .mississippi-gallery .photo figcaption{font-size:10px}
 }
+
+
+/* Pair the waterfront portraits in the Mississippi Riverwalk sequence */
+.story .mississippi-gallery.riverwalk-pair .photo{
+  grid-column:auto;
+}
+.story .mississippi-gallery.riverwalk-pair .photo img{
+  aspect-ratio:16 / 9;
+  object-fit:cover;
+}
+@media(max-width:650px){
+  .story .mississippi-gallery.riverwalk-pair{grid-template-columns:1fr}
+}

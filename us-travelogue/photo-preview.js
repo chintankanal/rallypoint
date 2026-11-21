@@ -70,15 +70,23 @@
     if (isTarget(img)) hide();
   });
 
-  // While a supported image is hovered, the mouse wheel zooms the preview
-  // instead of scrolling the page. Scroll down to return to the full frame.
+  // Resolve the hovered source image at wheel time. The preview overlay can
+  // change mouseover/mouseout targets, so do not rely only on activeImage.
   document.addEventListener('wheel', (event) => {
-    if (!activeImage) return;
+    const underPointer = document.elementFromPoint(event.clientX, event.clientY);
+    const hoveredImage = underPointer?.closest?.('.story .photo img');
+    const targetImage = isTarget(hoveredImage) ? hoveredImage : activeImage;
+    if (!targetImage || !isTarget(targetImage)) return;
+
+    if (activeImage !== targetImage || !preview.classList.contains('is-visible')) {
+      show(targetImage);
+    }
+
     event.preventDefault();
     if (event.deltaY < 0) zoomLevel = Math.min(maxZoom, zoomLevel + zoomStep);
     else if (event.deltaY > 0) zoomLevel = Math.max(minZoom, zoomLevel - zoomStep);
     applyZoom();
-  }, { passive: false });
+  }, { capture: true, passive: false });
 
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') hide();

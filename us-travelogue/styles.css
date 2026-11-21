@@ -211,6 +211,40 @@
 }
 
 
+/* Old Mill woodland gallery */
+.story .oldmill-gallery{
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  gap:18px;
+  margin:28px 0 34px;
+}
+.story .oldmill-gallery .photo{
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  margin:0;
+  clear:none;
+}
+.story .oldmill-gallery .photo img{
+  display:block;
+  width:100%;
+  height:auto;
+  max-height:620px;
+  object-fit:contain;
+}
+.story .oldmill-gallery.oldmill-pair{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  align-items:start;
+}
+.story .oldmill-gallery.oldmill-pair .photo img{
+  max-height:460px;
+}
+@media(max-width:650px){
+  .story .oldmill-gallery{gap:10px;margin:22px 0 28px}
+  .story .oldmill-gallery.oldmill-pair{grid-template-columns:1fr}
+  .story .oldmill-gallery .photo figcaption{font-size:10px}
+}
+
 /* Mud Island / Mississippi River photo sequence */
 .story .mississippi-gallery{
   display:grid;

@@ -19,10 +19,21 @@
   const previewImage = preview.querySelector('img');
   const previewCaption = preview.querySelector('figcaption');
   let activeImage = null;
+  let zoomLevel = 1;
+  const minZoom = 1;
+  const maxZoom = 3;
+  const zoomStep = 0.2;
+
+  function applyZoom() {
+    previewImage.style.transform = `scale(${zoomLevel})`;
+    previewImage.style.transformOrigin = 'center center';
+  }
 
   function show(img) {
     if (!isTarget(img)) return;
     activeImage = img;
+    zoomLevel = 1;
+    applyZoom();
     previewImage.src = img.currentSrc || img.src;
     previewImage.alt = img.alt || '';
     previewCaption.textContent =
@@ -33,6 +44,8 @@
 
   function hide() {
     activeImage = null;
+    zoomLevel = 1;
+    previewImage.style.transform = 'scale(1)';
     preview.classList.remove('is-visible');
     preview.setAttribute('aria-hidden', 'true');
     previewImage.removeAttribute('src');
@@ -56,6 +69,16 @@
     const img = event.target.closest?.('.story .photo img');
     if (isTarget(img)) hide();
   });
+
+  // While a supported image is hovered, the mouse wheel zooms the preview
+  // instead of scrolling the page. Scroll down to return to the full frame.
+  document.addEventListener('wheel', (event) => {
+    if (!activeImage) return;
+    event.preventDefault();
+    if (event.deltaY < 0) zoomLevel = Math.min(maxZoom, zoomLevel + zoomStep);
+    else if (event.deltaY > 0) zoomLevel = Math.max(minZoom, zoomLevel - zoomStep);
+    applyZoom();
+  }, { passive: false });
 
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') hide();

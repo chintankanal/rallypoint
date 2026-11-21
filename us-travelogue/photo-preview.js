@@ -4,6 +4,8 @@
     const source = (img.getAttribute('src') || '').toLowerCase();
     return source.includes('d7p14.jpg') ||
       source.includes('d7p15.jpg') ||
+      source.includes('d8p22.jpg') ||
+      source.includes('d8p23.jpg') ||
       source.includes('beale street - filmstrip.png');
   }
 

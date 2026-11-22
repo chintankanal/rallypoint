@@ -353,3 +353,7 @@
     object-fit:initial;
   }
 }
+
+/* Individual captions for the Lehman Hall / Sever Hall photo pair. */
+.d2p9-pair .photo-pair-item{min-width:0}
+.d2p9-pair .photo-pair-item figcaption{margin-top:9px;color:var(--muted);font-size:12px;line-height:1.5}

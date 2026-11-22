@@ -298,14 +298,3 @@
 }
 
 .journey-stats{margin:0 0 18px;color:var(--accent);font-size:11px;font-weight:700;letter-spacing:1.5px;line-height:1.9}
-
-/* Faded, geographically accurate route map behind the journey introduction */
-.journey-intro{position:relative;isolation:isolate;overflow:hidden}
-.journey-map{position:absolute;inset:0;z-index:-1;opacity:.28;filter:grayscale(1) sepia(.16) contrast(.92);pointer-events:none;background:#e9e5dc}
-.journey-map .leaflet-tile{mix-blend-mode:multiply}
-.journey-map .leaflet-control-attribution{font-size:8px;background:rgba(255,255,255,.55);color:#555}
-.journey-map .leaflet-control-attribution a{color:#555}
-.journey-map-label{background:transparent;border:0;white-space:nowrap}
-.journey-map-label span{display:inline-block;padding:3px 7px;border-radius:3px;background:rgba(255,255,255,.88);color:#6f2924;font:700 11px/1.2 Arial,sans-serif;letter-spacing:.2px;box-shadow:0 1px 4px rgba(0,0,0,.12)}
-.journey-copy,.chapter-index{position:relative;z-index:1}
-@media(max-width:760px){.journey-map{opacity:.2}.journey-map-label span{font-size:9px}}

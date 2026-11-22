@@ -7,7 +7,6 @@
 <meta name="description" content="The Ultimate American Road Trip — a day-by-day journey from Long Island to Texas.">
 <title>The Ultimate American Road Trip | Long Island to Texas</title>
 <link rel="stylesheet" href="styles.css?v=mississippi-mud-island">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 </head>
 <body>
 <header class="masthead"><a class="brand" href="#top">THE AMERICAN ROAD TRIP</a><span class="edition">FIELD NOTES · 2026</span></header>
@@ -19,7 +18,6 @@
 <span class="hero-caption">The road ahead · September–October 2026</span>
 </section>
 <section class="journey-intro" aria-labelledby="journey-heading">
-<div id="journey-map" class="journey-map" aria-label="Map showing the road trip route from Long Island, New York, to Houston, Texas"></div>
 <div class="journey-copy"><p class="eyebrow dark-eyebrow">A JOURNEY IN CHAPTERS</p><h2 id="journey-heading">Eleven states. 2,485 miles. A thousand memories.</h2><p class="journey-stats">11 STATES · WASHINGTON, D.C. · APPROX. 4,000 KM / 2,485 MILES</p><p>What began as a drive from Long Island to Houston turned into an unforgettable journey across the American landscape. Over roughly 4,000 kilometres (2,485 miles), we travelled through <strong>New York, Connecticut, Rhode Island, Massachusetts, New Hampshire, Vermont, Pennsylvania, Virginia, Tennessee, Arkansas and Texas</strong>, with a visit to the nation’s capital, Washington, D.C., along the way.</p><p>From New England’s coastal towns and mountain roads to the historic heart of the nation, the music-filled streets of Tennessee, the mighty Mississippi and the wide-open roads leading into Texas, every stretch brought something new. There were iconic landmarks and unexpected discoveries, lively cities and quiet corners, long days behind the wheel and moments that made us stop and take it all in. More than the miles or the destinations, it was the people, the detours and the experiences in between that made this road trip truly special. Here is that journey, one chapter at a time.</p></div>
 <nav class="chapter-index" aria-label="Journey chapters">
 <a class="chapter-link current" href="#day-1"><span class="chapter-number">01</span><span class="chapter-details"><strong>The ferry, the rainbow, and the road ahead</strong><small>Friday, September 25 · Long Island to Rhode Island</small></span><span class="chapter-arrow" aria-hidden="true">↘</span></a>
@@ -467,68 +465,6 @@ One of the familiar traditions associated with Harvard is rubbing the foot of th
 
 </main>
 <footer>THE ULTIMATE AMERICAN ROAD TRIP <span>SEPTEMBER–OCTOBER 2026</span></footer>
-\n<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script>
-(function(){
-  const el=document.getElementById('journey-map');
-  if(!el || !window.L) return;
-  const map=L.map(el,{zoomControl:false,scrollWheelZoom:false,dragging:false,doubleClickZoom:false,boxZoom:false,keyboard:false,touchZoom:false,attributionControl:true});
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-    maxZoom:18,
-    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-  }).addTo(map);
-  const stops=[
-    ['Long Island / Roslyn Harbour',40.816,-73.64],
-    ['Port Jefferson',40.946,-73.069],
-    ['Bridgeport',41.179,-73.189],
-    ['Providence',41.824,-71.412],
-    ['Boston',42.36,-71.058],
-    ['New Hampshire',43.65,-72.32],
-    ['Colchester',44.543,-73.155],
-    ['Burlington',44.476,-73.212],
-    ['Shelburne Farms',44.379,-73.229],
-    ['Smugglers’ Notch',44.558,-72.79],
-    ['Lake George',43.426,-73.712],
-    ['Carlisle',40.202,-77.2],
-    ['Gettysburg',39.831,-77.231],
-    ['Washington, D.C.',38.907,-77.037],
-    ['Georgetown',38.91,-77.071],
-    ['Fairfax',38.846,-77.306],
-    ['Bristol',36.596,-82.188],
-    ['Knoxville',35.96,-83.92],
-    ['Nashville',36.163,-86.782],
-    ['Lynchburg',35.284,-86.374],
-    ['Memphis',35.15,-90.049],
-    ['North Little Rock',34.769,-92.267],
-    ['Little Rock',34.747,-92.29],
-    ['Texarkana',33.425,-94.047],
-    ['Houston',29.76,-95.37]
-  ];
-  const latlngs=stops.map(s=>[s[1],s[2]]);
-  L.polyline(latlngs,{color:'#8d342d',weight:4,opacity:.92,lineCap:'round',lineJoin:'round'}).addTo(map);
-  stops.forEach((s,i)=>{
-    const first=i===0,last=i===stops.length-1;
-    L.circleMarker([s[1],s[2]],{
-      radius:first||last?7:3.2,
-      color:first||last?'#fff':'#8d342d',
-      weight:first||last?2:1,
-      fillColor:first||last?'#8d342d':'#fff',
-      fillOpacity:1
-    }).addTo(map);
-    if(first||last){
-      L.marker([s[1],s[2]],{interactive:false,icon:L.divIcon({
-        className:'journey-map-label',
-        html:'<span>'+s[0]+'</span>',
-        iconSize:null,
-        iconAnchor:first?[-10,8]:[-10,8]
-      })}).addTo(map);
-    }
-  });
-  map.fitBounds(L.latLngBounds(latlngs).pad(.08),{animate:false});
-  setTimeout(()=>map.invalidateSize(),150);
-  window.addEventListener('resize',()=>map.invalidateSize());
-})();
-</script>
-<script src="photo-preview.js?v=6" defer></script>
+\n<script src="photo-preview.js?v=6" defer></script>
 </body>
 </html>

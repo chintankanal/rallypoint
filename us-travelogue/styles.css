@@ -296,3 +296,5 @@
 @media(max-width:650px){
   .story .mississippi-gallery.riverwalk-pair{grid-template-columns:1fr}
 }
+
+.journey-stats{margin:0 0 18px;color:var(--accent);font-size:11px;font-weight:700;letter-spacing:1.5px;line-height:1.9}

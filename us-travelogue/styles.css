@@ -302,11 +302,5 @@
 .state-route{margin:0 0 24px!important;color:var(--accent);font-size:14px;line-height:1.9;letter-spacing:.15px}
 
 
-/* D2P7 Harvard photo: user-adjustable vertical crop. */
-.story .d2p7-photo-pair .d2p7-frame{min-width:0;display:flex;flex-direction:column;gap:8px}
-.story .d2p7-photo-pair .d2p7-frame>img{display:block;width:100%;height:clamp(190px,24vw,270px);max-height:none;object-fit:cover;object-position:50% 50%}
-.story .d2p7-photo-pair .photo-position-control{display:flex;align-items:center;gap:10px;font-size:11px;line-height:1.3;color:var(--muted)}
-.story .d2p7-photo-pair .photo-position-control label{white-space:nowrap}
-.story .d2p7-photo-pair .photo-position-control output{font-variant-numeric:tabular-nums;color:var(--accent);font-weight:700;margin-left:5px}
-.story .d2p7-photo-pair .photo-position-control input{width:100%;min-width:0;accent-color:var(--accent);cursor:pointer}
-@media(max-width:650px){.story .d2p7-photo-pair .d2p7-frame>img{height:clamp(145px,42vw,210px)}.story .d2p7-photo-pair .photo-position-control{gap:6px;font-size:10px}}
+/* D2P7: final vertical framing selected at 40%. */
+.story .d2p7-photo-pair .d2p7-frame>img{object-position:50% 40%}

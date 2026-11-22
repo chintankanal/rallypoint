@@ -67,7 +67,7 @@
 <figure class="photo photo-pair"><img src="assets/D2P4.JPG" alt="Fenway Park area in Boston"><img src="assets/D2P5.JPG" alt="Boston Harbour area"><figcaption>Fenway Park and Boston Harbour — memorable glimpses along the route.</figcaption></figure>
 <figure class="photo photo-float float-left"><img src="assets/D2P6.JPG" alt="Harvard Square and the university surroundings"><figcaption>Harvard Square, with the university woven into the neighbourhood around it.</figcaption></figure>
 <p>From Boston, we made our way to Harvard Square. The atmosphere around Harvard University was distinct: a lively mix of students, visitors, cafés and historic university buildings. We stopped for lunch at Santouka in Harvard Square, then spent time exploring the campus and its surroundings.</p>
-<figure class="photo photo-pair d2p7-photo-pair"><div class="d2p7-frame"><img id="d2p7-image" src="assets/D2P7.JPG" alt="Harvard University campus"><div class="photo-position-control"><label for="d2p7-vertical">Vertical position <output id="d2p7-value">V50</output></label><input id="d2p7-vertical" type="range" min="0" max="100" value="50" step="1" aria-label="Adjust D2P7 vertical position"></div></div><img src="assets/D2P8.JPG" alt="Historic architecture around Harvard"><figcaption>A closer look at Harvard’s campus and its historic surroundings.</figcaption></figure>
+<figure class="photo photo-pair d2p7-photo-pair"><div class="d2p7-frame"><img src="assets/D2P7.JPG" alt="Harvard University campus"></div><img src="assets/D2P8.JPG" alt="Historic architecture around Harvard"><figcaption>A closer look at Harvard’s campus and its historic surroundings.</figcaption></figure>
 <p><figure class="photo photo-float float-right"><img src="assets/D2P12.JPG" alt="Touching the foot of the John Harvard statue"><figcaption>A Harvard tradition: touching the foot of the John Harvard statue.</figcaption></figure>
 <p>Harvard felt like a place where history and everyday student life sat side by side. As we walked around the campus, we took in the historic buildings and the lively atmosphere of Harvard Square, with students and visitors moving between cafés and university spaces. It was a chance to experience a little of the university’s character beyond its famous name. We paused to enjoy the surroundings and take a few photographs before moving on to one of Harvard’s best-known landmarks.
 One of the familiar traditions associated with Harvard is rubbing the foot of the John Harvard statue for good luck. We made sure to stop by the statue too — and the well-touched foot made the tradition easy to spot.</p>
@@ -466,20 +466,6 @@ One of the familiar traditions associated with Harvard is rubbing the foot of th
 </main>
 <footer>THE ULTIMATE AMERICAN ROAD TRIP <span>SEPTEMBER–OCTOBER 2026</span></footer>
 
-<script>
-(() => {
-  const image = document.getElementById("d2p7-image");
-  const slider = document.getElementById("d2p7-vertical");
-  const value = document.getElementById("d2p7-value");
-  if (!image || !slider || !value) return;
-  const update = () => {
-    image.style.objectPosition = `50% ${slider.value}%`;
-    value.textContent = `V${slider.value}`;
-  };
-  slider.addEventListener("input", update);
-  update();
-})();
-</script>
 \n<script src="photo-preview.js?v=6" defer></script>
 </body>
 </html>

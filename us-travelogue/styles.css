@@ -339,3 +339,17 @@
  .ny-tile:nth-child(4n+3){grid-row:span 1}
  .ny-tile figcaption{font-size:10px}
 }
+
+
+/* Mobile portrait-image fix: use the image's natural aspect ratio instead of
+   constraining tall photographs inside a fixed-height box. */
+@media(max-width:650px){
+  .story .photo-feature img,
+  .story .photo-float img{
+    display:block;
+    width:100%;
+    height:auto;
+    max-height:none;
+    object-fit:initial;
+  }
+}
